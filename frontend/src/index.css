@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================
+   Tema PNNC - Dark "SOC"
+   Paleta: verde conservacion (primario), azul GOV.CO (encabezado),
+   fondo gris muy oscuro (no negro puro), acentos verde neon sutiles.
+   ===================================================================== */
+@layer base {
+  :root {
+    /* Fondo SOC: gris muy oscuro con leve tinte verde-azulado */
+    --background: 160 18% 7%;
+    --foreground: 150 12% 92%;
+
+    --card: 162 16% 10%;
+    --card-foreground: 150 12% 92%;
+
+    /* Primario: verde conservacion PNNC */
+    --primary: 145 58% 38%;
+    --primary-foreground: 150 30% 97%;
+
+    /* Secundario: superficie elevada */
+    --secondary: 162 12% 16%;
+    --secondary-foreground: 150 12% 92%;
+
+    --muted: 162 10% 18%;
+    --muted-foreground: 150 8% 62%;
+
+    /* Acento tierra suave */
+    --accent: 32 28% 30%;
+    --accent-foreground: 40 30% 92%;
+
+    --destructive: 0 72% 48%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 162 12% 20%;
+    --input: 162 12% 18%;
+    --ring: 145 70% 45%;
+
+    --radius: 0.75rem;
+
+    /* Marca institucional */
+    --govco-blue: 221 60% 22%;   /* azul oscuro GOV.CO para topbar */
+    --neon-green: 145 80% 55%;   /* acento futurista sutil */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.10), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 100% 0%, hsl(var(--govco-blue) / 0.18), transparent 55%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  /* Tarjeta con glassmorphism sutil */
+  .glass {
+    @apply bg-card/70 backdrop-blur-xl border border-border/70 shadow-lg;
+  }
+  /* Texto con leve resplandor neon para metricas destacadas */
+  .neon-text {
+    color: hsl(var(--neon-green));
+    text-shadow: 0 0 18px hsl(var(--neon-green) / 0.35);
+  }
+}
