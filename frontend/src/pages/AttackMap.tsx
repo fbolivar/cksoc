@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
-import { Globe2, Radio, RefreshCw, AlertTriangle, MapPin } from 'lucide-react';
+import { Globe2, Radio, RefreshCw, AlertTriangle, MapPin, ShieldBan, Loader2, CheckCircle2, ShieldCheck } from 'lucide-react';
 import {
   attacksApi,
   CLASIF,
@@ -12,9 +12,12 @@ import {
   type Destination,
   type NewAttack,
 } from '@/lib/attacks';
+import { responseApi, type ResponseStatus } from '@/lib/response';
+import { useAuth } from '@/lib/auth';
 import { getSocket } from '@/lib/socket';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { WorldAttackMap } from '@/components/attacks/WorldAttackMap';
 
 type Range = '24h' | '7d' | '30d';
@@ -31,10 +34,49 @@ interface LiveItem extends NewAttack {
 
 export default function AttackMap() {
   type Filtro = 'todos' | 'externos' | 'usuarios';
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [range, setRange] = useState<Range>('7d');
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [threatIntel, setThreatIntel] = useState(true);
   const [origins, setOrigins] = useState<AttackOrigin[]>([]);
+  // Bloqueo desde el mapa (reutiliza el modulo de Respuesta)
+  const [resp, setResp] = useState<ResponseStatus | null>(null);
+  const [blockTarget, setBlockTarget] = useState<AttackOrigin | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [blocking, setBlocking] = useState(false);
+  const [blockedIps, setBlockedIps] = useState<Set<string>>(new Set());
+  const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const canBlock = isAdmin && Boolean(resp?.configured && resp?.connection.ok);
+
+  const flash = (kind: 'ok' | 'err', text: string) => {
+    setToast({ kind, text });
+    setTimeout(() => setToast(null), 5000);
+  };
+
+  function openBlock(o: AttackOrigin) {
+    setMotivo(
+      `Bloqueo desde mapa de ataques · ${CLASIF[o.clasificacion].label}` +
+        `${o.abuseScore ? ` (${o.abuseScore}% AbuseIPDB)` : ''} · ${o.country}${o.city ? ' · ' + o.city : ''}`
+    );
+    setBlockTarget(o);
+  }
+
+  async function confirmBlock() {
+    if (!blockTarget) return;
+    const ip = blockTarget.ips[0];
+    setBlocking(true);
+    try {
+      await responseApi.block(ip, motivo.trim() || 'Bloqueo manual desde mapa de ataques');
+      setBlockedIps((prev) => new Set(prev).add(ip));
+      flash('ok', `IP ${ip} bloqueada en FortiGate`);
+      setBlockTarget(null);
+    } catch (e) {
+      flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo bloquear la IP');
+    } finally {
+      setBlocking(false);
+    }
+  }
   const [destination, setDestination] = useState<Destination>({ name: 'Bogotá', lat: 4.711, lon: -74.0721 });
   const [live, setLive] = useState<LiveItem[]>([]);
   const [seenLive, setSeenLive] = useState<AttackOrigin[]>([]);
@@ -62,6 +104,11 @@ export default function AttackMap() {
   useEffect(() => {
     load(range);
   }, [range]);
+
+  // Estado del modulo de Respuesta (para habilitar el bloqueo desde el mapa)
+  useEffect(() => {
+    if (isAdmin) responseApi.status().then(setResp).catch(() => undefined);
+  }, [isAdmin]);
 
   // Tiempo real
   useEffect(() => {
@@ -270,12 +317,92 @@ export default function AttackMap() {
                         </p>
                       </div>
                       <span className="tabular-nums text-sm font-medium">{o.count}</span>
+                      {canBlock && (
+                        blockedIps.has(o.ips[0]) ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400" title="IP bloqueada">
+                            <ShieldCheck className="h-3.5 w-3.5" />
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => openBlock(o)}
+                            title={`Bloquear ${o.ips[0]} en FortiGate`}
+                            className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                          >
+                            <ShieldBan className="h-4 w-4" />
+                          </button>
+                        )
+                      )}
                     </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Toast de resultado del bloqueo */}
+      {toast && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 max-w-sm rounded-lg border px-4 py-3 text-sm shadow-2xl ${
+            toast.kind === 'ok'
+              ? 'border-emerald-500/40 bg-emerald-950/90 text-emerald-200'
+              : 'border-destructive/50 bg-red-950/90 text-red-200'
+          }`}
+        >
+          {toast.text}
+        </div>
+      )}
+
+      {/* Confirmacion de bloqueo desde el mapa */}
+      {blockTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => !blocking && setBlockTarget(null)}>
+          <div className="w-full max-w-md rounded-lg border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
+              <ShieldBan className="h-5 w-5 text-red-400" />
+              <h3 className="font-semibold">Bloquear IP en FortiGate</h3>
+            </div>
+            <div className="space-y-3 p-5">
+              <div className="rounded-md border border-border/60 bg-secondary/40 p-3 text-sm">
+                <div className="flex items-center gap-2 font-medium">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: CLASIF[blockTarget.clasificacion].color }} />
+                  {blockTarget.ips[0]}
+                  <span className="text-xs" style={{ color: CLASIF[blockTarget.clasificacion].color }}>
+                    {CLASIF[blockTarget.clasificacion].label}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {blockTarget.country}{blockTarget.city ? ` · ${blockTarget.city}` : ''}
+                  {blockTarget.isp ? ` · ${blockTarget.isp}` : ''}
+                  {blockTarget.usageType ? ` · ${blockTarget.usageType}` : ''}
+                  {` · reputación ${blockTarget.abuseScore}%`}
+                </p>
+              </div>
+
+              {blockTarget.clasificacion === 'usuario' && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  Esta IP está clasificada como <b>Usuario</b> (ISP residencial, reputación limpia): probablemente un empleado legítimo. Verifica antes de bloquear.
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Motivo (queda en auditoría)</label>
+                <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} className="min-h-[70px] text-sm" />
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                Se añadirá a la lista de bloqueo del FortiGate. La lista blanca y la auditoría se aplican en el servidor.
+              </p>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setBlockTarget(null)} disabled={blocking}>Cancelar</Button>
+                <Button onClick={confirmBlock} disabled={blocking} className="bg-red-600 text-white hover:bg-red-500">
+                  {blocking ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Confirmar bloqueo
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
