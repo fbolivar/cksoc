@@ -21,6 +21,7 @@ import { reportsRouter } from './modules/reports/reports.routes';
 import { usersRouter } from './modules/users/users.routes';
 import { systemRouter } from './modules/system/system.routes';
 import { attacksRouter } from './modules/attacks/attacks.routes';
+import { responseRouter } from './modules/response/response.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startReportScheduler } from './modules/reports/report.scheduler';
@@ -54,6 +55,7 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/system', systemRouter);
 app.use('/api/attacks', attacksRouter);
+app.use('/api/response', responseRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

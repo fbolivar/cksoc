@@ -62,6 +62,18 @@ const schema = z.object({
   // --- Geolocalizacion / Mapa de ataques ---
   GEOIP_DB_PATH: z.string().default('/opt/soc-app/data/GeoLite2-City.mmdb'),
   ATTACKS_CACHE_SECONDS: z.coerce.number().default(30),
+
+  // --- Threat Intel (AbuseIPDB) ---
+  ABUSEIPDB_API_KEY: z.string().optional(),
+
+  // --- Respuesta semi-automatica (FortiGate) ---
+  FORTIGATE_HOST: z.string().optional(), // ej: 192.168.50.1
+  FORTIGATE_API_TOKEN: z.string().optional(),
+  FORTIGATE_BLOCKLIST_GROUP: z.string().default('WAZUH_BLOCKLIST'),
+  FORTIGATE_TLS_REJECT_UNAUTHORIZED: boolish.default('false'),
+  // IPs publicas criticas que NUNCA se pueden bloquear (coma-separadas):
+  // gateway, DNS, IP publica de la entidad, IPs de admins, etc.
+  RESPONSE_WHITELIST_IPS: z.string().default(''),
 });
 
 const parsed = schema.safeParse(process.env);

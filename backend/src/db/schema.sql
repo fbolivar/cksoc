@@ -80,6 +80,25 @@ CREATE TABLE IF NOT EXISTS notification_log (
 CREATE INDEX IF NOT EXISTS idx_notiflog_created ON notification_log(created_at DESC);
 
 -- ---------------------------------------------------------------------
+-- Respuesta semi-automatica: auditoria de acciones de bloqueo/desbloqueo
+-- Toda accion sobre el FortiGate queda registrada (trazabilidad institucional).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS block_actions (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ip              VARCHAR(45) NOT NULL,
+    accion          VARCHAR(10) NOT NULL,                 -- block | unblock
+    motivo          TEXT,
+    usuario_id      UUID REFERENCES users(id) ON DELETE SET NULL,
+    usuario_email   VARCHAR(255),                         -- snapshot por si se borra el usuario
+    resultado       VARCHAR(20) NOT NULL,                 -- success | failed | rejected
+    detalle         TEXT,                                 -- error o info adicional
+    alerta_origen_id VARCHAR(255),                        -- id de la alerta de Wazuh, si aplica
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_block_actions_ip ON block_actions(ip);
+CREATE INDEX IF NOT EXISTS idx_block_actions_created ON block_actions(created_at DESC);
+
+-- ---------------------------------------------------------------------
 -- Historico de reportes generados (Fase 4)
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS report_history (

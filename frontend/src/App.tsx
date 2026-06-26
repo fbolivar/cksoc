@@ -10,6 +10,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import AttackMap from '@/pages/AttackMap';
+import Response from '@/pages/Response';
 import Notifications from '@/pages/Notifications';
 import Reports from '@/pages/Reports';
 import Management from '@/pages/Management';
@@ -46,6 +47,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <AttackMap />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/respuesta"
+        element={
+          <Protected>
+            <AppLayout>
+              <Response />
             </AppLayout>
           </Protected>
         }
