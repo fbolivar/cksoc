@@ -16,6 +16,7 @@ import {
   ClipboardCheck,
   FileSearch,
   Activity,
+  Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +44,10 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/fim', label: 'Integridad (FIM)', icon: FileSearch },
       { to: '/hygiene', label: 'IT Hygiene', icon: Activity },
     ],
+  },
+  {
+    title: 'Cumplimiento',
+    items: [{ to: '/cumplimiento', label: 'Cumplimiento', icon: Scale }],
   },
   {
     title: 'Operación',

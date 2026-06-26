@@ -30,6 +30,7 @@ import { mitreRouter } from './modules/mitre/mitre.routes';
 import { scaRouter } from './modules/sca/sca.routes';
 import { fimRouter } from './modules/fim/fim.routes';
 import { hygieneRouter } from './modules/hygiene/hygiene.routes';
+import { complianceRouter } from './modules/compliance/compliance.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
@@ -73,6 +74,7 @@ app.use('/api/mitre', mitreRouter);
 app.use('/api/sca', scaRouter);
 app.use('/api/fim', fimRouter);
 app.use('/api/hygiene', hygieneRouter);
+app.use('/api/compliance', complianceRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

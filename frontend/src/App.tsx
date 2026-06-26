@@ -19,6 +19,7 @@ import Vulnerabilities from '@/pages/Vulnerabilities';
 import Sca from '@/pages/Sca';
 import Fim from '@/pages/Fim';
 import Hygiene from '@/pages/Hygiene';
+import Compliance from '@/pages/Compliance';
 import Management from '@/pages/Management';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -143,6 +144,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <SiemHealth />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/cumplimiento"
+        element={
+          <Protected>
+            <AppLayout>
+              <Compliance />
             </AppLayout>
           </Protected>
         }
