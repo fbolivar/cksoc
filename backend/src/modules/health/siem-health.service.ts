@@ -93,7 +93,7 @@ export async function checkManager(): Promise<HealthComponent> {
     const procs = data.affected_items[0] ?? {};
     const detenidos = critical.filter((p) => procs[p] && procs[p] !== 'running');
     const faltantes = critical.filter((p) => !(p in procs));
-    const malos = [...detenidos, ...faltantes.filter((p) => !(p in procs))];
+    const malos = [...detenidos, ...faltantes];
     const running = critical.filter((p) => procs[p] === 'running').length;
     return {
       id: 'manager', nombre: 'Manager Wazuh',

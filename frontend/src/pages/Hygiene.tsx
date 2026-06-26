@@ -47,13 +47,14 @@ export default function Hygiene() {
   }
   useEffect(() => { loadSummary(); }, []);
 
-  // Carga perezosa por pestaña
+  // Carga perezosa por pestaña (las guardas !ports/... evitan recargas)
   useEffect(() => {
     if (tab === 'puertos' && !ports) hygieneApi.ports().then(setPorts).catch(() => setPorts([]));
     if (tab === 'software' && !software) hygieneApi.software().then(setSoftware).catch(() => setSoftware([]));
     if (tab === 'usuarios' && !users) hygieneApi.users().then(setUsers).catch(() => setUsers({ porAgente: [], riesgo: [] }));
     if (tab === 'parches' && !hotfixes) hygieneApi.hotfixes().then(setHotfixes).catch(() => setHotfixes([]));
-  }, [tab, ports, software, users, hotfixes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const maxHtf = Math.max(1, ...(hotfixes ?? []).map((h) => h.count));
 

@@ -55,12 +55,16 @@ export default function SiemHealth() {
   const [eventos, setEventos] = useState<HealthEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (force = false) => {
     try {
       const [h, ev] = await Promise.all([healthApi.siem(force), healthApi.history(40)]);
       setHealth(h);
       setEventos(ev);
+      setError(null);
+    } catch {
+      setError('No se pudo consultar la salud del SIEM.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -91,6 +95,12 @@ export default function SiemHealth() {
           <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> Actualizar
         </Button>
       </div>
+
+      {error && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+          {error}
+        </div>
+      )}
 
       {/* Semaforo global */}
       {health && (

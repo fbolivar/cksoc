@@ -27,9 +27,13 @@ healthRouter.get('/siem', async (req: Request, res: Response) => {
 // Historico de cambios de estado (timeline).
 healthRouter.get('/history', async (req: Request, res: Response) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
-  const rows = await query(
-    `SELECT id, ts, componente, estado, detalle FROM health_log ORDER BY ts DESC LIMIT $1`,
-    [limit]
-  );
-  res.json({ eventos: rows });
+  try {
+    const rows = await query(
+      `SELECT id, ts, componente, estado, detalle FROM health_log ORDER BY ts DESC LIMIT $1`,
+      [limit]
+    );
+    res.json({ eventos: rows });
+  } catch {
+    res.status(500).json({ error: 'No se pudo consultar el histórico de salud' });
+  }
 });
