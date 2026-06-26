@@ -105,7 +105,7 @@ export function ExecutiveReports({ onFlash }: { onFlash: (k: 'ok' | 'err', t: st
               Generar reporte ejecutivo
             </Button>
             <span className="text-[11px] text-muted-foreground">
-              Lenguaje de gestión · 8 secciones · alineado a ISO 27001 · revisión humana antes de enviar
+              Lenguaje de gestión · 9 secciones (incl. postura de endpoints y cumplimiento) · ISO 27001 · revisión humana
             </span>
           </div>
         </CardContent>

@@ -9,10 +9,23 @@ import { env } from '../../../config/env';
 import { query } from '../../../config/db';
 import { geolocate, isPublicIP } from '../../geo/geoip.service';
 import { getAgentsSummary } from '../../wazuh/agents.service';
+import { getVulnerabilities } from '../../vulnerabilities/vuln.service';
+import { getSca } from '../../sca/sca.service';
+import { getCompliance } from '../../compliance/compliance.service';
 
 export interface ThreatOrigin { country: string; count: number; }
 export interface BlockedIp { ip: string; motivo: string | null; fecha: string; }
 export interface TrendPoint { mes: string; total: number; criticos: number; bloqueadas: number; }
+
+export interface PosturaEndpoints {
+  vulnTotal: number;
+  vulnCriticas: number;
+  vulnAltas: number;
+  topCves: { cve: string; severity: string }[];
+  hardeningScore: number;            // % promedio CIS
+  hardeningPeor: { agent: string; score: number } | null;
+  cumplimiento: { marco: string; controles: number }[]; // marcos regulatorios cubiertos
+}
 
 export interface ReportMetrics {
   mes: string;            // YYYY-MM
@@ -35,6 +48,8 @@ export interface ReportMetrics {
   // Cobertura
   agentesActivos: number;
   agentesTotal: number;
+  // Postura de endpoints (vulnerabilidades, hardening, cumplimiento)
+  postura: PosturaEndpoints | null;
   // Tendencias
   semaforo: 'verde' | 'amarillo' | 'rojo';
   tendencia: TrendPoint[];
@@ -133,6 +148,33 @@ export async function collectMetrics(mes: string): Promise<ReportMetrics> {
   // Cobertura de agentes (estado actual)
   const agents = await getAgentsSummary().catch(() => ({ active: 0, total: 0 }));
 
+  // Postura de endpoints: vulnerabilidades, hardening (SCA) y cumplimiento.
+  // Son estado ACTUAL de la plataforma (no acotado al mes), apropiado para el
+  // informe de postura del comite. Tolerante a modulos sin datos.
+  const [vuln, sca, comp] = await Promise.all([
+    getVulnerabilities().catch(() => null),
+    getSca().catch(() => null),
+    getCompliance(720).catch(() => null),
+  ]);
+  let postura: PosturaEndpoints | null = null;
+  if (vuln || sca || comp) {
+    postura = {
+      vulnTotal: vuln?.resumen.total ?? 0,
+      vulnCriticas: vuln?.resumen.critical ?? 0,
+      vulnAltas: vuln?.resumen.high ?? 0,
+      topCves: (vuln?.topCve ?? []).slice(0, 5).map((c) => ({ cve: c.cve, severity: c.severity })),
+      hardeningScore: sca?.resumen.scorePromedio ?? 0,
+      hardeningPeor: sca?.agentes?.[0] ? { agent: sca.agentes[0].agent, score: sca.agentes[0].score } : null,
+      cumplimiento: comp
+        ? [
+            { marco: 'NIST 800-53', controles: comp.frameworks.nist?.controles.length ?? 0 },
+            { marco: 'GDPR', controles: comp.frameworks.gdpr?.controles.length ?? 0 },
+            { marco: 'TSC (SOC 2)', controles: comp.frameworks.tsc?.controles.length ?? 0 },
+          ]
+        : [],
+    };
+  }
+
   // Tendencias: snapshots de meses anteriores
   const snaps = await query<{ mes: string; total_eventos: string; incidentes_criticos: number; ips_bloqueadas: number }>(
     `SELECT mes, total_eventos, incidentes_criticos, ips_bloqueadas FROM monthly_snapshots
@@ -157,6 +199,7 @@ export async function collectMetrics(mes: string): Promise<ReportMetrics> {
     bruteForceIntentos, bruteForceOrigenes, topAmenazas,
     origenes, ipsBloqueadas,
     agentesActivos: agents.active, agentesTotal: agents.total,
+    postura,
     semaforo, tendencia,
   };
 }
@@ -164,12 +207,14 @@ export async function collectMetrics(mes: string): Promise<ReportMetrics> {
 /** Archiva el snapshot del mes (para tendencias futuras). */
 export async function saveSnapshot(m: ReportMetrics): Promise<void> {
   await query(
-    `INSERT INTO monthly_snapshots (mes, total_eventos, incidentes_criticos, incidentes_altos, ips_bloqueadas, top_amenazas, postura_semaforo)
-     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7)
+    `INSERT INTO monthly_snapshots (mes, total_eventos, incidentes_criticos, incidentes_altos, ips_bloqueadas, top_amenazas, postura_semaforo, vuln_criticas, hardening_score)
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9)
      ON CONFLICT (mes) DO UPDATE SET
        total_eventos=$2, incidentes_criticos=$3, incidentes_altos=$4,
-       ips_bloqueadas=$5, top_amenazas=$6::jsonb, postura_semaforo=$7, generado_en=now()`,
+       ips_bloqueadas=$5, top_amenazas=$6::jsonb, postura_semaforo=$7,
+       vuln_criticas=$8, hardening_score=$9, generado_en=now()`,
     [m.mes, m.totalEventos, m.criticos, m.altos, m.ipsBloqueadas.length,
-     JSON.stringify(m.topAmenazas.slice(0, 5)), m.semaforo]
+     JSON.stringify(m.topAmenazas.slice(0, 5)), m.semaforo,
+     m.postura?.vulnCriticas ?? 0, m.postura?.hardeningScore ?? 0]
   );
 }

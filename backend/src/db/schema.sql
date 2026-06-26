@@ -129,6 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_block_actions_created ON block_actions(created_at
 -- Reporte ejecutivo mensual (Comite SGSI / ISO 27001)
 -- ---------------------------------------------------------------------
 -- Snapshot mensual de metricas para la seccion de tendencias
+-- Nota: vuln_criticas y hardening_score se agregan via ALTER mas abajo (idempotente)
 CREATE TABLE IF NOT EXISTS monthly_snapshots (
     mes                 VARCHAR(7) PRIMARY KEY,            -- YYYY-MM
     total_eventos       BIGINT  NOT NULL DEFAULT 0,
@@ -139,6 +140,8 @@ CREATE TABLE IF NOT EXISTS monthly_snapshots (
     postura_semaforo    VARCHAR(10) NOT NULL DEFAULT 'verde',
     generado_en         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE monthly_snapshots ADD COLUMN IF NOT EXISTS vuln_criticas   INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE monthly_snapshots ADD COLUMN IF NOT EXISTS hardening_score INTEGER NOT NULL DEFAULT 0;
 
 -- Reportes ejecutivos generados (con estado y ediciones de Fernando)
 CREATE TABLE IF NOT EXISTS executive_reports (

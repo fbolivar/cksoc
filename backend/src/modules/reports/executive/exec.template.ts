@@ -39,6 +39,10 @@ export function defaultRecommendations(m: ReportMetrics): string {
   const recs = [
     'Mantener el monitoreo continuo y la operación de la plataforma de correlación de eventos (SIEM).',
   ];
+  if (m.postura && m.postura.vulnCriticas + m.postura.vulnAltas > 0)
+    recs.push(`Priorizar la remediación (parcheo) de las ${fmt(m.postura.vulnCriticas)} vulnerabilidad(es) crítica(s) y ${fmt(m.postura.vulnAltas)} alta(s) identificadas en los servidores.`);
+  if (m.postura && m.postura.hardeningScore > 0 && m.postura.hardeningScore < 60)
+    recs.push(`Ejecutar un plan de endurecimiento (hardening CIS) de los servidores, hoy en ${m.postura.hardeningScore}% de cumplimiento promedio.`);
   if (m.bruteForceIntentos > 0)
     recs.push('Evaluar el bloqueo proactivo de los orígenes externos recurrentes de fuerza bruta hacia la VPN.');
   recs.push('Avanzar en el endurecimiento de la integración con el directorio activo (migración de NTLM a Kerberos/LDAPS).');
@@ -84,6 +88,33 @@ function trendSvg(m: ReportMetrics): string {
   const line = pts.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt[0].toFixed(0)} ${pt[1].toFixed(0)}`).join(' ');
   const labels = series.map((s, i) => `<text x="${pad + i * stepX}" y="${H - 8}" font-size="9" fill="#6b7c74" text-anchor="middle">${s.mes}</text>`).join('');
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><path d="${line}" fill="none" stroke="#1f7a4d" stroke-width="2"/>${pts.map((pt) => `<circle cx="${pt[0]}" cy="${pt[1]}" r="3" fill="#1f7a4d"/>`).join('')}${labels}<text x="${pad}" y="14" font-size="9" fill="#6b7c74">Eventos por mes (pico ${fmt(max)})</text></svg>`;
+}
+
+/** Seccion de postura de endpoints (vulnerabilidades + hardening + marcos). */
+function posturaSection(m: ReportMetrics): string {
+  const ps = m.postura;
+  if (!ps) return p('La evaluación de postura de endpoints no estuvo disponible en este periodo.');
+  let out = '';
+  // Vulnerabilidades
+  if (ps.vulnTotal > 0) {
+    out += p(`La gestión de vulnerabilidades identificó <b>${fmt(ps.vulnTotal)}</b> vulnerabilidades vigentes en los servidores monitoreados, de las cuales <b style="color:#b91c1c">${fmt(ps.vulnCriticas)} crítica(s)</b> y <b style="color:#c2410c">${fmt(ps.vulnAltas)} alta(s)</b> deben priorizarse para parcheo.`);
+    if (ps.topCves.length) {
+      out += `<p style="font-size:10px;color:#6b7c74;margin:0 0 8px">Principales CVE: ${ps.topCves.map((c) => `${esc(c.cve)} (${esc(c.severity)})`).join(', ')}.</p>`;
+    }
+  } else {
+    out += p('No se reportaron vulnerabilidades vigentes en los servidores evaluados durante el periodo.');
+  }
+  // Hardening
+  if (ps.hardeningScore > 0) {
+    const peor = ps.hardeningPeor ? ` El servidor con menor endurecimiento es <b>${esc(ps.hardeningPeor.agent)}</b> (${ps.hardeningPeor.score}%).` : '';
+    out += p(`El nivel de <b>endurecimiento (hardening)</b> de los servidores frente al estándar CIS se sitúa en promedio en <b>${ps.hardeningScore}%</b>, lo que representa una oportunidad de mejora gestionable mediante un plan de configuración segura.${peor}`);
+  }
+  // Marcos regulatorios
+  const marcos = ps.cumplimiento.filter((c) => c.controles > 0);
+  if (marcos.length) {
+    out += p(`Adicionalmente, el monitoreo aporta evidencia a marcos regulatorios complementarios: ${marcos.map((c) => `<b>${esc(c.marco)}</b> (${c.controles} controles)`).join(', ')}.`);
+  }
+  return out;
 }
 
 /**
@@ -140,19 +171,22 @@ export function buildExecutiveHtml(
     ${p(origenesTxt)}
     ${p('El tipo de amenaza predominante corresponde a <b>intentos de fuerza bruta</b> contra el acceso remoto (VPN), un patrón habitual de exposición en servicios publicados a Internet. Se distingue la actividad maliciosa externa de la operación normal de los usuarios internos de la entidad.')}
 
-    ${h(5, 'Acciones y Mitigaciones')}
+    ${h(5, 'Postura de Endpoints (Vulnerabilidades y Hardening)')}
+    ${posturaSection(m)}
+
+    ${h(6, 'Acciones y Mitigaciones')}
     ${p(accionesIps)}
     ${p('Se optimizaron las reglas de detección para reducir falsos positivos y mejorar la precisión del monitoreo, enfocando la atención del equipo en los eventos realmente relevantes.')}
     ${m.ipsBloqueadas.length ? `<p style="font-size:10px;color:#6b7c74">Direcciones bloqueadas: ${m.ipsBloqueadas.slice(0, 10).map((b) => esc(b.ip)).join(', ')}${m.ipsBloqueadas.length > 10 ? '…' : ''}</p>` : ''}
 
-    ${h(6, 'Cumplimiento ISO/IEC 27001:2022')}
+    ${h(7, 'Cumplimiento ISO/IEC 27001:2022')}
     ${p('La operación del Centro de Operaciones de Seguridad durante el periodo evidencia los siguientes controles del Anexo A:')}
     ${isoTable(m)}
 
-    ${h(7, 'Tendencias')}
+    ${h(8, 'Tendencias')}
     ${trendSvg(m)}
 
-    ${h(8, 'Recomendaciones')}
+    ${h(9, 'Recomendaciones')}
     ${p(esc(recomendaciones).replace(/\n/g, '<br>'))}
   `;
 
@@ -186,7 +220,7 @@ export function executiveEmailHtml(m: ReportMetrics, resumen: string): string {
     <div style="padding:22px 24px">
       <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:6px;background:${sem.color}22;border:1px solid ${sem.color}55;margin-bottom:14px"><span style="width:12px;height:12px;border-radius:50%;background:${sem.color}"></span><b style="color:${sem.color}">Postura ${sem.label}</b> <span style="color:#9fb3aa">— ${sem.texto}</span></div>
       <p style="font-size:13px;line-height:1.6">${esc(resumen).replace(/\n/g, '<br>')}</p>
-      <p style="font-size:12px;color:#9fb3aa;margin-top:16px">Se adjunta el reporte ejecutivo completo (8 secciones, alineado a ISO 27001) en formato PDF para el acta del Comité.</p>
+      <p style="font-size:12px;color:#9fb3aa;margin-top:16px">Se adjunta el reporte ejecutivo completo (9 secciones, incluye postura de endpoints y cumplimiento, alineado a ISO 27001) en formato PDF para el acta del Comité.</p>
     </div>
     <div style="padding:12px 24px;border-top:1px solid #1d2b25;color:#6b7c74;font-size:10px;display:flex;justify-content:space-between"><span>Periodo: ${m.rangoTexto}</span><span>Confidencial &middot; Uso interno</span></div>
   </div>`;
