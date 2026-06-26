@@ -7,7 +7,7 @@ import { AxiosError } from 'axios';
 import { Globe2, Radio, RefreshCw, AlertTriangle, MapPin } from 'lucide-react';
 import {
   attacksApi,
-  severityColor,
+  CLASIF,
   type AttackOrigin,
   type Destination,
   type NewAttack,
@@ -30,7 +30,10 @@ interface LiveItem extends NewAttack {
 }
 
 export default function AttackMap() {
+  type Filtro = 'todos' | 'externos' | 'usuarios';
   const [range, setRange] = useState<Range>('7d');
+  const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [threatIntel, setThreatIntel] = useState(true);
   const [origins, setOrigins] = useState<AttackOrigin[]>([]);
   const [destination, setDestination] = useState<Destination>({ name: 'Bogotá', lat: 4.711, lon: -74.0721 });
   const [live, setLive] = useState<LiveItem[]>([]);
@@ -48,6 +51,7 @@ export default function AttackMap() {
       const data = await attacksApi.geo(HOURS[r]);
       setOrigins(data.origins);
       setDestination(data.destination);
+      setThreatIntel(data.threatIntel);
     } catch (err) {
       setError((err as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo cargar el mapa');
     } finally {
@@ -91,6 +95,8 @@ export default function AttackMap() {
             country: a.country, city: a.city, isoCode: a.isoCode,
             lat: a.lat, lon: a.lon, count: 1, severity_max: a.severity,
             last_seen: a.ts, ips: [a.ip],
+            isp: null, usageType: null, abuseScore: 0,
+            clasificacion: 'desconocido' as const, esExterno: false,
           },
         ];
       });
@@ -113,7 +119,19 @@ export default function AttackMap() {
     return [...origins, ...extra];
   }, [origins, seenLive]);
 
-  const totalAttacks = displayOrigins.reduce((s, o) => s + o.count, 0);
+  // Conteos por clasificacion y origenes filtrados segun el filtro activo.
+  const nExternos = useMemo(() => displayOrigins.filter((o) => o.esExterno).length, [displayOrigins]);
+  const nUsuarios = useMemo(
+    () => displayOrigins.filter((o) => o.clasificacion === 'usuario').length,
+    [displayOrigins]
+  );
+  const shownOrigins = useMemo(() => {
+    if (filtro === 'externos') return displayOrigins.filter((o) => o.esExterno);
+    if (filtro === 'usuarios') return displayOrigins.filter((o) => o.clasificacion === 'usuario');
+    return displayOrigins;
+  }, [displayOrigins, filtro]);
+
+  const totalAttacks = shownOrigins.reduce((s, o) => s + o.count, 0);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -154,6 +172,36 @@ export default function AttackMap() {
         </div>
       </div>
 
+      {/* Filtro por clasificacion (reputacion + tipo de red, no severidad) */}
+      {!error && (
+        <div className="flex flex-wrap items-center gap-2">
+          {([
+            ['todos', 'Todos'],
+            ['externos', 'Ataques externos'],
+            ['usuarios', 'Usuarios VPN'],
+          ] as [Filtro, string][]).map(([f, label]) => (
+            <button
+              key={f}
+              onClick={() => setFiltro(f)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                filtro === f
+                  ? 'border-primary/50 bg-primary/15 text-foreground'
+                  : 'border-border/60 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+              {f === 'externos' && <span className="ml-1.5 text-amber-400">{nExternos}</span>}
+              {f === 'usuarios' && <span className="ml-1.5 text-emerald-400">{nUsuarios}</span>}
+            </button>
+          ))}
+          <span className="ml-auto text-[11px] text-muted-foreground/70">
+            {threatIntel
+              ? 'Clasificado por reputación (AbuseIPDB) + tipo de red, no por severidad de regla'
+              : 'Reputación no configurada (AbuseIPDB) — clasificación limitada'}
+          </span>
+        </div>
+      )}
+
       {error ? (
         <Card>
           <CardContent className="flex items-start gap-3 p-4">
@@ -168,16 +216,16 @@ export default function AttackMap() {
         <div className="grid gap-4 lg:grid-cols-3">
           {/* Mapa */}
           <div className="lg:col-span-2">
-            <WorldAttackMap origins={displayOrigins} destination={destination} live={live} />
+            <WorldAttackMap origins={shownOrigins} destination={destination} live={live} />
             <div className="mt-2 flex flex-wrap gap-4 px-1 text-[11px] text-muted-foreground">
-              <span>{displayOrigins.length} orígenes</span>
+              <span>{shownOrigins.length} orígenes</span>
               <span>{totalAttacks.toLocaleString('es-CO')} ataques</span>
               {liveCount > 0 && <span className="text-neon">{liveCount} en vivo esta sesión</span>}
               <span className="ml-auto flex items-center gap-3">
-                <Legend color="#22c55e" label="Baja" />
-                <Legend color="#eab308" label="Media" />
-                <Legend color="#f97316" label="Alta" />
-                <Legend color="#ef4444" label="Crítica" />
+                <Legend color={CLASIF.malicioso.color} label="Malicioso" />
+                <Legend color={CLASIF.sospechoso.color} label="Sospechoso" />
+                <Legend color={CLASIF.usuario.color} label="Usuario" />
+                <Legend color={CLASIF.desconocido.color} label="Sin datos" />
               </span>
             </div>
           </div>
@@ -190,25 +238,36 @@ export default function AttackMap() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {displayOrigins.length === 0 ? (
+              {shownOrigins.length === 0 ? (
                 <p className="py-4 text-center text-sm text-muted-foreground">
-                  Sin ataques con IP pública en este periodo
+                  {filtro === 'externos'
+                    ? 'Ningún ataque externo real en este periodo. El IPS del firewall bloquea esas IPs en el perímetro antes de que generen eventos.'
+                    : 'Sin orígenes con IP pública en este periodo'}
                 </p>
               ) : (
-                <div className="space-y-2">
-                  {displayOrigins.slice(0, 12).map((o, i) => (
-                    <div key={i} className="flex items-center gap-3">
+                <div className="space-y-2.5">
+                  {shownOrigins.slice(0, 14).map((o, i) => (
+                    <div key={i} className="flex items-center gap-2.5">
                       <span className="w-4 text-xs text-muted-foreground/60">{i + 1}</span>
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ background: severityColor(o.severity_max) }}
+                        style={{ background: CLASIF[o.clasificacion].color }}
+                        title={CLASIF[o.clasificacion].label}
                       />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm">
                           {o.country}
                           {o.city ? <span className="text-muted-foreground"> · {o.city}</span> : ''}
                         </p>
-                        <p className="truncate text-[10px] text-muted-foreground/60">{o.ips[0]}</p>
+                        <p className="truncate text-[10px] text-muted-foreground/60">
+                          {o.ips[0]}
+                          {o.isp ? ` · ${o.isp}` : ''}
+                        </p>
+                        <p className="truncate text-[10px]" style={{ color: CLASIF[o.clasificacion].color }}>
+                          {CLASIF[o.clasificacion].label}
+                          {o.usageType ? ` · ${o.usageType}` : ''}
+                          {o.abuseScore > 0 ? ` · ${o.abuseScore}%` : ''}
+                        </p>
                       </div>
                       <span className="tabular-nums text-sm font-medium">{o.count}</span>
                     </div>

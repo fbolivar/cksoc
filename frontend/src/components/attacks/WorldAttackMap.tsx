@@ -9,7 +9,7 @@ import { useMemo, useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps';
 import { geoEqualEarth } from 'd3-geo';
 import type { AttackOrigin, Destination, NewAttack } from '@/lib/attacks';
-import { severityColor } from '@/lib/attacks';
+import { CLASIF } from '@/lib/attacks';
 
 const W = 980;
 const H = 520;
@@ -129,7 +129,7 @@ export function WorldAttackMap({
               <path
                 key={`arc-${i}`}
                 d={d}
-                stroke={severityColor(o.severity_max)}
+                stroke={CLASIF[o.clasificacion].color}
                 strokeWidth={0.9}
                 strokeOpacity={0.55}
                 className="attack-arc"
@@ -157,7 +157,7 @@ export function WorldAttackMap({
         {/* Puntos de origen */}
         {origins.map((o, i) => {
           const r = markerRadius(o.count);
-          const color = severityColor(o.severity_max);
+          const color = CLASIF[o.clasificacion].color;
           return (
             <Marker key={`m-${i}`} coordinates={[o.lon, o.lat]}>
               <circle r={r} fill={color} opacity={0.35} className="attack-ping" />
@@ -193,12 +193,21 @@ export function WorldAttackMap({
           className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-md border border-border/70 bg-card/95 px-3 py-2 text-xs shadow-lg backdrop-blur"
           style={{ left: `${hover.x}%`, top: `${hover.y}%` }}
         >
-          <div className="font-semibold">
+          <div className="flex items-center gap-1.5 font-semibold">
+            <span className="h-2 w-2 rounded-full" style={{ background: CLASIF[hover.o.clasificacion].color }} />
             {hover.o.country}
             {hover.o.city ? ` · ${hover.o.city}` : ''}
+            <span className="text-[10px] font-normal" style={{ color: CLASIF[hover.o.clasificacion].color }}>
+              {CLASIF[hover.o.clasificacion].label}
+            </span>
           </div>
           <div className="text-muted-foreground">
-            {hover.o.count.toLocaleString('es-CO')} ataques · nivel máx {hover.o.severity_max}
+            {hover.o.count.toLocaleString('es-CO')} eventos
+            {hover.o.isp ? ` · ${hover.o.isp}` : ''}
+          </div>
+          <div className="text-[10px] text-muted-foreground/70">
+            {hover.o.usageType ?? 'tipo de red desconocido'}
+            {hover.o.abuseScore > 0 ? ` · reputación ${hover.o.abuseScore}%` : ' · reputación 0%'}
           </div>
           <div className="text-[10px] text-muted-foreground/70">{hover.o.ips.slice(0, 3).join(', ')}</div>
           <div className="text-[10px] text-muted-foreground/70">

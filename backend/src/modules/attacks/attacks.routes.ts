@@ -6,6 +6,7 @@ import { Router, type Request, type Response } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { getAttackGeo } from './attacks.service';
 import { isGeoReady, geoError } from '../geo/geoip.service';
+import { isThreatIntelConfigured } from '../threatintel/abuseipdb.service';
 import { HttpError } from '../auth/auth.service';
 
 export const attacksRouter = Router();
@@ -23,7 +24,7 @@ attacksRouter.get('/geo', async (req: Request, res: Response) => {
   const hours = Number.isFinite(h) && h > 0 && h <= 720 ? Math.floor(h) : 24;
   try {
     const origins = await getAttackGeo(hours);
-    res.json({ hours, destination: PNNC_DESTINATION, origins });
+    res.json({ hours, destination: PNNC_DESTINATION, origins, threatIntel: isThreatIntelConfigured() });
   } catch (err) {
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });

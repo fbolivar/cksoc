@@ -84,6 +84,10 @@ const schema = z.object({
 
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
+  // Score de AbuseIPDB a partir del cual una IP se considera "ataque externo".
+  ATTACKS_ABUSE_THRESHOLD: z.coerce.number().default(25),
+  // Maximo de origenes a enriquecer con reputacion por consulta (cuota free ~1000/dia).
+  ATTACKS_ENRICH_MAX: z.coerce.number().default(60),
 
   // --- Respuesta semi-automatica (FortiGate) ---
   FORTIGATE_HOST: z.string().optional(), // ej: 192.168.50.1

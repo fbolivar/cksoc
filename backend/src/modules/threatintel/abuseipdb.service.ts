@@ -11,6 +11,7 @@ export interface IpReputation {
   totalReports: number;
   countryCode: string | null;
   isp: string | null;
+  usageType: string | null; // ej: "Fixed Line ISP", "Data Center/Web Hosting/Transit"
   domain: string | null;
   lastReportedAt: string | null;
   configured: boolean;
@@ -44,6 +45,7 @@ export async function checkReputation(ip: string): Promise<IpReputation> {
       totalReports: d.totalReports ?? 0,
       countryCode: d.countryCode ?? null,
       isp: d.isp ?? null,
+      usageType: d.usageType ?? null,
       domain: d.domain ?? null,
       lastReportedAt: d.lastReportedAt ?? null,
       configured: true,
@@ -63,6 +65,7 @@ function emptyRep(ip: string, configured: boolean): IpReputation {
     totalReports: 0,
     countryCode: null,
     isp: null,
+    usageType: null,
     domain: null,
     lastReportedAt: null,
     configured,

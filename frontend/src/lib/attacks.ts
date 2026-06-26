@@ -1,6 +1,8 @@
 /** Tipos y llamadas del mapa de ataques. */
 import { api } from './api';
 
+export type Clasificacion = 'malicioso' | 'sospechoso' | 'usuario' | 'desconocido';
+
 export interface AttackOrigin {
   country: string;
   city: string;
@@ -11,6 +13,11 @@ export interface AttackOrigin {
   severity_max: number;
   last_seen: string;
   ips: string[];
+  isp: string | null;
+  usageType: string | null;
+  abuseScore: number;
+  clasificacion: Clasificacion;
+  esExterno: boolean;
 }
 
 export interface Destination {
@@ -23,7 +30,16 @@ export interface AttackGeoResponse {
   hours: number;
   destination: Destination;
   origins: AttackOrigin[];
+  threatIntel: boolean;
 }
+
+/** Color por clasificacion de origen (no por severidad de regla). */
+export const CLASIF: Record<Clasificacion, { color: string; label: string }> = {
+  malicioso: { color: '#ef4444', label: 'Malicioso' },
+  sospechoso: { color: '#f97316', label: 'Sospechoso' },
+  usuario: { color: '#22c55e', label: 'Usuario' },
+  desconocido: { color: '#94a3b8', label: 'Sin datos' },
+};
 
 export interface NewAttack {
   ip: string;

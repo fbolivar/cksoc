@@ -6,6 +6,9 @@ import { getIndexerClient } from '../wazuh/wazuh.client';
 import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
 import { geolocate, isPublicIP } from '../geo/geoip.service';
+import { checkReputation, isThreatIntelConfigured } from '../threatintel/abuseipdb.service';
+
+export type Clasificacion = 'malicioso' | 'sospechoso' | 'usuario' | 'desconocido';
 
 export interface AttackOrigin {
   country: string;
@@ -17,6 +20,46 @@ export interface AttackOrigin {
   severity_max: number;
   last_seen: string;
   ips: string[];
+  // Enriquecimiento con reputacion/ISP (AbuseIPDB)
+  isp: string | null;
+  usageType: string | null;
+  abuseScore: number;
+  clasificacion: Clasificacion;
+  esExterno: boolean; // true = ataque externo real (reputacion mala o infraestructura)
+}
+
+// usageType que delata infraestructura (hosting/datacenter/VPS): origen tipico de
+// atacantes, nunca de un empleado normal navegando.
+const HOSTING_RE = /hosting|data\s*center|datacenter|colo|vps|server|cloud|transit/i;
+
+function classify(
+  rep: { configured: boolean; abuseScore: number; usageType: string | null },
+  threshold: number
+): { clasificacion: Clasificacion; esExterno: boolean } {
+  if (!rep.configured) return { clasificacion: 'desconocido', esExterno: false };
+  if (rep.abuseScore >= threshold) return { clasificacion: 'malicioso', esExterno: true };
+  if (rep.usageType && HOSTING_RE.test(rep.usageType)) return { clasificacion: 'sospechoso', esExterno: true };
+  return { clasificacion: 'usuario', esExterno: false };
+}
+
+/** Enriquece los primeros N origenes con reputacion/ISP y los clasifica. */
+async function enrich(origins: AttackOrigin[]): Promise<void> {
+  if (!isThreatIntelConfigured()) return;
+  const top = origins.slice(0, env.ATTACKS_ENRICH_MAX);
+  const chunk = 8; // limita la concurrencia hacia AbuseIPDB
+  for (let i = 0; i < top.length; i += chunk) {
+    await Promise.all(
+      top.slice(i, i + chunk).map(async (o) => {
+        const rep = await checkReputation(o.ips[0]);
+        o.isp = rep.isp;
+        o.usageType = rep.usageType;
+        o.abuseScore = rep.abuseScore;
+        const c = classify(rep, env.ATTACKS_ABUSE_THRESHOLD);
+        o.clasificacion = c.clasificacion;
+        o.esExterno = c.esExterno;
+      })
+    );
+  }
 }
 
 interface IpBucket {
@@ -90,11 +133,17 @@ export async function getAttackGeo(hours: number): Promise<AttackOrigin[]> {
         severity_max: lvl,
         last_seen: last,
         ips: [b.key],
+        isp: null,
+        usageType: null,
+        abuseScore: 0,
+        clasificacion: 'desconocido',
+        esExterno: false,
       });
     }
   }
 
   const result = [...byLoc.values()].sort((a, b) => b.count - a.count);
+  await enrich(result);
   cache.set(hours, { at: Date.now(), data: result });
   return result;
 }
