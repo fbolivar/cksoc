@@ -6,6 +6,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
+  Globe2,
   ShieldAlert,
   BellRing,
   FileBarChart,
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils';
 
 const items = [
   { to: '/', label: 'Panel', icon: LayoutDashboard, enabled: true },
+  { to: '/mapa', label: 'Mapa de ataques', icon: Globe2, enabled: true },
   { to: '/alertas', label: 'Alertas', icon: ShieldAlert, enabled: false },
   { to: '/notificaciones', label: 'Notificaciones', icon: BellRing, enabled: true },
   { to: '/reportes', label: 'Reportes', icon: FileBarChart, enabled: true },

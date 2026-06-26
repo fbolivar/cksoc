@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
+import AttackMap from '@/pages/AttackMap';
 import Notifications from '@/pages/Notifications';
 import Reports from '@/pages/Reports';
 import Management from '@/pages/Management';
@@ -35,6 +36,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Dashboard />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/mapa"
+        element={
+          <Protected>
+            <AppLayout>
+              <AttackMap />
             </AppLayout>
           </Protected>
         }

@@ -58,6 +58,10 @@ const schema = z.object({
   REPORT_EMAIL_TO: z.string().optional(), // correos separados por coma (opcional)
   // Ruta del ejecutable de Chromium (si no, Puppeteer usa el suyo)
   PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
+
+  // --- Geolocalizacion / Mapa de ataques ---
+  GEOIP_DB_PATH: z.string().default('/opt/soc-app/data/GeoLite2-City.mmdb'),
+  ATTACKS_CACHE_SECONDS: z.coerce.number().default(30),
 });
 
 const parsed = schema.safeParse(process.env);

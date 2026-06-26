@@ -20,10 +20,13 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { reportsRouter } from './modules/reports/reports.routes';
 import { usersRouter } from './modules/users/users.routes';
 import { systemRouter } from './modules/system/system.routes';
+import { attacksRouter } from './modules/attacks/attacks.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startReportScheduler } from './modules/reports/report.scheduler';
 import { closePdfEngine } from './modules/reports/pdf.service';
+import { initGeoIp } from './modules/geo/geoip.service';
+import { startAttacksBroadcast } from './modules/attacks/attacks.broadcast';
 
 const app = express();
 
@@ -50,6 +53,7 @@ app.use('/api/notifications', notificationsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/system', systemRouter);
+app.use('/api/attacks', attacksRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {
@@ -76,6 +80,9 @@ startScheduler();
 
 // Scheduler de reporte programado (diario)
 startReportScheduler();
+
+// Geolocalizacion (carga GeoLite2) + emisor de ataques en vivo
+void initGeoIp().then(() => startAttacksBroadcast(io));
 
 // Cierre limpio del navegador de Puppeteer
 process.on('SIGTERM', () => void closePdfEngine());
