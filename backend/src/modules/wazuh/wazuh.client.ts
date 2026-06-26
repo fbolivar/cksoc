@@ -35,3 +35,25 @@ export function getIndexerClient(): AxiosInstance {
 
   return cached;
 }
+
+let statesCached: AxiosInstance | null = null;
+
+/**
+ * Cliente para los indices de ESTADO (wazuh-states-*: vulnerabilidades e
+ * inventario). Usa las credenciales admin del Indexer si estan definidas
+ * (algunos roles de solo-lectura no alcanzan estos indices); si no, reutiliza
+ * el cliente regular.
+ */
+export function getStatesClient(): AxiosInstance {
+  if (statesCached) return statesCached;
+  if (!env.INDEXER_ADMIN_USER || !env.INDEXER_ADMIN_PASS || !env.WAZUH_INDEXER_URL) {
+    return getIndexerClient();
+  }
+  statesCached = axios.create({
+    baseURL: env.WAZUH_INDEXER_URL,
+    auth: { username: env.INDEXER_ADMIN_USER, password: env.INDEXER_ADMIN_PASS },
+    timeout: 10_000,
+    httpsAgent: new https.Agent({ rejectUnauthorized: env.WAZUH_TLS_REJECT_UNAUTHORIZED }),
+  });
+  return statesCached;
+}

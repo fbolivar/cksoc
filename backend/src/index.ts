@@ -25,6 +25,7 @@ import { attacksRouter } from './modules/attacks/attacks.routes';
 import { responseRouter } from './modules/response/response.routes';
 import { healthRouter } from './modules/health/health.routes';
 import { startHealthMonitor } from './modules/health/health.monitor';
+import { vulnRouter } from './modules/vulnerabilities/vuln.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
@@ -63,6 +64,7 @@ app.use('/api/system', systemRouter);
 app.use('/api/attacks', attacksRouter);
 app.use('/api/response', responseRouter);
 app.use('/api/health', healthRouter);
+app.use('/api/vulnerabilities', vulnRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

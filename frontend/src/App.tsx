@@ -14,6 +14,7 @@ import Response from '@/pages/Response';
 import Notifications from '@/pages/Notifications';
 import Reports from '@/pages/Reports';
 import SiemHealth from '@/pages/SiemHealth';
+import Vulnerabilities from '@/pages/Vulnerabilities';
 import Management from '@/pages/Management';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -78,6 +79,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Reports />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/vulnerabilidades"
+        element={
+          <Protected>
+            <AppLayout>
+              <Vulnerabilities />
             </AppLayout>
           </Protected>
         }
