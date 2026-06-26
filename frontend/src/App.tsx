@@ -10,6 +10,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import AttackMap from '@/pages/AttackMap';
+import Mitre from '@/pages/Mitre';
 import Response from '@/pages/Response';
 import Notifications from '@/pages/Notifications';
 import Reports from '@/pages/Reports';
@@ -49,6 +50,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <AttackMap />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/mitre"
+        element={
+          <Protected>
+            <AppLayout>
+              <Mitre />
             </AppLayout>
           </Protected>
         }

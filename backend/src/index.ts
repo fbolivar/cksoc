@@ -26,6 +26,7 @@ import { responseRouter } from './modules/response/response.routes';
 import { healthRouter } from './modules/health/health.routes';
 import { startHealthMonitor } from './modules/health/health.monitor';
 import { vulnRouter } from './modules/vulnerabilities/vuln.routes';
+import { mitreRouter } from './modules/mitre/mitre.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
@@ -65,6 +66,7 @@ app.use('/api/attacks', attacksRouter);
 app.use('/api/response', responseRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/vulnerabilities', vulnRouter);
+app.use('/api/mitre', mitreRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

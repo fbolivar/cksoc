@@ -12,6 +12,7 @@ import {
   Users,
   HeartPulse,
   Bug,
+  Crosshair,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -27,6 +28,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     title: 'Amenazas',
     items: [
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
+      { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
       { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert },
     ],
   },
