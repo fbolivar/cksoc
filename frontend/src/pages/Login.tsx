@@ -93,7 +93,7 @@ export default function Login() {
         </form>
 
         <p className="mt-6 text-center text-[11px] text-muted-foreground/60">
-          Acceso restringido a personal autorizado · GOV.CO
+          Acceso restringido a personal autorizado · Parques Nacionales Naturales de Colombia
         </p>
       </div>
     </div>

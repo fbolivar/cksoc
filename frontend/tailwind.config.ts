@@ -37,9 +37,10 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        // Marca institucional
-        govco: 'hsl(var(--govco-blue))',
+        // Marca institucional PNNC
+        brand: 'hsl(var(--brand-green))',
         neon: 'hsl(var(--neon-green))',
+        warn: 'hsl(var(--warn-orange))',
       },
       borderRadius: {
         lg: 'var(--radius)',

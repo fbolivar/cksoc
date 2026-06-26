@@ -14,8 +14,11 @@ export const SEVERITY_LABELS = {
   critica: 'Critica',
 } as const;
 
-export const CHART_GREEN = '#34d399';
-export const CHART_BLUE = '#38bdf8';
+// Paleta de graficas alineada a Parques Nacionales
+export const CHART_GREEN = '#00a651'; // verde PNNC
+export const CHART_BLUE = '#85B425'; // lima PNNC (nombre conservado por compatibilidad)
+export const CHART_LIME = '#85B425';
+export const CHART_TEAL = '#5fb0c9'; // verde-agua (categorias como MITRE)
 
 /** Formatea numeros con separador de miles es-CO. */
 export const fmt = (n: number) => n.toLocaleString('es-CO');

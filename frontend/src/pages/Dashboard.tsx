@@ -23,7 +23,6 @@ import {
   type AlertsSummary,
   type TimelinePoint,
   type AgentsSummary,
-  type AgentItem,
 } from '@/lib/wazuh';
 import { getSocket, type LiveMetrics } from '@/lib/socket';
 import { MetricCard } from '@/components/dashboard/MetricCard';
@@ -32,8 +31,8 @@ import { SeverityDonut } from '@/components/dashboard/SeverityDonut';
 import { TimelineChart } from '@/components/dashboard/TimelineChart';
 import { BarList } from '@/components/dashboard/BarList';
 import { ActivityHeatmap } from '@/components/dashboard/ActivityHeatmap';
-import { AgentsStatusDonut, AgentsTable } from '@/components/dashboard/AgentsPanel';
-import { SEVERITY_COLORS, CHART_BLUE, fmt } from '@/components/dashboard/theme';
+import { SiemHealthStrip } from '@/components/dashboard/SiemHealthStrip';
+import { SEVERITY_COLORS, CHART_BLUE, CHART_TEAL, fmt } from '@/components/dashboard/theme';
 
 interface RangeData {
   summary: AlertsSummary;
@@ -47,7 +46,6 @@ export default function Dashboard() {
   const [data, setData] = useState<RangeData | null>(null);
   const [heatmap, setHeatmap] = useState<TimelinePoint[]>([]);
   const [agentsSummary, setAgentsSummary] = useState<AgentsSummary | null>(null);
-  const [agents, setAgents] = useState<AgentItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState<LiveMetrics | null>(null);
@@ -81,7 +79,6 @@ export default function Dashboard() {
   useEffect(() => {
     wazuhApi.timeline('7d', '1h').then(setHeatmap).catch(() => undefined);
     wazuhApi.agentsSummary().then(setAgentsSummary).catch(() => undefined);
-    wazuhApi.agents(100).then(setAgents).catch(() => undefined);
   }, []);
 
   // Socket.io: total en vivo
@@ -199,7 +196,7 @@ export default function Dashboard() {
         {data && (
           <BarList
             title="Top técnicas MITRE ATT&CK"
-            color="#a78bfa"
+            color={CHART_TEAL}
             emptyText="Sin técnicas MITRE en este rango"
             data={data.mitre.map((m) => ({ label: m.technique, value: m.count }))}
           />
@@ -209,11 +206,8 @@ export default function Dashboard() {
       {/* Mapa de calor */}
       {heatmap.length > 0 && <ActivityHeatmap data={heatmap} />}
 
-      {/* Agentes */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div>{agentsSummary && <AgentsStatusDonut summary={agentsSummary} />}</div>
-        <div className="lg:col-span-2">{agents.length > 0 && <AgentsTable agents={agents} />}</div>
-      </div>
+      {/* Salud de la plataforma (resumen — el detalle vive en Salud del SIEM) */}
+      <SiemHealthStrip />
 
       <p className="pb-2 text-center text-[11px] text-muted-foreground/50">
         {data ? `${fmt(data.summary.total)} alertas en el rango seleccionado` : ''}

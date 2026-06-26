@@ -4,45 +4,49 @@
 
 /* =====================================================================
    Tema PNNC - Dark "SOC"
-   Paleta: verde conservacion (primario), azul GOV.CO (encabezado),
-   fondo gris muy oscuro (no negro puro), acentos verde neon sutiles.
+   Identidad Parques Nacionales Naturales de Colombia:
+     - Verde institucional  #009846  (primario)
+     - Lima                 #85B425  (acento vivo / "neon")
+     - Naranja              #F6A33A  (advertencias)
+     - Tonos naturales sobre un fondo bosque muy oscuro.
    ===================================================================== */
 @layer base {
   :root {
-    /* Fondo SOC: gris muy oscuro con leve tinte verde-azulado */
-    --background: 160 18% 7%;
-    --foreground: 150 12% 92%;
+    /* Fondo SOC: verde bosque muy oscuro (no negro puro) */
+    --background: 158 26% 6%;
+    --foreground: 140 14% 93%;
 
-    --card: 162 16% 10%;
-    --card-foreground: 150 12% 92%;
+    --card: 158 22% 9%;
+    --card-foreground: 140 14% 93%;
 
-    /* Primario: verde conservacion PNNC */
-    --primary: 145 58% 38%;
-    --primary-foreground: 150 30% 97%;
+    /* Primario: verde institucional PNNC #009846 */
+    --primary: 148 100% 30%;
+    --primary-foreground: 150 35% 97%;
 
     /* Secundario: superficie elevada */
-    --secondary: 162 12% 16%;
-    --secondary-foreground: 150 12% 92%;
+    --secondary: 158 16% 15%;
+    --secondary-foreground: 140 14% 93%;
 
-    --muted: 162 10% 18%;
-    --muted-foreground: 150 8% 62%;
+    --muted: 158 12% 17%;
+    --muted-foreground: 145 9% 63%;
 
-    /* Acento tierra suave */
-    --accent: 32 28% 30%;
-    --accent-foreground: 40 30% 92%;
+    /* Acento tierra calida (complemento natural) */
+    --accent: 32 38% 32%;
+    --accent-foreground: 40 35% 92%;
 
     --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 162 12% 20%;
-    --input: 162 12% 18%;
-    --ring: 145 70% 45%;
+    --border: 158 16% 19%;
+    --input: 158 16% 17%;
+    --ring: 148 80% 42%;
 
     --radius: 0.75rem;
 
-    /* Marca institucional */
-    --govco-blue: 221 60% 22%;   /* azul oscuro GOV.CO para topbar */
-    --neon-green: 145 80% 55%;   /* acento futurista sutil */
+    /* Marca institucional PNNC */
+    --brand-green: 148 100% 30%;  /* #009846 verde Parques */
+    --neon-green: 82 68% 50%;     /* #85B425 lima (acento vivo / glow) */
+    --warn-orange: 34 91% 60%;    /* #F6A33A naranja */
   }
 }
 
@@ -54,8 +58,8 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: 'cv11', 'ss01';
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.10), transparent 60%),
-      radial-gradient(ellipse 60% 50% at 100% 0%, hsl(var(--govco-blue) / 0.18), transparent 55%);
+      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--brand-green) / 0.14), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 100% 0%, hsl(var(--neon-green) / 0.10), transparent 55%);
     background-attachment: fixed;
   }
 }

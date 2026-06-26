@@ -1,6 +1,6 @@
 /**
- * Barra superior con identidad GOV.CO (azul oscuro), logo PNNC,
- * titulo del modulo y menu de usuario con cierre de sesion.
+ * Barra superior con identidad Parques Nacionales (verde institucional),
+ * logo PNNC, titulo del modulo y menu de usuario con cierre de sesion.
  */
 import { LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -16,7 +16,7 @@ export function Topbar() {
   const { user, logout } = useAuth();
 
   return (
-    <header className="h-16 shrink-0 flex items-center justify-between gap-4 px-5 bg-govco/80 backdrop-blur-xl border-b border-border/60">
+    <header className="h-16 shrink-0 flex items-center justify-between gap-4 px-5 bg-gradient-to-r from-[hsl(150_55%_13%)] via-[hsl(156_30%_9%)] to-[hsl(156_30%_9%)] backdrop-blur-xl border-b border-primary/25">
       <div className="flex items-center gap-3 min-w-0">
         <img
           src="/logo-pnnc.png"
