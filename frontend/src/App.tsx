@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
+import Overview from '@/pages/Overview';
 import AttackMap from '@/pages/AttackMap';
 import Mitre from '@/pages/Mitre';
 import Response from '@/pages/Response';
@@ -44,6 +45,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Dashboard />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/resumen"
+        element={
+          <Protected>
+            <AppLayout>
+              <Overview />
             </AppLayout>
           </Protected>
         }

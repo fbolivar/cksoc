@@ -5,6 +5,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
+  Gauge,
   Globe2,
   ShieldAlert,
   BellRing,
@@ -27,7 +28,13 @@ interface Item {
 }
 
 const sections: { title: string | null; items: Item[] }[] = [
-  { title: null, items: [{ to: '/', label: 'Panel', icon: LayoutDashboard }] },
+  {
+    title: null,
+    items: [
+      { to: '/resumen', label: 'Resumen Ejecutivo', icon: Gauge },
+      { to: '/', label: 'Panel', icon: LayoutDashboard },
+    ],
+  },
   {
     title: 'Amenazas',
     items: [
