@@ -17,6 +17,7 @@ import Reports from '@/pages/Reports';
 import SiemHealth from '@/pages/SiemHealth';
 import Vulnerabilities from '@/pages/Vulnerabilities';
 import Sca from '@/pages/Sca';
+import Fim from '@/pages/Fim';
 import Management from '@/pages/Management';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -111,6 +112,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Sca />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/fim"
+        element={
+          <Protected>
+            <AppLayout>
+              <Fim />
             </AppLayout>
           </Protected>
         }
