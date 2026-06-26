@@ -13,6 +13,7 @@ import {
   HeartPulse,
   Bug,
   Crosshair,
+  ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,7 +35,10 @@ const sections: { title: string | null; items: Item[] }[] = [
   },
   {
     title: 'Postura / Endpoints',
-    items: [{ to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug }],
+    items: [
+      { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug },
+      { to: '/sca', label: 'Config. Assessment', icon: ClipboardCheck },
+    ],
   },
   {
     title: 'Operación',
