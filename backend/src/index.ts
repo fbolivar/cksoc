@@ -29,6 +29,7 @@ import { vulnRouter } from './modules/vulnerabilities/vuln.routes';
 import { mitreRouter } from './modules/mitre/mitre.routes';
 import { scaRouter } from './modules/sca/sca.routes';
 import { fimRouter } from './modules/fim/fim.routes';
+import { hygieneRouter } from './modules/hygiene/hygiene.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
@@ -71,6 +72,7 @@ app.use('/api/vulnerabilities', vulnRouter);
 app.use('/api/mitre', mitreRouter);
 app.use('/api/sca', scaRouter);
 app.use('/api/fim', fimRouter);
+app.use('/api/hygiene', hygieneRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

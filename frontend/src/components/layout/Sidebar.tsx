@@ -15,6 +15,7 @@ import {
   Crosshair,
   ClipboardCheck,
   FileSearch,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +41,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug },
       { to: '/sca', label: 'Config. Assessment', icon: ClipboardCheck },
       { to: '/fim', label: 'Integridad (FIM)', icon: FileSearch },
+      { to: '/hygiene', label: 'IT Hygiene', icon: Activity },
     ],
   },
   {
