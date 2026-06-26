@@ -185,6 +185,20 @@ CREATE TABLE IF NOT EXISTS notification_subscriptions (
 CREATE INDEX IF NOT EXISTS idx_notif_user ON notification_subscriptions(user_id);
 
 -- ---------------------------------------------------------------------
+-- Salud del SIEM: bitacora de cambios de estado de los componentes
+-- (agentes, manager, indexer, disco, flujo). Sirve para el historico/timeline
+-- y para detectar transiciones (bueno->malo / malo->bueno).
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS health_log (
+    id         BIGSERIAL PRIMARY KEY,
+    ts         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    componente VARCHAR(40) NOT NULL,            -- agentes | manager | indexer | disco | flujo
+    estado     VARCHAR(10) NOT NULL,            -- ok | warn | fail
+    detalle    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_health_log_comp_ts ON health_log(componente, ts DESC);
+
+-- ---------------------------------------------------------------------
 -- Seed de roles (idempotente)
 -- ---------------------------------------------------------------------
 INSERT INTO roles (name, description) VALUES

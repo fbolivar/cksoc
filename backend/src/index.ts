@@ -23,6 +23,8 @@ import { usersRouter } from './modules/users/users.routes';
 import { systemRouter } from './modules/system/system.routes';
 import { attacksRouter } from './modules/attacks/attacks.routes';
 import { responseRouter } from './modules/response/response.routes';
+import { healthRouter } from './modules/health/health.routes';
+import { startHealthMonitor } from './modules/health/health.monitor';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
@@ -60,6 +62,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/system', systemRouter);
 app.use('/api/attacks', attacksRouter);
 app.use('/api/response', responseRouter);
+app.use('/api/health', healthRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {
@@ -90,6 +93,9 @@ startDigestScheduler();
 
 // Scheduler de reporte programado (diario)
 startReportScheduler();
+
+// Monitor de Salud del SIEM (quien vigila al vigilante)
+startHealthMonitor();
 
 // Geolocalizacion (carga GeoLite2) + emisor de ataques en vivo
 void initGeoIp().then(() => startAttacksBroadcast(io));

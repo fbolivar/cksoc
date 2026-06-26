@@ -29,3 +29,6 @@ Thumbs.db
 
 # Assets descargados en runtime (se regeneran)
 frontend/public/logo-pnnc.png
+
+# Watchdog (config real con clave SMTP, vive en /etc en los servidores)
+ops/watchdog/watchdog.conf

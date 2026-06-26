@@ -1,0 +1,27 @@
+# SOC PNNC - Watchdog externo. Copiar a /etc/soc-watchdog/watchdog.conf y chmod 600.
+# NO subir el archivo real a git (contiene la clave SMTP). Este .example si.
+
+# Nombre de este vigilante (aparece en el correo). Ej: "servidor-wazuh" o "servidor-app".
+WATCHDOG_NAME=servidor-wazuh
+
+# Objetivos a vigilar: nombre|url|codigos_ok(opcional, coma-sep). Separados por ";".
+# Si se omiten los codigos, "responde" = 200/301/302/401/403 (liveness).
+# --- Ejemplo en el servidor WAZUH (.5) vigilando la APP (.4): ---
+TARGETS=App SOC (backend)|http://192.168.50.4/health|200 ; App SOC (web)|http://192.168.50.4/|200,301,302
+
+# --- Ejemplo en el servidor APP (.4) vigilando WAZUH (.5): ---
+# WATCHDOG_NAME=servidor-app
+# TARGETS=Wazuh API|https://192.168.50.5:55000|200,401 ; Wazuh Indexer|https://192.168.50.5:9200|200,401
+
+# SMTP directo (mismo Gmail del SOC). La clave es una App Password de 16 digitos.
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=tu_cuenta@gmail.com
+SMTP_PASS=xxxxxxxxxxxxxxxx
+SMTP_FROM=SOC PNNC Watchdog <tu_cuenta@gmail.com>
+
+# Destinatarios del aviso (coma-separados).
+ALERT_TO=redes.seguridad@parquesnacionales.gov.co
+
+# Archivo de estado (para no repetir avisos). Ruta escribible por el usuario del cron.
+STATE_FILE=/var/lib/soc-watchdog/state.json

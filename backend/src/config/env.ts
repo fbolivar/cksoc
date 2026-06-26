@@ -93,6 +93,19 @@ const schema = z.object({
   // IPs publicas criticas que NUNCA se pueden bloquear (coma-separadas):
   // gateway, DNS, IP publica de la entidad, IPs de admins, etc.
   RESPONSE_WHITELIST_IPS: z.string().default(''),
+
+  // --- Salud del SIEM ---
+  // Usuario admin del Indexer (necesario para cluster:monitor / disco).
+  INDEXER_ADMIN_USER: z.string().optional(),
+  INDEXER_ADMIN_PASS: z.string().optional(),
+  HEALTH_EXPECTED_AGENTS: z.coerce.number().default(5),
+  HEALTH_AGENT_STALE_MIN: z.coerce.number().default(10),
+  HEALTH_DISK_WARN: z.coerce.number().default(80),
+  HEALTH_DISK_CRIT: z.coerce.number().default(90),
+  HEALTH_ALERTFLOW_MIN: z.coerce.number().default(2),
+  HEALTH_ALERTFLOW_WINDOW_MIN: z.coerce.number().default(30),
+  HEALTH_POLL_SECONDS: z.coerce.number().default(120),
+  HEALTH_CRITICAL_PROCS: z.string().default('wazuh-analysisd,wazuh-remoted,wazuh-db,wazuh-modulesd'),
 });
 
 const parsed = schema.safeParse(process.env);

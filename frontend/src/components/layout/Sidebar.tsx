@@ -11,6 +11,7 @@ import {
   BellRing,
   FileBarChart,
   Users,
+  HeartPulse,
   Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -21,6 +22,7 @@ const items = [
   { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert, enabled: true },
   { to: '/notificaciones', label: 'Notificaciones', icon: BellRing, enabled: true },
   { to: '/reportes', label: 'Reportes', icon: FileBarChart, enabled: true },
+  { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse, enabled: true },
   { to: '/gestion', label: 'Gestion', icon: Users, enabled: true },
 ];
 
