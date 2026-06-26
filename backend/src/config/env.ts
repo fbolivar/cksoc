@@ -65,6 +65,9 @@ const schema = z.object({
   NOTIFY_ABUSE_MIN_SCORE: z.coerce.number().default(50),
   NOTIFY_POLL_SECONDS: z.coerce.number().default(60),
   PUBLIC_DASHBOARD_URL: z.string().default('http://192.168.50.4'),
+  // Reglas con falsos positivos conocidos a excluir del conteo de INCIDENTES
+  // del reporte ejecutivo (datos historicos ya indexados antes del tuning).
+  REPORT_EXCLUDE_RULES: z.string().default('92213,92217'),
 
   // --- Reportes (Fase 4) ---
   REPORT_DIR: z.string().default('./reports'),

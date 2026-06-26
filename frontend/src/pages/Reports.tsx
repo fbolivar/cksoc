@@ -21,10 +21,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { ExecutiveReports } from '@/components/reports/ExecutiveReports';
 
 export default function Reports() {
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'analista';
+  const isAdmin = user?.role === 'admin';
+  const [tab, setTab] = useState<'tecnico' | 'ejecutivo'>('tecnico');
 
   const [reports, setReports] = useState<Report[]>([]);
   const [title, setTitle] = useState('Reporte de seguridad SOC PNNC');
@@ -104,6 +107,23 @@ export default function Reports() {
         </div>
       )}
 
+      {/* Pestañas */}
+      <div className="flex gap-1 border-b border-border/60">
+        <button onClick={() => setTab('tecnico')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'tecnico' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+          Técnico
+        </button>
+        {isAdmin && (
+          <button onClick={() => setTab('ejecutivo')}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'ejecutivo' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
+            Ejecutivo (Comité SGSI)
+          </button>
+        )}
+      </div>
+
+      {tab === 'ejecutivo' && isAdmin && <ExecutiveReports onFlash={flash} />}
+
+      {tab === 'tecnico' && (<>
       {/* Generador */}
       {canManage && (
         <Card>
@@ -218,6 +238,7 @@ export default function Reports() {
           )}
         </CardContent>
       </Card>
+      </>)}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { authRouter } from './modules/auth/auth.routes';
 import { wazuhRouter } from './modules/wazuh/wazuh.routes';
 import { notificationsRouter } from './modules/notifications/notifications.routes';
 import { reportsRouter } from './modules/reports/reports.routes';
+import { executiveRouter } from './modules/reports/executive/exec.routes';
 import { usersRouter } from './modules/users/users.routes';
 import { systemRouter } from './modules/system/system.routes';
 import { attacksRouter } from './modules/attacks/attacks.routes';
@@ -53,6 +54,7 @@ app.use('/api', apiLimiter);
 app.use('/api/auth', authRouter);
 app.use('/api/wazuh', wazuhRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/reports/executive', executiveRouter); // antes de /api/reports
 app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/system', systemRouter);

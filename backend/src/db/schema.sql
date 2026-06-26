@@ -126,6 +126,36 @@ CREATE INDEX IF NOT EXISTS idx_block_actions_ip ON block_actions(ip);
 CREATE INDEX IF NOT EXISTS idx_block_actions_created ON block_actions(created_at DESC);
 
 -- ---------------------------------------------------------------------
+-- Reporte ejecutivo mensual (Comite SGSI / ISO 27001)
+-- ---------------------------------------------------------------------
+-- Snapshot mensual de metricas para la seccion de tendencias
+CREATE TABLE IF NOT EXISTS monthly_snapshots (
+    mes                 VARCHAR(7) PRIMARY KEY,            -- YYYY-MM
+    total_eventos       BIGINT  NOT NULL DEFAULT 0,
+    incidentes_criticos INTEGER NOT NULL DEFAULT 0,
+    incidentes_altos    INTEGER NOT NULL DEFAULT 0,
+    ips_bloqueadas      INTEGER NOT NULL DEFAULT 0,
+    top_amenazas        JSONB   NOT NULL DEFAULT '[]'::jsonb,
+    postura_semaforo    VARCHAR(10) NOT NULL DEFAULT 'verde',
+    generado_en         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Reportes ejecutivos generados (con estado y ediciones de Fernando)
+CREATE TABLE IF NOT EXISTS executive_reports (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    mes           VARCHAR(7) NOT NULL,                      -- YYYY-MM
+    estado        VARCHAR(20) NOT NULL DEFAULT 'borrador',  -- borrador | revisado | enviado
+    pdf_path      TEXT,
+    datos_json    JSONB NOT NULL DEFAULT '{}'::jsonb,
+    resumen_editado        TEXT,                            -- override del resumen ejecutivo
+    recomendaciones_editadas TEXT,                          -- override de recomendaciones
+    generado_por  UUID REFERENCES users(id) ON DELETE SET NULL,
+    generado_en   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    enviado_en    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_exec_reports_mes ON executive_reports(mes);
+
+-- ---------------------------------------------------------------------
 -- Historico de reportes generados (Fase 4)
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS report_history (
