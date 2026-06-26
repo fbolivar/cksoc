@@ -160,7 +160,7 @@ export function buildExecutiveHtml(
     @page { margin: 0; }
     * { box-sizing: border-box; }
     body { font-family: 'Liberation Sans', Arial, sans-serif; margin: 0; color: #1f2a26; }
-    .cover { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: linear-gradient(160deg,#0f3d24,#16294f); color: #fff; page-break-after: always; }
+    .cover { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: linear-gradient(160deg,#0f3d24,#0a5c34); color: #fff; page-break-after: always; }
     .cover img { height: 70px; background: #fff; padding: 6px; border-radius: 8px; margin-bottom: 24px; }
     .content { padding: 28px 34px 60px; }
     .footer-band { position: fixed; bottom: 0; left: 0; right: 0; background: #0f3d24; color: #cfe6da; font-size: 9px; padding: 5px 34px; display: flex; justify-content: space-between; }
@@ -169,7 +169,7 @@ export function buildExecutiveHtml(
       ${logo ? `<img src="${logo}" alt="PNNC">` : ''}
       <div style="font-size:13px;letter-spacing:3px;color:#9fe9c5">PARQUES NACIONALES NATURALES DE COLOMBIA</div>
       <h1 style="font-size:26px;margin:14px 0 6px">Reporte Ejecutivo de Seguridad</h1>
-      <div style="font-size:16px;color:#c5d2ea">${m.periodoLabel}</div>
+      <div style="font-size:16px;color:#cfe6da">${m.periodoLabel}</div>
       <div style="margin-top:30px;font-size:12px;color:#9fb3aa">Centro de Operaciones de Seguridad &middot; Comité de Seguridad / SGSI</div>
       <div style="margin-top:6px;font-size:11px;color:#7f9488">Documento alineado a ISO/IEC 27001:2022</div>
     </div>
@@ -182,7 +182,7 @@ export function buildExecutiveHtml(
 export function executiveEmailHtml(m: ReportMetrics, resumen: string): string {
   const sem = SEMAFORO[m.semaforo];
   return `<div style="font-family:Inter,Arial,sans-serif;max-width:620px;margin:auto;background:#0f1613;color:#e6f2ec;border-radius:12px;overflow:hidden;border:1px solid #1d2b25">
-    <div style="background:#16294f;padding:16px 24px;border-bottom:3px solid #1f7a4d"><h2 style="margin:0;font-size:15px;color:#fff">Reporte Ejecutivo de Seguridad &middot; ${m.periodoLabel}</h2><p style="margin:2px 0 0;font-size:11px;color:#c5d2ea">Parques Nacionales Naturales de Colombia &middot; Comité de Seguridad / SGSI</p></div>
+    <div style="background:#0f3d24;padding:16px 24px;border-bottom:3px solid #85b425"><h2 style="margin:0;font-size:15px;color:#fff">Reporte Ejecutivo de Seguridad &middot; ${m.periodoLabel}</h2><p style="margin:2px 0 0;font-size:11px;color:#cfe6da">Parques Nacionales Naturales de Colombia &middot; Comité de Seguridad / SGSI</p></div>
     <div style="padding:22px 24px">
       <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:6px;background:${sem.color}22;border:1px solid ${sem.color}55;margin-bottom:14px"><span style="width:12px;height:12px;border-radius:50%;background:${sem.color}"></span><b style="color:${sem.color}">Postura ${sem.label}</b> <span style="color:#9fb3aa">— ${sem.texto}</span></div>
       <p style="font-size:13px;line-height:1.6">${esc(resumen).replace(/\n/g, '<br>')}</p>

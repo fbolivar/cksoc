@@ -26,13 +26,13 @@ function emailHtml(c: HealthComponent, kind: 'alerta' | 'recuperacion', prev: st
   const recup = kind === 'recuperacion';
   const color = recup ? '#16a34a' : c.estado === 'fail' ? '#dc2626' : '#d97706';
   const titulo = recup ? 'Componente recuperado' : 'Alerta de salud del SIEM';
-  return `<!DOCTYPE html><html lang="es"><body style="margin:0;background:#0b1220;font-family:Segoe UI,Arial,sans-serif;color:#e5e7eb">
+  return `<!DOCTYPE html><html lang="es"><body style="margin:0;background:#0a1711;font-family:Segoe UI,Arial,sans-serif;color:#e5efe9">
   <div style="max-width:560px;margin:0 auto;padding:24px">
-    <div style="background:linear-gradient(135deg,#0a3d2e,#0b2a4a);border-radius:12px 12px 0 0;padding:18px 22px">
-      <div style="font-size:12px;letter-spacing:2px;color:#7dd3a8">SOC · PARQUES NACIONALES NATURALES DE COLOMBIA</div>
+    <div style="background:linear-gradient(135deg,#0a3d2e,#0a5c34);border-radius:12px 12px 0 0;padding:18px 22px;border-bottom:3px solid #85b425">
+      <div style="font-size:12px;letter-spacing:2px;color:#a9e36b">SOC · PARQUES NACIONALES NATURALES DE COLOMBIA</div>
       <div style="font-size:18px;font-weight:700;margin-top:4px">Salud del SIEM</div>
     </div>
-    <div style="background:#0f172a;border:1px solid #1e293b;border-top:0;border-radius:0 0 12px 12px;padding:22px">
+    <div style="background:#0d1c15;border:1px solid #1f3a2e;border-top:0;border-radius:0 0 12px 12px;padding:22px">
       <div style="display:inline-block;background:${color};color:#fff;font-weight:700;border-radius:6px;padding:6px 12px;font-size:13px">${titulo}</div>
       <h2 style="margin:16px 0 6px;font-size:20px">${c.nombre}</h2>
       <p style="margin:0 0 14px;color:#94a3b8">Estado: <b style="color:${color}">${ESTADO_TXT[c.estado] ?? c.estado}</b>

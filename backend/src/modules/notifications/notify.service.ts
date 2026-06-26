@@ -56,7 +56,7 @@ function buildMessages(rule: AlertRule, matchedCount: number) {
 
   const html = `
   <div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;background:#0f1613;color:#e6f2ec;border-radius:12px;overflow:hidden;border:1px solid #1d2b25">
-    <div style="background:#16294f;padding:18px 24px;border-bottom:3px solid #16a34a">
+    <div style="background:#0f3d24;padding:18px 24px;border-bottom:3px solid #85b425">
       <h2 style="margin:0;font-size:16px;color:#fff">Centro de Operaciones de Seguridad · PNNC</h2>
     </div>
     <div style="padding:24px">

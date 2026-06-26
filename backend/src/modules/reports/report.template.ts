@@ -1,6 +1,6 @@
 /**
  * Plantilla HTML del reporte PDF con identidad PNNC.
- * Diseno claro/institucional (mejor para impresion) con encabezado GOV.CO.
+ * Diseno claro/institucional (mejor para impresion) con identidad PNNC.
  */
 import type { ReportData } from './report.data';
 import { donutSvg, barsSvg, sparkAreaSvg } from './svg';
@@ -37,7 +37,7 @@ export function buildReportHtml(
   );
   const agentsBars = barsSvg(topAgents.map((a) => ({ label: a.agent, value: a.count })), '#1f7a4d');
   const mitreBars = mitre.length
-    ? barsSvg(mitre.map((m) => ({ label: m.technique, value: m.count })), '#7c3aed')
+    ? barsSvg(mitre.map((m) => ({ label: m.technique, value: m.count })), '#5fb0c9')
     : '<p style="color:#888;font-size:12px">Sin técnicas MITRE en el periodo</p>';
   const spark = sparkAreaSvg(timeline);
 
@@ -56,10 +56,10 @@ export function buildReportHtml(
 <style>
   * { box-sizing: border-box; }
   body { font-family: 'Liberation Sans', Arial, sans-serif; color: #1f2a26; margin: 0; font-size: 12px; }
-  .header { background: #16294f; color: #fff; padding: 18px 28px; border-bottom: 4px solid #1f7a4d; display: flex; align-items: center; gap: 14px; }
+  .header { background: #0f3d24; color: #fff; padding: 18px 28px; border-bottom: 4px solid #85b425; display: flex; align-items: center; gap: 14px; }
   .header img { height: 46px; background:#fff; border-radius:6px; padding:3px; }
   .header h1 { font-size: 16px; margin: 0; }
-  .header p { font-size: 11px; margin: 2px 0 0; color: #c5d2ea; }
+  .header p { font-size: 11px; margin: 2px 0 0; color: #cfe6da; }
   .content { padding: 24px 28px; }
   .title { font-size: 20px; font-weight: 700; color: #0f3d24; margin: 0 0 2px; }
   .subtitle { color: #5b6b63; margin: 0 0 18px; }
@@ -82,7 +82,7 @@ export function buildReportHtml(
     ${opts.logoDataUri ? `<img src="${opts.logoDataUri}" alt="PNNC">` : ''}
     <div>
       <h1>Centro de Operaciones de Seguridad · PNNC</h1>
-      <p>Parques Nacionales Naturales de Colombia · GOV.CO</p>
+      <p>Parques Nacionales Naturales de Colombia</p>
     </div>
   </div>
 

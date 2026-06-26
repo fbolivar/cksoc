@@ -177,9 +177,9 @@ const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'
 
 function shell(title: string, accent: string, bodyHtml: string): string {
   return `<div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:auto;background:#0f1613;color:#e6f2ec;border-radius:12px;overflow:hidden;border:1px solid #1d2b25">
-    <div style="background:#16294f;padding:16px 24px;border-bottom:3px solid ${accent}">
+    <div style="background:#0f3d24;padding:16px 24px;border-bottom:3px solid ${accent}">
       <h2 style="margin:0;font-size:15px;color:#fff">Centro de Operaciones de Seguridad &middot; PNNC</h2>
-      <p style="margin:2px 0 0;font-size:11px;color:#c5d2ea">Parques Nacionales Naturales de Colombia &middot; GOV.CO</p>
+      <p style="margin:2px 0 0;font-size:11px;color:#cfe6da">Parques Nacionales Naturales de Colombia</p>
     </div>
     <div style="padding:22px 24px">${bodyHtml}</div>
     <div style="padding:12px 24px;border-top:1px solid #1d2b25;color:#6b7c74;font-size:10px;display:flex;justify-content:space-between">
