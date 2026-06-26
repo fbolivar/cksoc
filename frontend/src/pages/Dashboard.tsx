@@ -93,6 +93,9 @@ export default function Dashboard() {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('metrics:update', onMetrics);
+    // El socket es un singleton: si ya estaba conectado al montar, el evento
+    // 'connect' no se vuelve a disparar. Inicializa el estado desde el socket.
+    if (socket.connected) setConnected(true);
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);

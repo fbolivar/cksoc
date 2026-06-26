@@ -8,8 +8,13 @@ import { env } from '../../config/env';
 
 let transporter: Transporter | null = null;
 
+/** App Password de Gmail: admite SMTP_PASS (preferido) o SMTP_PASSWORD. */
+function smtpPass(): string | undefined {
+  return env.SMTP_PASS ?? env.SMTP_PASSWORD;
+}
+
 export function isEmailConfigured(): boolean {
-  return Boolean(env.SMTP_HOST && env.SMTP_PORT && env.SMTP_FROM);
+  return Boolean(env.SMTP_HOST && env.SMTP_PORT && env.SMTP_FROM && env.SMTP_USER && smtpPass());
 }
 
 function getTransporter(): Transporter {
@@ -17,10 +22,12 @@ function getTransporter(): Transporter {
   transporter = nodemailer.createTransport({
     host: env.SMTP_HOST,
     port: env.SMTP_PORT,
-    secure: env.SMTP_SECURE,
+    secure: env.SMTP_SECURE, // false en 587 (STARTTLS)
+    // Gmail en 587 exige STARTTLS: forzarlo evita enviar sin cifrar.
+    requireTLS: env.SMTP_PORT === 587 ? true : undefined,
     auth:
-      env.SMTP_USER && env.SMTP_PASSWORD
-        ? { user: env.SMTP_USER, pass: env.SMTP_PASSWORD }
+      env.SMTP_USER && smtpPass()
+        ? { user: env.SMTP_USER, pass: smtpPass() }
         : undefined,
   });
   return transporter;

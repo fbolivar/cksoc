@@ -32,6 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { RuleForm } from '@/components/notifications/RuleForm';
+import { EngineConfig } from '@/components/notifications/EngineConfig';
 
 export default function Notifications() {
   const { user } = useAuth();
@@ -132,6 +133,9 @@ export default function Notifications() {
           {msg.text}
         </div>
       )}
+
+      {/* Motor de correo (config + tope + pruebas) */}
+      <EngineConfig canManage={canManage} onFlash={flash} />
 
       {/* Estado de canales */}
       {channels && <ChannelsPanel channels={channels} canManage={canManage} onFlash={flash} />}

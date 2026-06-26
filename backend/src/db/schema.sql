@@ -80,6 +80,33 @@ CREATE TABLE IF NOT EXISTS notification_log (
 CREATE INDEX IF NOT EXISTS idx_notiflog_created ON notification_log(created_at DESC);
 
 -- ---------------------------------------------------------------------
+-- Motor de notificaciones por correo: anti-flood, contador diario, settings
+-- ---------------------------------------------------------------------
+ALTER TABLE notification_log
+  ADD COLUMN IF NOT EXISTS tipo          VARCHAR(20),    -- immediate | digest | test | cap
+  ADD COLUMN IF NOT EXISTS alert_rule_id VARCHAR(32),    -- rule.id de Wazuh
+  ADD COLUMN IF NOT EXISTS origen        VARCHAR(64);    -- IP origen / agente
+
+-- Contador diario de correos (tope de seguridad de cuota Gmail)
+CREATE TABLE IF NOT EXISTS daily_counter (
+    fecha       DATE PRIMARY KEY,
+    enviados    INTEGER NOT NULL DEFAULT 0,
+    cap_avisado BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Configuracion del motor (singleton)
+CREATE TABLE IF NOT EXISTS notification_settings (
+    id                INTEGER PRIMARY KEY DEFAULT 1,
+    recipients        TEXT[]  NOT NULL DEFAULT '{}',
+    immediate_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    digest_enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+    digest_hour       INTEGER NOT NULL DEFAULT 8,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT notif_settings_singleton CHECK (id = 1)
+);
+INSERT INTO notification_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- ---------------------------------------------------------------------
 -- Respuesta semi-automatica: auditoria de acciones de bloqueo/desbloqueo
 -- Toda accion sobre el FortiGate queda registrada (trazabilidad institucional).
 -- ---------------------------------------------------------------------

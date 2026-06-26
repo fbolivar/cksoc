@@ -46,9 +46,25 @@ const schema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_SECURE: boolish.default('false'),
   SMTP_USER: z.string().optional(),
+  // App Password de Gmail. SMTP_PASS es el nombre preferido; SMTP_PASSWORD se
+  // mantiene por compatibilidad. Quitar espacios al pegar la clave de 16 digitos.
+  SMTP_PASS: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
+
+  // --- Motor de notificaciones por correo (umbrales + anti-flood + digest) ---
+  ALERT_RECIPIENTS: z.string().default(''), // coma-separado
+  NOTIFY_IMMEDIATE_MIN_LEVEL: z.coerce.number().default(12), // criticas inmediatas
+  NOTIFY_DIGEST_MIN_LEVEL: z.coerce.number().default(7), // nunca <7 por correo
+  NOTIFY_FLOOD_MINUTES: z.coerce.number().default(30), // anti-flood misma regla+origen
+  NOTIFY_DAILY_CAP: z.coerce.number().default(200), // tope de seguridad de cuota
+  DIGEST_CRON: z.string().default('0 8 * * *'), // 8:00
+  DIGEST_TZ: z.string().default('America/Bogota'),
+  NOTIFY_BRUTEFORCE_RULES: z.string().default('100031,100036'),
+  NOTIFY_ABUSE_MIN_SCORE: z.coerce.number().default(50),
+  NOTIFY_POLL_SECONDS: z.coerce.number().default(60),
+  PUBLIC_DASHBOARD_URL: z.string().default('http://192.168.50.4'),
 
   // --- Reportes (Fase 4) ---
   REPORT_DIR: z.string().default('./reports'),

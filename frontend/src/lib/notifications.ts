@@ -51,7 +51,29 @@ export interface LogEntry {
   created_at: string;
 }
 
+export interface NotifySettings {
+  recipients: string[];
+  immediateEnabled: boolean;
+  digestEnabled: boolean;
+  digestHour: number;
+}
+
+export interface DailyStatus {
+  sent: number;
+  cap: number;
+  capReached: boolean;
+}
+
 export const notificationsApi = {
+  getSettings: () =>
+    api
+      .get<{ settings: NotifySettings; daily: DailyStatus; channels: ChannelStatus }>('/notifications/settings')
+      .then((r) => r.data),
+  updateSettings: (s: Partial<NotifySettings>) =>
+    api.put<{ settings: NotifySettings }>('/notifications/settings', s).then((r) => r.data.settings),
+  sendDigest: () => api.post('/notifications/digest/send').then((r) => r.data),
+  testImmediate: () => api.post('/notifications/test-immediate').then((r) => r.data),
+
   list: () =>
     api
       .get<{ rules: AlertRule[]; channels: ChannelStatus }>('/notifications/rules')

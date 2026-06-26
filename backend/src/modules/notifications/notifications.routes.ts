@@ -25,6 +25,10 @@ import {
   getChannelCheck,
   postEvaluateNow,
   getLog,
+  getNotifySettings,
+  putNotifySettings,
+  postSendDigest,
+  postTestImmediate,
 } from './notifications.controller';
 
 export const notificationsRouter = Router();
@@ -42,3 +46,9 @@ notificationsRouter.post('/test', canManage, postTest);
 notificationsRouter.get('/channels/:channel/check', canManage, getChannelCheck);
 notificationsRouter.post('/evaluate', canManage, postEvaluateNow);
 notificationsRouter.get('/log', getLog);
+
+// Motor de correo: configuracion + resumen
+notificationsRouter.get('/settings', getNotifySettings);
+notificationsRouter.put('/settings', requireRole('admin'), putNotifySettings);
+notificationsRouter.post('/digest/send', requireRole('admin'), postSendDigest);
+notificationsRouter.post('/test-immediate', canManage, postTestImmediate);

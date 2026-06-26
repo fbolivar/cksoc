@@ -24,6 +24,8 @@ import { attacksRouter } from './modules/attacks/attacks.routes';
 import { responseRouter } from './modules/response/response.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
+import { startAlertWatcher } from './modules/notifications/alertwatcher';
+import { startDigestScheduler } from './modules/notifications/digest.service';
 import { startReportScheduler } from './modules/reports/report.scheduler';
 import { closePdfEngine } from './modules/reports/pdf.service';
 import { initGeoIp } from './modules/geo/geoip.service';
@@ -79,6 +81,10 @@ startMetricsBroadcast(io);
 
 // Scheduler de notificaciones (evaluacion de reglas cada minuto)
 startScheduler();
+
+// Motor de correo: vigilante de alertas inmediatas + resumen diario
+startAlertWatcher();
+startDigestScheduler();
 
 // Scheduler de reporte programado (diario)
 startReportScheduler();
