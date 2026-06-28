@@ -9,25 +9,10 @@ import { fimApi, EVENT_META, type FimData } from '@/lib/fim';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RangeTabs, RANGE_24_7_30 } from '@/components/shared/RangeTabs';
+import { KpiCard } from '@/components/shared/KpiCard';
 
 type Range = '24h' | '7d' | '30d';
 const HOURS: Record<Range, number> = { '24h': 24, '7d': 168, '30d': 720 };
-
-function Kpi({ label, value, color, icon: Icon }: { label: string; value: number; color?: string; icon: typeof Server }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">{label}</span>
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <p className="mt-1 text-2xl font-semibold tabular-nums" style={color ? { color } : undefined}>
-          {value.toLocaleString('es-CO')}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
 
 function EventChip({ e }: { e: string }) {
   const m = EVENT_META[e] ?? { color: '#94a3b8', label: e };
@@ -93,11 +78,11 @@ export default function Fim() {
       ) : r && data && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <Kpi label="Cambios totales" value={r.total} icon={FileSearch} />
-            <Kpi label="Añadidos" value={r.added} color={EVENT_META.added.color} icon={FilePlus2} />
-            <Kpi label="Modificados" value={r.modified} color={EVENT_META.modified.color} icon={FilePen} />
-            <Kpi label="Eliminados" value={r.deleted} color={EVENT_META.deleted.color} icon={FileX2} />
-            <Kpi label="Activos" value={r.agentes} icon={Server} />
+            <KpiCard label="Cambios totales" value={r.total} icon={FileSearch} />
+            <KpiCard label="Añadidos" value={r.added} color={EVENT_META.added.color} icon={FilePlus2} />
+            <KpiCard label="Modificados" value={r.modified} color={EVENT_META.modified.color} icon={FilePen} />
+            <KpiCard label="Eliminados" value={r.deleted} color={EVENT_META.deleted.color} icon={FileX2} />
+            <KpiCard label="Activos" value={r.agentes} icon={Server} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">

@@ -9,6 +9,7 @@ import { ShieldAlert, RefreshCw, Loader2, ExternalLink, Server, Package, Bug } f
 import { vulnApi, SEV_COLOR, SEV_LABEL, type VulnData, type Severity } from '@/lib/vulnerabilities';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { KpiCard } from '@/components/shared/KpiCard';
 
 function SevChip({ s }: { s: Severity }) {
   return (
@@ -18,22 +19,6 @@ function SevChip({ s }: { s: Severity }) {
     >
       {SEV_LABEL[s]}
     </span>
-  );
-}
-
-function Kpi({ label, value, color, icon: Icon }: { label: string; value: number; color?: string; icon: typeof Server }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">{label}</span>
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <p className="mt-1 text-3xl font-semibold tabular-nums" style={color ? { color } : undefined}>
-          {value.toLocaleString('es-CO')}
-        </p>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -90,12 +75,12 @@ export default function Vulnerabilities() {
         <>
           {/* KPIs */}
           <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-            <Kpi label="Total" value={r.total} icon={Bug} />
-            <Kpi label="Críticas" value={r.critical} color={SEV_COLOR.Critical} icon={ShieldAlert} />
-            <Kpi label="Altas" value={r.high} color={SEV_COLOR.High} icon={ShieldAlert} />
-            <Kpi label="Medias" value={r.medium} color={SEV_COLOR.Medium} icon={ShieldAlert} />
-            <Kpi label="CVEs únicas" value={r.cves} icon={Bug} />
-            <Kpi label="Activos afectados" value={r.agentes} icon={Server} />
+            <KpiCard label="Total" value={r.total} icon={Bug} />
+            <KpiCard label="Críticas" value={r.critical} color={SEV_COLOR.Critical} icon={ShieldAlert} />
+            <KpiCard label="Altas" value={r.high} color={SEV_COLOR.High} icon={ShieldAlert} />
+            <KpiCard label="Medias" value={r.medium} color={SEV_COLOR.Medium} icon={ShieldAlert} />
+            <KpiCard label="CVEs únicas" value={r.cves} icon={Bug} />
+            <KpiCard label="Activos afectados" value={r.agentes} icon={Server} />
           </div>
 
           {/* Distribucion por severidad */}

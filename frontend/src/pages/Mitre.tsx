@@ -9,6 +9,7 @@ import { mitreApi, TACTIC_ORDER, TACTIC_ES, type MitreData, type MitreTechnique 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RangeTabs, RANGE_24_7_30 } from '@/components/shared/RangeTabs';
+import { KpiCard } from '@/components/shared/KpiCard';
 
 type Range = '24h' | '7d' | '30d';
 const HOURS: Record<Range, number> = { '24h': 24, '7d': 168, '30d': 720 };
@@ -19,17 +20,6 @@ function sevBorder(level: number): string {
   if (level >= 8) return '#f97316';
   if (level >= 5) return '#eab308';
   return 'transparent';
-}
-
-function Kpi({ label, value }: { label: string; value: string | number }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-      </CardContent>
-    </Card>
-  );
 }
 
 export default function Mitre() {
@@ -105,10 +95,10 @@ export default function Mitre() {
       ) : data && (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Kpi label="Eventos mapeados a ATT&CK" value={data.total.toLocaleString('es-CO')} />
-            <Kpi label="Técnicas distintas" value={data.tecnicasDistintas} />
-            <Kpi label="Tácticas observadas" value={`${columns.length} / 14`} />
-            <Kpi label="Técnica más activa" value={data.techniques[0]?.id ?? '—'} />
+            <KpiCard label="Eventos mapeados a ATT&CK" value={data.total.toLocaleString('es-CO')} />
+            <KpiCard label="Técnicas distintas" value={data.tecnicasDistintas} />
+            <KpiCard label="Tácticas observadas" value={`${columns.length} / 14`} />
+            <KpiCard label="Técnica más activa" value={data.techniques[0]?.id ?? '—'} />
           </div>
 
           {/* Tecnicas de mayor riesgo */}
@@ -140,9 +130,9 @@ export default function Mitre() {
               <CardTitle className="text-muted-foreground">Matriz ATT&CK · tácticas y técnicas observadas</CardTitle>
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                 <span>menos</span>
-                <span className="h-3 w-6 rounded" style={{ background: 'rgba(239,68,68,0.18)' }} />
-                <span className="h-3 w-6 rounded" style={{ background: 'rgba(239,68,68,0.45)' }} />
-                <span className="h-3 w-6 rounded" style={{ background: 'rgba(239,68,68,0.8)' }} />
+                <span className="h-3 w-6 rounded" style={{ background: 'rgba(220,38,38,0.35)' }} />
+                <span className="h-3 w-6 rounded" style={{ background: 'rgba(220,38,38,0.58)' }} />
+                <span className="h-3 w-6 rounded" style={{ background: 'rgba(220,38,38,0.82)' }} />
                 <span>más</span>
               </div>
             </CardHeader>
@@ -171,7 +161,8 @@ export default function Mitre() {
 }
 
 function Cell({ t, intensity }: { t: MitreTechnique; intensity: number }) {
-  const bg = `rgba(239,68,68,${(0.12 + intensity * 0.68).toFixed(2)})`;
+  // Opacidad minima alta para que las celdas poco activas sigan legibles.
+  const bg = `rgba(220,38,38,${(0.32 + intensity * 0.5).toFixed(2)})`;
   return (
     <a
       href={`https://attack.mitre.org/techniques/${t.id.replace('.', '/')}/`}
@@ -179,13 +170,13 @@ function Cell({ t, intensity }: { t: MitreTechnique; intensity: number }) {
       rel="noreferrer"
       title={`${t.id} · ${t.name} — ${t.count.toLocaleString('es-CO')} eventos · nivel ${t.maxLevel}`}
       className="block rounded border-l-2 px-2 py-1.5 transition-transform hover:scale-[1.02]"
-      style={{ background: bg, borderColor: sevBorder(t.maxLevel) }}
+      style={{ background: bg, borderColor: sevBorder(t.maxLevel), textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="font-mono text-[10px] font-semibold text-white/90">{t.id}</span>
-        <span className="text-[10px] tabular-nums text-white/80">{t.count > 999 ? `${Math.round(t.count / 1000)}k` : t.count}</span>
+        <span className="font-mono text-[10px] font-semibold text-white">{t.id}</span>
+        <span className="text-[10px] tabular-nums text-white/95">{t.count > 999 ? `${Math.round(t.count / 1000)}k` : t.count}</span>
       </div>
-      <p className="truncate text-[10px] leading-tight text-white/80">{t.name}</p>
+      <p className="truncate text-[10px] leading-tight text-white/95">{t.name}</p>
     </a>
   );
 }

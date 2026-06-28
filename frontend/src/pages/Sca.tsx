@@ -8,17 +8,7 @@ import { ClipboardCheck, RefreshCw, Loader2, Server, Wrench } from 'lucide-react
 import { scaApi, scoreColor, type ScaData } from '@/lib/sca';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-
-function Kpi({ label, value, color }: { label: string; value: string | number; color?: string }) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums" style={color ? { color } : undefined}>{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
+import { KpiCard } from '@/components/shared/KpiCard';
 
 export default function Sca() {
   const [data, setData] = useState<ScaData | null>(null);
@@ -71,11 +61,11 @@ export default function Sca() {
         <>
           {/* KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <Kpi label="Cumplimiento promedio" value={`${r.scorePromedio}%`} color={scoreColor(r.scorePromedio)} />
-            <Kpi label="Activos evaluados" value={r.agentesEvaluados} />
-            <Kpi label="Checks evaluados" value={r.totalChecks.toLocaleString('es-CO')} />
-            <Kpi label="Aprobados" value={r.pass.toLocaleString('es-CO')} color="#22c55e" />
-            <Kpi label="Fallidos" value={r.fail.toLocaleString('es-CO')} color="#ef4444" />
+            <KpiCard label="Cumplimiento promedio" value={`${r.scorePromedio}%`} color={scoreColor(r.scorePromedio)} />
+            <KpiCard label="Activos evaluados" value={r.agentesEvaluados} />
+            <KpiCard label="Checks evaluados" value={r.totalChecks.toLocaleString('es-CO')} />
+            <KpiCard label="Aprobados" value={r.pass.toLocaleString('es-CO')} color="#22c55e" />
+            <KpiCard label="Fallidos" value={r.fail.toLocaleString('es-CO')} color="#ef4444" />
           </div>
 
           {/* Postura por activo */}
