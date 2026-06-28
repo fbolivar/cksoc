@@ -116,7 +116,7 @@ export default function Sca() {
               ) : (
                 <div className="divide-y divide-border/40">
                   {data.topFallidos.map((c, i) => (
-                    <div key={i} className="py-2.5">
+                    <div key={c.title} className="py-2.5">
                       <button onClick={() => setOpen(open === i ? null : i)} className="flex w-full items-start gap-3 text-left">
                         <span className="mt-0.5 inline-flex h-5 min-w-[2rem] items-center justify-center rounded bg-red-500/15 px-1.5 text-[11px] font-semibold text-red-400">
                           {c.count}

@@ -8,6 +8,7 @@ import { Crosshair, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import { mitreApi, TACTIC_ORDER, TACTIC_ES, type MitreData, type MitreTechnique } from '@/lib/mitre';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { RangeTabs, RANGE_24_7_30 } from '@/components/shared/RangeTabs';
 
 type Range = '24h' | '7d' | '30d';
 const HOURS: Record<Range, number> = { '24h': 24, '7d': 168, '30d': 720 };
@@ -88,16 +89,7 @@ export default function Mitre() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border/70 bg-card/50 p-1">
-            {(['24h', '7d', '30d'] as Range[]).map((rg) => (
-              <button key={rg} onClick={() => setRange(rg)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  range === rg ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}>
-                {rg === '24h' ? '24 h' : rg === '7d' ? '7 días' : '30 días'}
-              </button>
-            ))}
-          </div>
+          <RangeTabs value={range} onChange={setRange} options={RANGE_24_7_30} />
           <Button variant="outline" size="sm" onClick={() => load(range)} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
           </Button>

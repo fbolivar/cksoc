@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { WorldAttackMap } from '@/components/attacks/WorldAttackMap';
+import { RangeTabs, RANGE_24_7_30 } from '@/components/shared/RangeTabs';
 
 type Range = '24h' | '7d' | '30d';
 const HOURS: Record<Range, number> = { '24h': 24, '7d': 168, '30d': 720 };
@@ -199,19 +200,7 @@ export default function AttackMap() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border/70 bg-card/50 p-1">
-            {(['24h', '7d', '30d'] as Range[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  range === r ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {r === '24h' ? '24 h' : r === '7d' ? '7 días' : '30 días'}
-              </button>
-            ))}
-          </div>
+          <RangeTabs value={range} onChange={setRange} options={RANGE_24_7_30} />
           <Button variant="outline" size="sm" onClick={() => load(range)} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
             Actualizar
@@ -294,7 +283,7 @@ export default function AttackMap() {
               ) : (
                 <div className="space-y-2.5">
                   {shownOrigins.slice(0, 14).map((o, i) => (
-                    <div key={i} className="flex items-center gap-2.5">
+                    <div key={`${o.ips[0]}-${o.isoCode}-${i}`} className="flex items-center gap-2.5">
                       <span className="w-4 text-xs text-muted-foreground/60">{i + 1}</span>
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full"

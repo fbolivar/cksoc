@@ -20,11 +20,15 @@ import {
   Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
+
+type Role = 'admin' | 'analista' | 'lector';
 
 interface Item {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
+  roles?: Role[]; // si se define, solo esos roles ven el item
 }
 
 const sections: { title: string | null; items: Item[] }[] = [
@@ -40,7 +44,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
       { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
-      { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert },
+      { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert, roles: ['admin', 'analista'] },
     ],
   },
   {
@@ -62,12 +66,19 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/notificaciones', label: 'Notificaciones', icon: BellRing },
       { to: '/reportes', label: 'Reportes', icon: FileBarChart },
       { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse },
-      { to: '/gestion', label: 'Gestión', icon: Users },
+      { to: '/gestion', label: 'Gestión', icon: Users, roles: ['admin'] },
     ],
   },
 ];
 
 export function Sidebar() {
+  const { user } = useAuth();
+  const role = (user?.role ?? 'lector') as Role;
+  // Filtra items por rol y descarta secciones que queden vacias.
+  const visibles = sections
+    .map((s) => ({ ...s, items: s.items.filter((i) => !i.roles || i.roles.includes(role)) }))
+    .filter((s) => s.items.length > 0);
+
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-border/60 bg-card/40 backdrop-blur-xl">
       <div className="flex items-center gap-2 px-5 h-16 border-b border-border/60">
@@ -75,7 +86,7 @@ export function Sidebar() {
         <span className="text-sm font-semibold tracking-wide">SOC · PNNC</span>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
-        {sections.map((section, si) => (
+        {visibles.map((section, si) => (
           <div key={si} className="space-y-1">
             {section.title && (
               <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">

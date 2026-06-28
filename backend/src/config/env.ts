@@ -84,6 +84,8 @@ const schema = z.object({
 
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
+  // Tope diario de consultas a AbuseIPDB (free tier ~1000/dia); deja margen.
+  ABUSEIPDB_DAILY_CAP: z.coerce.number().default(900),
   // Score de AbuseIPDB a partir del cual una IP se considera "ataque externo".
   ATTACKS_ABUSE_THRESHOLD: z.coerce.number().default(25),
   // Maximo de origenes a enriquecer con reputacion por consulta (cuota free ~1000/dia).

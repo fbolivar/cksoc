@@ -8,6 +8,7 @@ import { FileSearch, RefreshCw, Loader2, Server, User, FilePlus2, FilePen, FileX
 import { fimApi, EVENT_META, type FimData } from '@/lib/fim';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { RangeTabs, RANGE_24_7_30 } from '@/components/shared/RangeTabs';
 
 type Range = '24h' | '7d' | '30d';
 const HOURS: Record<Range, number> = { '24h': 24, '7d': 168, '30d': 720 };
@@ -72,16 +73,7 @@ export default function Fim() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border/70 bg-card/50 p-1">
-            {(['24h', '7d', '30d'] as Range[]).map((rg) => (
-              <button key={rg} onClick={() => setRange(rg)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  range === rg ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}>
-                {rg === '24h' ? '24 h' : rg === '7d' ? '7 días' : '30 días'}
-              </button>
-            ))}
-          </div>
+          <RangeTabs value={range} onChange={setRange} options={RANGE_24_7_30} />
           <Button variant="outline" size="sm" onClick={() => load(range)} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
           </Button>
@@ -131,8 +123,8 @@ export default function Fim() {
             <Card>
               <CardHeader><CardTitle className="text-muted-foreground">Rutas con más cambios</CardTitle></CardHeader>
               <CardContent className="space-y-2">
-                {data.topPaths.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs">
+                {data.topPaths.map((p) => (
+                  <div key={p.path} className="flex items-center gap-2 text-xs">
                     <span className="tabular-nums rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">{p.count}</span>
                     <span className="truncate font-mono text-muted-foreground" title={p.path}>{p.path}</span>
                   </div>
@@ -158,7 +150,7 @@ export default function Fim() {
                   </thead>
                   <tbody>
                     {data.recientes.map((c, i) => (
-                      <tr key={i} className="border-b border-border/30 last:border-0">
+                      <tr key={`${c.timestamp}-${c.path}-${i}`} className="border-b border-border/30 last:border-0">
                         <td className="py-2 pr-3"><EventChip e={c.event} /></td>
                         <td className="py-2 pr-3 max-w-md">
                           <span className="block truncate font-mono text-xs" title={c.path}>{c.path}</span>

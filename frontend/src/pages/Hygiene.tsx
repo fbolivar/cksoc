@@ -148,7 +148,7 @@ export default function Hygiene() {
                       </tr></thead>
                       <tbody>
                         {ports.map((p, i) => (
-                          <tr key={i} className="border-b border-border/20 last:border-0">
+                          <tr key={`${p.agent}-${p.transport}-${p.ip}-${p.port}-${i}`} className="border-b border-border/20 last:border-0">
                             <td className="py-1.5 pr-3 font-mono text-[11px] text-muted-foreground">{p.agent}</td>
                             <td className="py-1.5 pr-3 text-[11px] uppercase text-muted-foreground">{p.transport}</td>
                             <td className="py-1.5 pr-3 font-mono text-xs">{p.ip}:<b className="text-neon">{p.port}</b></td>
@@ -173,7 +173,7 @@ export default function Hygiene() {
                 {!software ? <Loading /> : (
                   <div className="grid gap-2 md:grid-cols-2">
                     {software.map((s, i) => (
-                      <div key={i} className="flex items-center gap-3 rounded-md border border-border/40 px-3 py-2">
+                      <div key={`${s.name}-${i}`} className="flex items-center gap-3 rounded-md border border-border/40 px-3 py-2">
                         <span className="min-w-[2rem] rounded bg-secondary px-1.5 py-0.5 text-center text-[10px] text-muted-foreground" title="activos con este software">{s.hosts}</span>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm">{s.name}</p>
@@ -211,7 +211,7 @@ export default function Hygiene() {
                   ) : (
                     <div className="space-y-1.5">
                       {users.riesgo.map((u, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm">
+                        <div key={`${u.agent}-${u.name}-${i}`} className="flex items-center gap-2 text-sm">
                           <span className="font-mono text-xs">{u.name}</span>
                           {u.hidden && <span className="rounded bg-red-500/15 px-1.5 text-[10px] text-red-400">oculta</span>}
                           {u.authFailures > 0 && <span className="rounded bg-amber-500/15 px-1.5 text-[10px] text-amber-400">{u.authFailures} fallos</span>}

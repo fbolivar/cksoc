@@ -11,6 +11,7 @@ import {
 } from '@/lib/compliance';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { RangeTabs } from '@/components/shared/RangeTabs';
 
 type Range = '7d' | '30d' | '90d';
 const HOURS: Record<Range, number> = { '7d': 168, '30d': 720, '90d': 2160 };
@@ -46,16 +47,8 @@ export default function Compliance() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-border/70 bg-card/50 p-1">
-            {(['7d', '30d', '90d'] as Range[]).map((rg) => (
-              <button key={rg} onClick={() => setRange(rg)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  range === rg ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}>
-                {rg === '7d' ? '7 días' : rg === '30d' ? '30 días' : '90 días'}
-              </button>
-            ))}
-          </div>
+          <RangeTabs value={range} onChange={setRange}
+            options={[{ value: '7d', label: '7 días' }, { value: '30d', label: '30 días' }, { value: '90d', label: '90 días' }]} />
           <Button variant="outline" size="sm" onClick={() => load(range)} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
           </Button>

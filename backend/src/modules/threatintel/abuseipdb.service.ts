@@ -20,6 +20,16 @@ export interface IpReputation {
 const cache = new Map<string, { at: number; data: IpReputation }>();
 const TTL_MS = 30 * 60_000; // 30 min
 
+// Contador diario para no agotar la cuota (free tier ~1000/dia). Se reinicia al
+// cambiar de dia (UTC). En memoria: suficiente para un unico proceso backend.
+let dailyCount = 0;
+let dailyKey = '';
+function underDailyCap(): boolean {
+  const k = new Date().toISOString().slice(0, 10);
+  if (k !== dailyKey) { dailyKey = k; dailyCount = 0; }
+  return dailyCount < env.ABUSEIPDB_DAILY_CAP;
+}
+
 export function isThreatIntelConfigured(): boolean {
   return Boolean(env.ABUSEIPDB_API_KEY);
 }
@@ -32,7 +42,11 @@ export async function checkReputation(ip: string): Promise<IpReputation> {
   const cached = cache.get(ip);
   if (cached && Date.now() - cached.at < TTL_MS) return cached.data;
 
+  // Respeta el tope diario: si se alcanzo, no consulta (devuelve "configurado" vacio).
+  if (!underDailyCap()) return emptyRep(ip, true);
+
   try {
+    dailyCount += 1;
     const { data } = await axios.get('https://api.abuseipdb.com/api/v2/check', {
       params: { ipAddress: ip, maxAgeInDays: 90 },
       headers: { Key: env.ABUSEIPDB_API_KEY as string, Accept: 'application/json' },
@@ -52,10 +66,21 @@ export async function checkReputation(ip: string): Promise<IpReputation> {
     };
     cache.set(ip, { at: Date.now(), data: rep });
     return rep;
-  } catch {
+  } catch (err) {
     // Un fallo de la API no debe romper el flujo: devolvemos vacio "configurado".
+    const status = (err as { response?: { status?: number } }).response?.status;
+    if (status === 429) {
+      // eslint-disable-next-line no-console
+      console.warn(`AbuseIPDB: cuota agotada (HTTP 429) tras ${dailyCount} consultas hoy.`);
+      dailyCount = env.ABUSEIPDB_DAILY_CAP; // frena el resto del dia
+    }
     return emptyRep(ip, true);
   }
+}
+
+/** Estado de la cuota (para diagnostico). */
+export function abuseQuotaUsed(): number {
+  return dailyCount;
 }
 
 function emptyRep(ip: string, configured: boolean): IpReputation {

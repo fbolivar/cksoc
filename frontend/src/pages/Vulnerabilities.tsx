@@ -183,7 +183,7 @@ export default function Vulnerabilities() {
                   </thead>
                   <tbody>
                     {data.items.map((v, i) => (
-                      <tr key={i} className="border-b border-border/30 last:border-0 align-top">
+                      <tr key={`${v.cve}-${v.agent}-${v.packageName}-${i}`} className="border-b border-border/30 last:border-0 align-top">
                         <td className="py-2 pr-3">
                           <a href={v.reference?.split(',')[0] || `https://cti.wazuh.com/vulnerabilities/cves/${v.cve}`}
                             target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-mono text-xs text-neon hover:underline">
