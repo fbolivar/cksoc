@@ -196,6 +196,124 @@ async function termsAgg(
   }
 }
 
+// ------------------------- Explorador de alertas -------------------------
+
+export interface AlertHit {
+  id: string;
+  index: string;
+  timestamp: string;
+  ruleId: string;
+  level: number;
+  band: 'baja' | 'media' | 'alta' | 'critica';
+  description: string;
+  agent: string;
+  srcip: string | null;
+  mitre: string[];
+  groups: string[];
+}
+
+export interface AlertSearchParams {
+  range: string;
+  band?: string;
+  agent?: string;
+  srcip?: string;
+  ruleId?: string;
+  q?: string;
+  mitre?: string;
+  page: number;
+  size: number;
+}
+
+const MAX_WINDOW = 10000; // limite de deep paging de OpenSearch
+
+function bandRange(band: string): Record<string, number> | null {
+  switch (band) {
+    case 'critica': return { gte: 12 };
+    case 'alta': return { gte: 8, lte: 11 };
+    case 'media': return { gte: 5, lte: 7 };
+    case 'baja': return { lte: 4 };
+    default: return null;
+  }
+}
+
+/** Busqueda paginada de alertas individuales con filtros. */
+export async function searchAlerts(
+  p: AlertSearchParams
+): Promise<{ total: number; capped: boolean; items: AlertHit[] }> {
+  const client = getIndexerClient();
+  const filter: unknown[] = [timeQuery(p.range)];
+  const bandR = p.band ? bandRange(p.band) : null;
+  if (bandR) filter.push({ range: { 'rule.level': bandR } });
+  if (p.agent) filter.push({ term: { 'agent.name': p.agent } });
+  if (p.ruleId) filter.push({ term: { 'rule.id': p.ruleId } });
+  if (p.mitre) filter.push({ term: { 'rule.mitre.id': p.mitre } });
+  if (p.srcip) {
+    filter.push({
+      bool: { should: [{ term: { 'data.srcip': p.srcip } }, { term: { 'data.remip': p.srcip } }], minimum_should_match: 1 },
+    });
+  }
+  const must = p.q ? [{ match: { 'rule.description': { query: p.q, operator: 'and' } } }] : [];
+
+  const from = Math.min(p.page * p.size, Math.max(0, MAX_WINDOW - p.size));
+  try {
+    const { data } = await client.post<{
+      hits: { total: { value: number; relation: string }; hits: { _id: string; _index: string; _source: Record<string, unknown> }[] };
+    }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+      track_total_hits: MAX_WINDOW,
+      from,
+      size: p.size,
+      sort: [{ timestamp: { order: 'desc' } }],
+      _source: ['timestamp', 'rule.id', 'rule.level', 'rule.description', 'rule.groups', 'rule.mitre.id', 'agent.name', 'data.srcip', 'data.remip'],
+      query: { bool: { filter, ...(must.length ? { must } : {}) } },
+    });
+    return {
+      total: data.hits.total.value,
+      capped: data.hits.total.relation === 'gte',
+      items: data.hits.hits.map(flattenHit),
+    };
+  } catch (err) {
+    return mapIndexerError(err);
+  }
+}
+
+function flattenHit(h: { _id: string; _index: string; _source: Record<string, unknown> }): AlertHit {
+  const s = h._source;
+  const rule = (s.rule ?? {}) as Record<string, unknown>;
+  const agent = (s.agent ?? {}) as Record<string, unknown>;
+  const dataF = (s.data ?? {}) as Record<string, unknown>;
+  const mitre = ((rule.mitre ?? {}) as Record<string, unknown>).id;
+  const level = Number(rule.level ?? 0);
+  return {
+    id: h._id,
+    index: h._index,
+    timestamp: (s.timestamp as string) ?? '',
+    ruleId: String(rule.id ?? ''),
+    level,
+    band: severityBand(level),
+    description: (rule.description as string) ?? '',
+    agent: (agent.name as string) ?? '',
+    srcip: ((dataF.srcip ?? dataF.remip) as string) ?? null,
+    mitre: Array.isArray(mitre) ? (mitre as string[]) : mitre ? [String(mitre)] : [],
+    groups: Array.isArray(rule.groups) ? (rule.groups as string[]) : [],
+  };
+}
+
+/** Documento completo de una alerta por _id (para el panel de detalle). */
+export async function getAlertDetail(index: string, id: string): Promise<Record<string, unknown>> {
+  if (!/^wazuh-alerts-[\w.\-*]+$/.test(index)) {
+    throw new HttpError(400, 'Índice no permitido');
+  }
+  const client = getIndexerClient();
+  try {
+    const { data } = await client.get<{ _source: Record<string, unknown> }>(
+      `/${encodeURIComponent(index)}/_doc/${encodeURIComponent(id)}`
+    );
+    return data._source ?? {};
+  } catch (err) {
+    return mapIndexerError(err);
+  }
+}
+
 /** Traduce errores del Indexer a HttpError legibles. */
 function mapIndexerError(err: unknown): never {
   if (err instanceof HttpError) throw err;

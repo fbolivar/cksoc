@@ -32,6 +32,7 @@ import { fimRouter } from './modules/fim/fim.routes';
 import { hygieneRouter } from './modules/hygiene/hygiene.routes';
 import { complianceRouter } from './modules/compliance/compliance.routes';
 import { overviewRouter } from './modules/overview/overview.routes';
+import { assetsRouter } from './modules/assets/assets.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
@@ -77,6 +78,7 @@ app.use('/api/fim', fimRouter);
 app.use('/api/hygiene', hygieneRouter);
 app.use('/api/compliance', complianceRouter);
 app.use('/api/overview', overviewRouter);
+app.use('/api/assets', assetsRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

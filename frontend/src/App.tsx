@@ -11,12 +11,14 @@ import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import Overview from '@/pages/Overview';
 import AttackMap from '@/pages/AttackMap';
+import Alerts from '@/pages/Alerts';
 import Mitre from '@/pages/Mitre';
 import Response from '@/pages/Response';
 import Notifications from '@/pages/Notifications';
 import Reports from '@/pages/Reports';
 import SiemHealth from '@/pages/SiemHealth';
 import Vulnerabilities from '@/pages/Vulnerabilities';
+import Assets from '@/pages/Assets';
 import Sca from '@/pages/Sca';
 import Fim from '@/pages/Fim';
 import Hygiene from '@/pages/Hygiene';
@@ -55,6 +57,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Overview />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/alertas"
+        element={
+          <Protected>
+            <AppLayout>
+              <Alerts />
             </AppLayout>
           </Protected>
         }
@@ -105,6 +117,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Reports />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/activos"
+        element={
+          <Protected>
+            <AppLayout>
+              <Assets />
             </AppLayout>
           </Protected>
         }

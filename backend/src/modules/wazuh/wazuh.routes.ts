@@ -22,6 +22,8 @@ import {
   getTimeline,
   getTopAgents,
   getMitre,
+  searchAlerts,
+  getAlertDetail,
 } from './wazuh.service';
 import { getAgentsSummary, getAgents } from './agents.service';
 import { HttpError } from '../auth/auth.service';
@@ -36,6 +38,46 @@ const getSize = (req: Request, def: number) => {
   const n = Number(req.query.size);
   return Number.isFinite(n) && n > 0 && n <= 50 ? Math.floor(n) : def;
 };
+
+// Explorador de alertas: busqueda paginada con filtros
+wazuhRouter.get('/alerts/search', async (req: Request, res: Response) => {
+  try {
+    const str = (k: string) => (typeof req.query[k] === 'string' && req.query[k] ? String(req.query[k]) : undefined);
+    const page = Math.max(0, Math.floor(Number(req.query.page) || 0));
+    const sizeN = Number(req.query.size);
+    const size = Number.isFinite(sizeN) && sizeN > 0 && sizeN <= 100 ? Math.floor(sizeN) : 25;
+    res.json(
+      await searchAlerts({
+        range: getRange(req),
+        band: str('band'),
+        agent: str('agent'),
+        srcip: str('srcip'),
+        ruleId: str('ruleId'),
+        q: str('q'),
+        mitre: str('mitre'),
+        page,
+        size,
+      })
+    );
+  } catch (err) {
+    sendError(err, res);
+  }
+});
+
+// Documento completo de una alerta (panel de detalle)
+wazuhRouter.get('/alerts/detail', async (req: Request, res: Response) => {
+  const index = typeof req.query.index === 'string' ? req.query.index : '';
+  const id = typeof req.query.id === 'string' ? req.query.id : '';
+  if (!index || !id) {
+    res.status(400).json({ error: 'Faltan parámetros index/id' });
+    return;
+  }
+  try {
+    res.json({ source: await getAlertDetail(index, id) });
+  } catch (err) {
+    sendError(err, res);
+  }
+});
 
 wazuhRouter.get('/alerts/count', async (req, res) => {
   try {
