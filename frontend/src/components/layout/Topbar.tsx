@@ -3,6 +3,7 @@
  * logo PNNC, titulo del modulo y menu de usuario con cierre de sesion.
  */
 import { LogOut, ShieldCheck, Menu } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 
@@ -40,10 +41,10 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
 
       <div className="flex items-center gap-3">
         {user && (
-          <div className="text-right leading-tight hidden sm:block">
+          <Link to="/cuenta" className="text-right leading-tight hidden sm:block rounded px-2 py-1 hover:bg-white/10 transition-colors" title="Mi cuenta y seguridad">
             <p className="text-sm font-medium text-white">{user.fullName}</p>
             <p className="text-[11px] text-neon">{roleLabels[user.role] ?? user.role}</p>
-          </div>
+          </Link>
         )}
         <Button variant="outline" size="sm" onClick={logout} className="border-white/20 text-white hover:bg-white/10">
           <LogOut className="h-4 w-4" />

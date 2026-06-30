@@ -14,7 +14,13 @@ interface UserRow {
   full_name: string;
   is_active: boolean;
   role: RoleName;
+  totp_enabled?: boolean;
 }
+
+/** Resultado del login: sesion completa, o reto de 2FA pendiente. */
+export type LoginResult =
+  | { user: AuthUser; token: string }
+  | { twoFactor: true; challenge: string };
 
 const SALT_ROUNDS = 12;
 
@@ -58,9 +64,9 @@ export async function registerUser(
 export async function loginUser(
   email: string,
   password: string
-): Promise<{ user: AuthUser; token: string }> {
+): Promise<LoginResult> {
   const rows = await query<UserRow>(
-    `SELECT u.id, u.email, u.password_hash, u.full_name, u.is_active, r.name AS role
+    `SELECT u.id, u.email, u.password_hash, u.full_name, u.is_active, u.totp_enabled, r.name AS role
        FROM users u
        JOIN roles r ON r.id = u.role_id
       WHERE u.email = $1`,
@@ -80,11 +86,40 @@ export async function loginUser(
     throw new HttpError(401, 'Credenciales invalidas');
   }
 
+  // Si el usuario tiene 2FA activo, no se emite la sesion: se entrega un reto
+  // de corta duracion que se canjea con el codigo TOTP en /auth/login/2fa.
+  if (user.totp_enabled) {
+    return { twoFactor: true, challenge: signChallenge(user.id) };
+  }
+
   await query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]);
 
   const authUser = toAuthUser(user);
   const token = signToken(authUser);
   return { user: authUser, token };
+}
+
+/** Firma un reto de 2FA de corta duracion (5 min) ligado al usuario. */
+export function signChallenge(userId: string): string {
+  return jwt.sign({ sub: userId, purpose: '2fa' }, env.JWT_SECRET, { expiresIn: '5m' });
+}
+
+/** Valida un reto de 2FA y devuelve el id del usuario. */
+export function verifyChallenge(token: string): string {
+  try {
+    const p = jwt.verify(token, env.JWT_SECRET) as { sub: string; purpose?: string };
+    if (p.purpose !== '2fa') throw new Error('proposito invalido');
+    return p.sub;
+  } catch {
+    throw new HttpError(401, 'Reto 2FA invalido o expirado');
+  }
+}
+
+/** Emite la sesion (user + token) de un usuario ya autenticado por 2FA. */
+export async function issueSessionForUser(userId: string): Promise<{ user: AuthUser; token: string }> {
+  const authUser = await getProfile(userId);
+  await query('UPDATE users SET last_login_at = now() WHERE id = $1', [userId]);
+  return { user: authUser, token: signToken(authUser) };
 }
 
 /** Devuelve el perfil del usuario autenticado. */

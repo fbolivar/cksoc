@@ -25,6 +25,7 @@ import Fim from '@/pages/Fim';
 import Hygiene from '@/pages/Hygiene';
 import Compliance from '@/pages/Compliance';
 import Management from '@/pages/Management';
+import Account from '@/pages/Account';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -198,6 +199,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Compliance />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/cuenta"
+        element={
+          <Protected>
+            <AppLayout>
+              <Account />
             </AppLayout>
           </Protected>
         }

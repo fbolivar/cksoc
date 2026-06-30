@@ -231,6 +231,14 @@ CREATE TABLE IF NOT EXISTS incident_notes (
 CREATE INDEX IF NOT EXISTS idx_incident_notes_inc ON incident_notes(incident_id, created_at);
 
 -- ---------------------------------------------------------------------
+-- 2FA (TOTP) por usuario: secreto cifrado (AES-256-GCM), flag de
+-- activacion y codigos de respaldo (hashes SHA-256, de un solo uso).
+-- ---------------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup_codes TEXT[];
+
+-- ---------------------------------------------------------------------
 -- Seed de roles (idempotente)
 -- ---------------------------------------------------------------------
 INSERT INTO roles (name, description) VALUES

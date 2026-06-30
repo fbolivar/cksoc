@@ -4,7 +4,11 @@
  */
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { registerUser, loginUser, getProfile, HttpError } from './auth.service';
+import {
+  registerUser, loginUser, getProfile, HttpError,
+  verifyChallenge, issueSessionForUser,
+} from './auth.service';
+import { getStatus, setup, enable, disable, verifyCode } from './twofactor.service';
 
 const credentialsSchema = z.object({
   email: z.string().email('Correo invalido'),
@@ -50,6 +54,75 @@ export async function me(req: Request, res: Response): Promise<void> {
   try {
     const user = await getProfile(req.user!.id);
     res.json({ user });
+  } catch (err) {
+    handleError(err, res);
+  }
+}
+
+const login2faSchema = z.object({
+  challenge: z.string().min(10),
+  code: z.string().min(6, 'Código inválido').max(20),
+});
+
+/** Segundo paso del login: canjea el reto + codigo 2FA por una sesion. */
+export async function login2fa(req: Request, res: Response): Promise<void> {
+  const parsed = login2faSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Datos invalidos' });
+    return;
+  }
+  try {
+    const userId = verifyChallenge(parsed.data.challenge);
+    if (!(await verifyCode(userId, parsed.data.code))) {
+      res.status(401).json({ error: 'Código 2FA inválido' });
+      return;
+    }
+    res.json(await issueSessionForUser(userId));
+  } catch (err) {
+    handleError(err, res);
+  }
+}
+
+// --- Gestion de 2FA (usuario autenticado, para su propia cuenta) ---
+
+export async function twofaStatus(req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await getStatus(req.user!.id));
+  } catch (err) {
+    handleError(err, res);
+  }
+}
+
+export async function twofaSetup(req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await setup(req.user!.id, req.user!.email));
+  } catch (err) {
+    handleError(err, res);
+  }
+}
+
+export async function twofaEnable(req: Request, res: Response): Promise<void> {
+  const parsed = z.object({ code: z.string().min(6).max(10) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Código inválido' });
+    return;
+  }
+  try {
+    res.json(await enable(req.user!.id, parsed.data.code));
+  } catch (err) {
+    handleError(err, res);
+  }
+}
+
+export async function twofaDisable(req: Request, res: Response): Promise<void> {
+  const parsed = z.object({ password: z.string().min(1), code: z.string().min(6).max(20) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Datos invalidos' });
+    return;
+  }
+  try {
+    await disable(req.user!.id, parsed.data.password, parsed.data.code);
+    res.json({ enabled: false });
   } catch (err) {
     handleError(err, res);
   }
