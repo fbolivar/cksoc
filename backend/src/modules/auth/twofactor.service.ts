@@ -18,7 +18,7 @@ authenticator.options = { window: 1 };
 const ISSUER = 'SOC PNNC';
 const KEY = createHash('sha256').update(`${env.JWT_SECRET}|totp-v1`).digest(); // 32 bytes
 
-function encrypt(plain: string): string {
+export function encryptSecret(plain: string): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', KEY, iv);
   const ct = Buffer.concat([cipher.update(plain, 'utf8'), cipher.final()]);
@@ -26,7 +26,7 @@ function encrypt(plain: string): string {
   return [iv.toString('base64'), tag.toString('base64'), ct.toString('base64')].join(':');
 }
 
-function decrypt(blob: string): string {
+export function decryptSecret(blob: string): string {
   const [ivb, tagb, ctb] = blob.split(':');
   const decipher = createDecipheriv('aes-256-gcm', KEY, Buffer.from(ivb, 'base64'));
   decipher.setAuthTag(Buffer.from(tagb, 'base64'));
@@ -63,7 +63,7 @@ export async function setup(userId: string, email: string): Promise<{ otpauth: s
   const otpauth = authenticator.keyuri(email, ISSUER, secret);
   const qr = await QRCode.toDataURL(otpauth, { margin: 1, width: 220 });
   // Guarda el secreto cifrado pero deja 2FA desactivado hasta confirmar un codigo.
-  await query('UPDATE users SET totp_secret = $1, totp_enabled = FALSE WHERE id = $2', [encrypt(secret), userId]);
+  await query('UPDATE users SET totp_secret = $1, totp_enabled = FALSE WHERE id = $2', [encryptSecret(secret), userId]);
   return { otpauth, qr, secret };
 }
 
@@ -72,7 +72,7 @@ export async function enable(userId: string, code: string): Promise<{ backupCode
   const r = await load(userId);
   if (!r.totp_secret) throw new HttpError(400, 'Primero genere el código QR (setup)');
   if (r.totp_enabled) throw new HttpError(400, 'El 2FA ya está activado');
-  const secret = decrypt(r.totp_secret);
+  const secret = decryptSecret(r.totp_secret);
   if (!authenticator.verify({ token: normalize(code), secret })) {
     throw new HttpError(401, 'Código inválido. Verifique la hora del dispositivo e intente de nuevo.');
   }
@@ -107,7 +107,7 @@ export async function verifyCode(userId: string, code: string): Promise<boolean>
   const r = await load(userId);
   if (!r.totp_secret || !r.totp_enabled) return false;
   const input = normalize(code);
-  const secret = decrypt(r.totp_secret);
+  const secret = decryptSecret(r.totp_secret);
   if (authenticator.verify({ token: input, secret })) return true;
 
   const codes = r.totp_backup_codes ?? [];
