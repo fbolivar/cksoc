@@ -202,6 +202,35 @@ CREATE TABLE IF NOT EXISTS health_log (
 CREATE INDEX IF NOT EXISTS idx_health_log_comp_ts ON health_log(componente, ts DESC);
 
 -- ---------------------------------------------------------------------
+-- Gestion de incidentes/casos del SOC (ciclo de vida + timeline)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS incidents (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title        VARCHAR(200) NOT NULL,
+    description  TEXT,
+    severity     VARCHAR(10)  NOT NULL DEFAULT 'media',     -- baja | media | alta | critica
+    status       VARCHAR(15)  NOT NULL DEFAULT 'abierto',   -- abierto | en_curso | resuelto | cerrado
+    assignee_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    source       JSONB NOT NULL DEFAULT '{}'::jsonb,        -- {alertId, index, ip, agent, ruleId}
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    closed_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS incident_notes (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    incident_id  UUID NOT NULL REFERENCES incidents(id) ON DELETE CASCADE,
+    author_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+    author_name  VARCHAR(255),
+    kind         VARCHAR(20) NOT NULL DEFAULT 'comment',    -- comment | system
+    note         TEXT NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_incident_notes_inc ON incident_notes(incident_id, created_at);
+
+-- ---------------------------------------------------------------------
 -- Seed de roles (idempotente)
 -- ---------------------------------------------------------------------
 INSERT INTO roles (name, description) VALUES

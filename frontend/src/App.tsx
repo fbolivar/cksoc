@@ -12,6 +12,7 @@ import Dashboard from '@/pages/Dashboard';
 import Overview from '@/pages/Overview';
 import AttackMap from '@/pages/AttackMap';
 import Alerts from '@/pages/Alerts';
+import Incidents from '@/pages/Incidents';
 import Mitre from '@/pages/Mitre';
 import Response from '@/pages/Response';
 import Notifications from '@/pages/Notifications';
@@ -67,6 +68,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Alerts />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/incidentes"
+        element={
+          <Protected>
+            <AppLayout>
+              <Incidents />
             </AppLayout>
           </Protected>
         }

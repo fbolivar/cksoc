@@ -3,9 +3,12 @@
  * (tiempo, severidad, regla, agente, IP, texto) con panel de detalle del evento.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase } from 'lucide-react';
 import { alertsApi, BAND_COLOR, BAND_LABEL, type AlertHit, type AlertFilters } from '@/lib/alerts';
+import { incidentsApi, type Severity } from '@/lib/incidents';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +26,10 @@ function SevDot({ band, level }: { band: AlertHit['band']; level: number }) {
 }
 
 export default function Alerts() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const canManage = user?.role === 'admin' || user?.role === 'analista';
+  const [escalating, setEscalating] = useState(false);
   const [range, setRange] = useState('24h');
   const [band, setBand] = useState('');
   const [agent, setAgent] = useState('');
@@ -65,6 +72,22 @@ export default function Alerts() {
       setDetail({ hit, source });
     } catch {
       setDetail({ hit, source: { error: 'No se pudo cargar el detalle' } });
+    }
+  }
+
+  async function escalate(hit: AlertHit) {
+    setEscalating(true);
+    try {
+      await incidentsApi.create({
+        title: (hit.description || `Alerta regla ${hit.ruleId}`).slice(0, 180),
+        severity: hit.band as Severity,
+        source: { alertId: hit.id, index: hit.index, ip: hit.srcip ?? undefined, agent: hit.agent, ruleId: hit.ruleId, description: hit.description },
+      });
+      navigate('/incidentes');
+    } catch {
+      /* el error se ignora; el boton vuelve a estar disponible */
+    } finally {
+      setEscalating(false);
     }
   }
 
@@ -186,6 +209,11 @@ export default function Alerts() {
                 )}
                 {detail.hit.groups.length > 0 && (
                   <p className="mt-1 text-[10px] text-muted-foreground/70">grupos: {detail.hit.groups.join(', ')}</p>
+                )}
+                {canManage && (
+                  <Button size="sm" className="mt-3" onClick={() => escalate(detail.hit)} disabled={escalating}>
+                    {escalating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Briefcase className="h-4 w-4" />} Escalar a incidente
+                  </Button>
                 )}
               </div>
               <div>

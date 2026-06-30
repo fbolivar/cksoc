@@ -20,6 +20,7 @@ import {
   Scale,
   ListFilter,
   Server,
+  Briefcase,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -47,6 +48,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/alertas', label: 'Alertas', icon: ListFilter },
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
       { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
+      { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert, roles: ['admin', 'analista'] },
     ],
   },
