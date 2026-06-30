@@ -6,10 +6,26 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { ShieldAlert, RefreshCw, Loader2, ExternalLink, Server, Package, Bug } from 'lucide-react';
-import { vulnApi, SEV_COLOR, SEV_LABEL, type VulnData, type Severity } from '@/lib/vulnerabilities';
+import { vulnApi, SEV_COLOR, SEV_LABEL, type VulnData, type VulnItem, type Severity } from '@/lib/vulnerabilities';
+import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { KpiCard } from '@/components/shared/KpiCard';
+import { ExportButton } from '@/components/shared/ExportButton';
+
+const VULN_COLS: CsvCol<VulnItem>[] = [
+  { label: 'CVE', get: (v) => v.cve },
+  { label: 'Severidad', get: (v) => SEV_LABEL[v.severity] },
+  { label: 'Score', get: (v) => v.score ?? '' },
+  { label: 'Paquete', get: (v) => v.packageName },
+  { label: 'Versión', get: (v) => v.packageVersion },
+  { label: 'Agente', get: (v) => v.agent },
+  { label: 'SO', get: (v) => v.os },
+  { label: 'Detectado', get: (v) => v.detectedAt ?? '' },
+  { label: 'Publicado', get: (v) => v.publishedAt ?? '' },
+  { label: 'Descripción', get: (v) => v.description },
+  { label: 'Referencia', get: (v) => v.reference ?? '' },
+];
 
 function SevChip({ s }: { s: Severity }) {
   return (
@@ -54,9 +70,12 @@ export default function Vulnerabilities() {
             CVEs detectados por el Vulnerability Detector de Wazuh en los activos monitoreados
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportButton onExport={() => downloadCsv(`vulnerabilidades-${fileStamp()}.csv`, data?.items ?? [], VULN_COLS)} disabled={!data || data.items.length === 0} label="CSV" />
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
+          </Button>
+        </div>
       </div>
 
       {error && (

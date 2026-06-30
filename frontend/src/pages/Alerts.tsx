@@ -9,12 +9,27 @@ import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, B
 import { alertsApi, BAND_COLOR, BAND_LABEL, type AlertHit, type AlertFilters } from '@/lib/alerts';
 import { incidentsApi, type Severity } from '@/lib/incidents';
 import { useAuth } from '@/lib/auth';
+import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RangeTabs, RANGE_24_7_30 } from '@/components/shared/RangeTabs';
+import { ExportButton } from '@/components/shared/ExportButton';
 
 const SIZE = 25;
+const EXPORT_MAX = 1000; // tope de filas a exportar (10 paginas de 100)
+
+const ALERT_COLS: CsvCol<AlertHit>[] = [
+  { label: 'Fecha', get: (h) => h.timestamp },
+  { label: 'Nivel', get: (h) => h.level },
+  { label: 'Banda', get: (h) => BAND_LABEL[h.band] },
+  { label: 'Regla', get: (h) => h.ruleId },
+  { label: 'Descripción', get: (h) => h.description },
+  { label: 'Agente', get: (h) => h.agent },
+  { label: 'IP origen', get: (h) => h.srcip ?? '' },
+  { label: 'MITRE', get: (h) => h.mitre.join(' ') },
+  { label: 'Grupos', get: (h) => h.groups.join(' ') },
+];
 
 function SevDot({ band, level }: { band: AlertHit['band']; level: number }) {
   return (
@@ -30,6 +45,7 @@ export default function Alerts() {
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'analista';
   const [escalating, setEscalating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [range, setRange] = useState('24h');
   const [band, setBand] = useState('');
   const [agent, setAgent] = useState('');
@@ -91,6 +107,26 @@ export default function Alerts() {
     }
   }
 
+  // Exporta hasta EXPORT_MAX filas que cumplan los filtros actuales (varias paginas).
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const base = { range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined };
+      const PSIZE = 100;
+      const all: AlertHit[] = [];
+      for (let p = 0; p * PSIZE < EXPORT_MAX; p++) {
+        const res = await alertsApi.search({ ...base, page: p, size: PSIZE });
+        all.push(...res.items);
+        if (all.length >= res.total || res.items.length < PSIZE) break;
+      }
+      downloadCsv(`alertas-${range}-${fileStamp()}.csv`, all, ALERT_COLS);
+    } catch {
+      /* noop: el boton se reactiva */
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const total = data?.total ?? 0;
   const maxPage = Math.min(Math.ceil(total / SIZE) - 1, Math.floor(10000 / SIZE) - 1);
 
@@ -105,6 +141,7 @@ export default function Alerts() {
         </div>
         <div className="flex items-center gap-2">
           <RangeTabs value={range} onChange={(v) => { setPage(0); setRange(v); }} options={RANGE_24_7_30} />
+          <ExportButton onExport={exportCsv} busy={exporting} disabled={loading || total === 0} />
           <Button variant="outline" size="sm" onClick={() => load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, page, size: SIZE })} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
           </Button>

@@ -8,10 +8,21 @@ import { AxiosError } from 'axios';
 import { Server, RefreshCw, Loader2, ArrowLeft, ShieldAlert, ClipboardCheck, FileSearch, Cpu, ListFilter } from 'lucide-react';
 import { assetsApi, type AssetListItem, type AssetDetail } from '@/lib/assets';
 import { scoreColor } from '@/lib/sca';
+import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ExportButton } from '@/components/shared/ExportButton';
 
 const STATUS_DOT: Record<string, string> = { active: 'bg-emerald-500', disconnected: 'bg-red-500', never_connected: 'bg-gray-500', pending: 'bg-amber-500' };
+
+const ASSET_COLS: CsvCol<AssetListItem>[] = [
+  { label: 'Nombre', get: (a) => a.name },
+  { label: 'IP', get: (a) => a.ip },
+  { label: 'Sistema operativo', get: (a) => a.os },
+  { label: 'Estado', get: (a) => a.status },
+  { label: 'Versión agente', get: (a) => a.version },
+  { label: 'Último keep-alive', get: (a) => a.lastKeepAlive ?? '' },
+];
 
 export default function Assets() {
   const [list, setList] = useState<AssetListItem[] | null>(null);
@@ -43,9 +54,12 @@ export default function Assets() {
         {sel ? (
           <Button variant="outline" size="sm" onClick={() => setSel(null)}><ArrowLeft className="h-4 w-4" /> Volver</Button>
         ) : (
-          <Button variant="outline" size="sm" onClick={() => { setLoading(true); assetsApi.list().then(setList).finally(() => setLoading(false)); }} disabled={loading}>
-            <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
-          </Button>
+          <div className="flex items-center gap-2">
+            <ExportButton onExport={() => downloadCsv(`activos-${fileStamp()}.csv`, list ?? [], ASSET_COLS)} disabled={!list || list.length === 0} />
+            <Button variant="outline" size="sm" onClick={() => { setLoading(true); assetsApi.list().then(setList).finally(() => setLoading(false)); }} disabled={loading}>
+              <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
+            </Button>
+          </div>
         )}
       </div>
 

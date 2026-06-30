@@ -7,13 +7,26 @@ import { AxiosError } from 'axios';
 import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock } from 'lucide-react';
 import { incidentsApi, SEV, ST, type IncidentListItem, type IncidentDetail, type Severity, type Status } from '@/lib/incidents';
 import { useAuth } from '@/lib/auth';
+import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ExportButton } from '@/components/shared/ExportButton';
 
 const STATUSES: Status[] = ['abierto', 'en_curso', 'resuelto', 'cerrado'];
 const SEVS: Severity[] = ['critica', 'alta', 'media', 'baja'];
+
+const INCIDENT_COLS: CsvCol<IncidentListItem>[] = [
+  { label: 'Título', get: (i) => i.title },
+  { label: 'Severidad', get: (i) => SEV[i.severity].label },
+  { label: 'Estado', get: (i) => ST[i.status].label },
+  { label: 'Asignado a', get: (i) => i.assigneeName ?? '' },
+  { label: 'Creado por', get: (i) => i.creatorName ?? '' },
+  { label: 'Notas', get: (i) => i.notes },
+  { label: 'Creado', get: (i) => i.createdAt },
+  { label: 'Actualizado', get: (i) => i.updatedAt },
+];
 
 function Chip({ color, label }: { color: string; label: string }) {
   return <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: `${color}22`, color }}>{label}</span>;
@@ -74,6 +87,7 @@ export default function Incidents() {
           ) : (
             <>
               {canManage && <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> Nuevo</Button>}
+              <ExportButton onExport={() => downloadCsv(`incidentes-${fileStamp()}.csv`, list ?? [], INCIDENT_COLS)} disabled={!list || list.length === 0} />
               <Button variant="outline" size="sm" onClick={loadList} disabled={loading}><RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /></Button>
             </>
           )}
