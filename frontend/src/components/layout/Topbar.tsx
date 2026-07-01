@@ -6,6 +6,7 @@ import { LogOut, ShieldCheck, Menu } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from './ThemeToggle';
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrador',
@@ -40,6 +41,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
       </div>
 
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         {user && (
           <Link to="/cuenta" className="text-right leading-tight hidden sm:block rounded px-2 py-1 hover:bg-white/10 transition-colors" title="Mi cuenta y seguridad">
             <p className="text-sm font-medium text-white">{user.fullName}</p>

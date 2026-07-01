@@ -16,49 +16,77 @@
      - Amarillo #FFC800 · Azul #003189 · Rojo #D80025
    ===================================================================== */
 @layer base {
+  /* ===== Modo claro (por defecto en :root) — apegado al manual impreso:
+     fondo blanco/gris claro #F2F2F2, texto negro #0D0D0D, verde #03A64A ===== */
   :root {
-    /* Fondo SOC: negro verdoso muy oscuro (base #0D0D0D con matiz bosque) */
-    --background: 156 20% 7%;
+    --background: 150 24% 98%;     /* casi blanco con leve matiz bosque */
+    --foreground: 156 26% 12%;     /* texto ~#0D0D0D verdoso */
+
+    --card: 0 0% 100%;             /* tarjetas blancas */
+    --card-foreground: 156 26% 12%;
+
+    /* Primario: verde corporativo PNNC #03A64A (invariante entre modos) */
+    --primary: 146 96% 33%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 150 16% 93%;
+    --secondary-foreground: 156 22% 18%;
+
+    --muted: 150 14% 94%;
+    --muted-foreground: 156 8% 42%;
+
+    /* Acento: superficie cian muy clara */
+    --accent: 197 58% 91%;
+    --accent-foreground: 197 82% 22%;
+
+    --destructive: 350 100% 42%;   /* #D80025 rojo gov.co (invariante) */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 150 13% 85%;
+    --input: 150 13% 88%;
+    --ring: 146 90% 34%;
+
+    --radius: 0.75rem;
+
+    /* Marca institucional PNNC */
+    --brand-green: 146 96% 33%;    /* #03A64A verde corporativo */
+    --neon-green: 83 52% 36%;      /* verde institucional oscurecido para contraste en claro */
+    --warn-orange: 30 90% 44%;
+
+    /* Corporativos e identidad de Gobierno (invariantes) */
+    --cyan: 197 93% 40%;           /* #049DD9 cian corporativo */
+    --cyan-light: 191 85% 44%;     /* #05C7F2 celeste */
+    --gov-yellow: 47 100% 50%;     /* #FFC800 */
+    --gov-blue: 219 100% 27%;      /* #003189 */
+    --gov-red: 350 100% 42%;       /* #D80025 */
+  }
+
+  /* ===== Modo oscuro "SOC" (activo con class="dark") — solo sobrescribe
+     los tokens que dependen del modo; el resto se hereda de :root ===== */
+  .dark {
+    --background: 156 20% 7%;      /* negro verdoso #0D0D0D con matiz bosque */
     --foreground: 0 0% 95%;        /* #F2F2F2 gris claro corporativo */
 
     --card: 156 16% 10%;
     --card-foreground: 0 0% 95%;
 
-    /* Primario: verde corporativo PNNC #03A64A */
-    --primary: 146 96% 33%;
-    --primary-foreground: 0 0% 100%;
-
-    /* Secundario: superficie elevada */
     --secondary: 156 13% 16%;
     --secondary-foreground: 0 0% 95%;
 
     --muted: 156 10% 18%;
     --muted-foreground: 150 6% 64%;
 
-    /* Acento: cian corporativo (superficie fria on-brand) */
-    --accent: 197 42% 22%;
+    --accent: 197 42% 22%;         /* cian corporativo oscuro */
     --accent-foreground: 0 0% 98%;
-
-    --destructive: 350 100% 42%;   /* #D80025 rojo gov.co */
-    --destructive-foreground: 0 0% 100%;
 
     --border: 156 12% 20%;
     --input: 156 12% 18%;
     --ring: 146 90% 40%;
 
-    --radius: 0.75rem;
-
-    /* Marca institucional PNNC */
-    --brand-green: 146 96% 33%;    /* #03A64A verde corporativo */
     --neon-green: 83 45% 54%;      /* #96BE54 verde institucional propio */
-    --warn-orange: 34 91% 60%;     /* naranja (advertencias) */
-
-    /* Corporativos e institucionales del Gobierno de Colombia */
-    --cyan: 197 93% 43%;           /* #049DD9 cian corporativo */
-    --cyan-light: 191 92% 48%;     /* #05C7F2 celeste */
-    --gov-yellow: 47 100% 50%;     /* #FFC800 */
-    --gov-blue: 219 100% 27%;      /* #003189 */
-    --gov-red: 350 100% 42%;       /* #D80025 */
+    --warn-orange: 34 91% 60%;
+    --cyan: 197 93% 43%;
+    --cyan-light: 191 92% 48%;
   }
 }
 
