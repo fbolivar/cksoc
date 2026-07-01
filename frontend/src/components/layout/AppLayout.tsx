@@ -20,7 +20,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setMobileOpen(false)} />
           <aside className="absolute left-0 top-0 flex h-full w-64 flex-col border-r border-border/60 bg-card shadow-2xl">
             <div className="flex h-16 items-center justify-between border-b border-border/60 px-5">
-              <span className="text-sm font-semibold tracking-wide">SOC · PNNC</span>
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logo-emblem.png"
+                  alt="Parques Nacionales Naturales de Colombia"
+                  className="h-10 w-auto object-contain drop-shadow-sm"
+                />
+                <span className="text-base font-semibold tracking-wide">SOC</span>
+              </div>
               <button onClick={() => setMobileOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Cerrar menú">
                 <X className="h-5 w-5" />
               </button>

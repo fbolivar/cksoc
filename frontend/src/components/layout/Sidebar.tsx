@@ -123,9 +123,13 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 export function Sidebar() {
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-border/60 bg-card/40 backdrop-blur-xl">
-      <div className="flex items-center gap-2 px-5 h-16 border-b border-border/60">
-        <span className="h-2.5 w-2.5 rounded-full bg-neon animate-pulse-soft shadow-glow" />
-        <span className="text-sm font-semibold tracking-wide">SOC · PNNC</span>
+      <div className="flex items-center gap-3 px-5 h-16 border-b border-border/60">
+        <img
+          src="/logo-emblem.png"
+          alt="Parques Nacionales Naturales de Colombia"
+          className="h-11 w-auto object-contain drop-shadow-sm"
+        />
+        <span className="text-base font-semibold tracking-wide">SOC</span>
       </div>
       <SidebarNav />
       <div className="px-5 py-4 border-t border-border/60 text-[11px] leading-relaxed text-muted-foreground/70">
