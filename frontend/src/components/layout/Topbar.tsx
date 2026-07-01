@@ -1,6 +1,7 @@
 /**
  * Barra superior con identidad Parques Nacionales (verde institucional),
- * logo PNNC, titulo del modulo y menu de usuario con cierre de sesion.
+ * titulo del modulo, cambio de tema y menu de usuario con cierre de sesion.
+ * El emblema PNNC vive en el encabezado del sidebar, no aqui.
  */
 import { LogOut, ShieldCheck, Menu } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -23,16 +24,8 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         <button onClick={onMenuClick} className="md:hidden text-white/80 hover:text-white" aria-label="Abrir menú">
           <Menu className="h-6 w-6" />
         </button>
-        <img
-          src="/logo-pnnc.png"
-          alt="Parques Nacionales Naturales de Colombia"
-          className="h-9 w-auto object-contain drop-shadow"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = 'none';
-          }}
-        />
-        <div className="hidden sm:flex items-center gap-2 border-l border-white/15 pl-3">
-          <ShieldCheck className="h-4 w-4 text-neon" />
+        <div className="hidden sm:flex items-center gap-2 min-w-0">
+          <ShieldCheck className="h-5 w-5 shrink-0 text-neon" />
           <div className="leading-tight">
             <p className="text-sm font-semibold text-white">Centro de Operaciones de Seguridad</p>
             <p className="text-[11px] text-white/60">Monitoreo Wazuh · Tiempo real</p>
