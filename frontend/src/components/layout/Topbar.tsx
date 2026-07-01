@@ -17,7 +17,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth();
 
   return (
-    <header className="h-16 shrink-0 flex items-center justify-between gap-4 px-5 bg-gradient-to-r from-[hsl(150_55%_13%)] via-[hsl(156_30%_9%)] to-[hsl(156_30%_9%)] backdrop-blur-xl border-b border-primary/25">
+    <header className="h-16 shrink-0 flex items-center justify-between gap-4 px-5 bg-gradient-to-r from-[hsl(146_60%_14%)] via-[hsl(156_28%_9%)] to-[hsl(197_45%_11%)] backdrop-blur-xl border-b border-primary/25">
       <div className="flex items-center gap-3 min-w-0">
         <button onClick={onMenuClick} className="md:hidden text-white/80 hover:text-white" aria-label="Abrir menú">
           <Menu className="h-6 w-6" />

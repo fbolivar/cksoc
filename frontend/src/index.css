@@ -4,49 +4,61 @@
 
 /* =====================================================================
    Tema PNNC - Dark "SOC"
-   Identidad Parques Nacionales Naturales de Colombia:
-     - Verde institucional  #009846  (primario)
-     - Lima                 #85B425  (acento vivo / "neon")
-     - Naranja              #F6A33A  (advertencias)
-     - Tonos naturales sobre un fondo bosque muy oscuro.
+   Alineado al Manual de Identidad Visual PNNC (E4-MN-01 V2).
+   Paleta corporativa (Ministerio de Ambiente / Parques Nacionales):
+     - Verde corporativo        #03A64A  (primario)
+     - Verde institucional      #96BE54  (acento propio / "neon")
+     - Cian corporativo         #049DD9  (acento / info)
+     - Celeste                  #05C7F2  (info claro)
+     - Gris claro               #F2F2F2  (texto sobre oscuro)
+     - Negro                    #0D0D0D  (base)
+   Identidad de Gobierno (gov.co / bandera):
+     - Amarillo #FFC800 · Azul #003189 · Rojo #D80025
    ===================================================================== */
 @layer base {
   :root {
-    /* Fondo SOC: verde bosque muy oscuro (no negro puro) */
-    --background: 158 26% 6%;
-    --foreground: 140 14% 93%;
+    /* Fondo SOC: negro verdoso muy oscuro (base #0D0D0D con matiz bosque) */
+    --background: 156 20% 7%;
+    --foreground: 0 0% 95%;        /* #F2F2F2 gris claro corporativo */
 
-    --card: 158 22% 9%;
-    --card-foreground: 140 14% 93%;
+    --card: 156 16% 10%;
+    --card-foreground: 0 0% 95%;
 
-    /* Primario: verde institucional PNNC #009846 */
-    --primary: 148 100% 30%;
-    --primary-foreground: 150 35% 97%;
+    /* Primario: verde corporativo PNNC #03A64A */
+    --primary: 146 96% 33%;
+    --primary-foreground: 0 0% 100%;
 
     /* Secundario: superficie elevada */
-    --secondary: 158 16% 15%;
-    --secondary-foreground: 140 14% 93%;
+    --secondary: 156 13% 16%;
+    --secondary-foreground: 0 0% 95%;
 
-    --muted: 158 12% 17%;
-    --muted-foreground: 145 9% 63%;
+    --muted: 156 10% 18%;
+    --muted-foreground: 150 6% 64%;
 
-    /* Acento tierra calida (complemento natural) */
-    --accent: 32 38% 32%;
-    --accent-foreground: 40 35% 92%;
+    /* Acento: cian corporativo (superficie fria on-brand) */
+    --accent: 197 42% 22%;
+    --accent-foreground: 0 0% 98%;
 
-    --destructive: 0 72% 48%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 350 100% 42%;   /* #D80025 rojo gov.co */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 158 16% 19%;
-    --input: 158 16% 17%;
-    --ring: 148 80% 42%;
+    --border: 156 12% 20%;
+    --input: 156 12% 18%;
+    --ring: 146 90% 40%;
 
     --radius: 0.75rem;
 
     /* Marca institucional PNNC */
-    --brand-green: 148 100% 30%;  /* #009846 verde Parques */
-    --neon-green: 82 68% 50%;     /* #85B425 lima (acento vivo / glow) */
-    --warn-orange: 34 91% 60%;    /* #F6A33A naranja */
+    --brand-green: 146 96% 33%;    /* #03A64A verde corporativo */
+    --neon-green: 83 45% 54%;      /* #96BE54 verde institucional propio */
+    --warn-orange: 34 91% 60%;     /* naranja (advertencias) */
+
+    /* Corporativos e institucionales del Gobierno de Colombia */
+    --cyan: 197 93% 43%;           /* #049DD9 cian corporativo */
+    --cyan-light: 191 92% 48%;     /* #05C7F2 celeste */
+    --gov-yellow: 47 100% 50%;     /* #FFC800 */
+    --gov-blue: 219 100% 27%;      /* #003189 */
+    --gov-red: 350 100% 42%;       /* #D80025 */
   }
 }
 
@@ -59,7 +71,7 @@
     font-feature-settings: 'cv11', 'ss01';
     background-image:
       radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--brand-green) / 0.14), transparent 60%),
-      radial-gradient(ellipse 60% 50% at 100% 0%, hsl(var(--neon-green) / 0.10), transparent 55%);
+      radial-gradient(ellipse 60% 50% at 100% 0%, hsl(var(--cyan) / 0.10), transparent 55%);
     background-attachment: fixed;
   }
 }
@@ -73,6 +85,17 @@
   .neon-text {
     color: hsl(var(--neon-green));
     text-shadow: 0 0 18px hsl(var(--neon-green) / 0.35);
+  }
+  /* Franja tricolor gov.co (amarillo/azul/rojo) - identidad de Gobierno */
+  .gov-strip {
+    height: 4px;
+    width: 100%;
+    background: linear-gradient(
+      to right,
+      hsl(var(--gov-yellow)) 0 50%,
+      hsl(var(--gov-blue)) 50% 75%,
+      hsl(var(--gov-red)) 75% 100%
+    );
   }
 }
 

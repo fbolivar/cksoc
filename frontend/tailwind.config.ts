@@ -41,6 +41,16 @@ const config: Config = {
         brand: 'hsl(var(--brand-green))',
         neon: 'hsl(var(--neon-green))',
         warn: 'hsl(var(--warn-orange))',
+        // Paleta corporativa (cian) e identidad de Gobierno (gov.co)
+        cyan: {
+          DEFAULT: 'hsl(var(--cyan))',
+          light: 'hsl(var(--cyan-light))',
+        },
+        gov: {
+          yellow: 'hsl(var(--gov-yellow))',
+          blue: 'hsl(var(--gov-blue))',
+          red: 'hsl(var(--gov-red))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -48,7 +58,9 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        // Tipografia principal PNNC (Manual de Identidad Visual); Verdana como
+        // complementaria/office segun el manual, luego el system stack.
+        sans: ['"Nunito Sans"', 'Verdana', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
         glow: '0 0 24px -6px hsl(var(--neon-green) / 0.45)',

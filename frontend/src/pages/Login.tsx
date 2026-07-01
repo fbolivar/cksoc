@@ -65,6 +65,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
+      {/* Franja tricolor gov.co en el borde superior de la pantalla */}
+      <div className="gov-strip fixed inset-x-0 top-0" />
       <div className="w-full max-w-md">
         {/* Encabezado institucional */}
         <div className="flex flex-col items-center text-center mb-8">

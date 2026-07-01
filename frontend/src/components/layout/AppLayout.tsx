@@ -8,7 +8,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen flex-col overflow-hidden">
+      {/* Franja tricolor gov.co - identidad de Gobierno de Colombia */}
+      <div className="gov-strip shrink-0" />
+      <div className="flex flex-1 overflow-hidden">
       <Sidebar />
 
       {/* Drawer de navegacion en movil */}
@@ -30,6 +33,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar onMenuClick={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+      </div>
       </div>
     </div>
   );

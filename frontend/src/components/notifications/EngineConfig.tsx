@@ -104,7 +104,7 @@ export function EngineConfig({
           <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-muted">
             <div
               className="h-full rounded-full transition-all"
-              style={{ width: `${pct}%`, background: daily.capReached ? '#ef4444' : '#1f7a4d' }}
+              style={{ width: `${pct}%`, background: daily.capReached ? '#ef4444' : '#03A64A' }}
             />
           </div>
         </div>
