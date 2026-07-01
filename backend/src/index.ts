@@ -8,11 +8,13 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import { pinoHttp } from 'pino-http';
 import { createServer } from 'node:http';
 import { Server as SocketServer } from 'socket.io';
 
 import { env } from './config/env';
 import { pingDb } from './config/db';
+import { logger } from './config/logger';
 import { apiLimiter } from './middleware/rateLimit';
 import { authRouter } from './modules/auth/auth.routes';
 import { wazuhRouter } from './modules/wazuh/wazuh.routes';
@@ -48,6 +50,9 @@ const app = express();
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',') }));
 app.use(express.json({ limit: '1mb' }));
+
+// Logging estructurado de peticiones (omite el healthcheck para no inundar).
+app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
 
 // Healthcheck (publico) — valida la conexion a Postgres
 app.get('/health', async (_req, res) => {
@@ -123,8 +128,7 @@ process.on('SIGTERM', () => void closePdfEngine());
 process.on('SIGINT', () => void closePdfEngine());
 
 httpServer.listen(env.PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`🟢 Backend SOC PNNC escuchando en http://127.0.0.1:${env.PORT} (${env.NODE_ENV})`);
+  logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Backend SOC PNNC escuchando');
 });
 
 export { app, io };

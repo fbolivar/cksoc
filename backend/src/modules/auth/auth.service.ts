@@ -15,6 +15,7 @@ interface UserRow {
   is_active: boolean;
   role: RoleName;
   totp_enabled?: boolean;
+  token_version?: number;
 }
 
 /** Resultado del login: sesion completa, o reto de 2FA pendiente. */
@@ -66,7 +67,7 @@ export async function loginUser(
   password: string
 ): Promise<LoginResult> {
   const rows = await query<UserRow>(
-    `SELECT u.id, u.email, u.password_hash, u.full_name, u.is_active, u.totp_enabled, r.name AS role
+    `SELECT u.id, u.email, u.password_hash, u.full_name, u.is_active, u.totp_enabled, u.token_version, r.name AS role
        FROM users u
        JOIN roles r ON r.id = u.role_id
       WHERE u.email = $1`,
@@ -95,7 +96,7 @@ export async function loginUser(
   await query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]);
 
   const authUser = toAuthUser(user);
-  const token = signToken(authUser);
+  const token = signToken(authUser, user.token_version ?? 0);
   return { user: authUser, token };
 }
 
@@ -118,8 +119,9 @@ export function verifyChallenge(token: string): string {
 /** Emite la sesion (user + token) de un usuario ya autenticado por 2FA. */
 export async function issueSessionForUser(userId: string): Promise<{ user: AuthUser; token: string }> {
   const authUser = await getProfile(userId);
+  const tv = await getTokenVersion(userId);
   await query('UPDATE users SET last_login_at = now() WHERE id = $1', [userId]);
-  return { user: authUser, token: signToken(authUser) };
+  return { user: authUser, token: signToken(authUser, tv) };
 }
 
 /** Devuelve el perfil del usuario autenticado. */
@@ -136,15 +138,39 @@ export async function getProfile(userId: string): Promise<AuthUser> {
   return toAuthUser(rows[0]);
 }
 
-function signToken(user: AuthUser): string {
+function signToken(user: AuthUser, tokenVersion: number): string {
   const payload: JwtPayload = {
     sub: user.id,
     email: user.email,
     role: user.role,
+    tv: tokenVersion,
   };
   return jwt.sign(payload, env.JWT_SECRET, {
     expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   });
+}
+
+/** Lee la version de token actual del usuario (0 si no se encuentra). */
+async function getTokenVersion(userId: string): Promise<number> {
+  const rows = await query<{ token_version: number }>(
+    'SELECT token_version FROM users WHERE id = $1',
+    [userId]
+  );
+  return rows[0]?.token_version ?? 0;
+}
+
+/**
+ * Revoca todas las sesiones del usuario (incrementa token_version) y emite una
+ * sesion nueva para el dispositivo actual. Los demas tokens quedan invalidos.
+ */
+export async function revokeSessions(userId: string): Promise<{ user: AuthUser; token: string }> {
+  const rows = await query<{ token_version: number }>(
+    'UPDATE users SET token_version = token_version + 1 WHERE id = $1 RETURNING token_version',
+    [userId]
+  );
+  if (rows.length === 0) throw new HttpError(404, 'Usuario no encontrado');
+  const authUser = await getProfile(userId);
+  return { user: authUser, token: signToken(authUser, rows[0].token_version) };
 }
 
 function toAuthUser(row: UserRow): AuthUser {

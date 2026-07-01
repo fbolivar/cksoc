@@ -11,7 +11,8 @@ import {
   getUser,
   countActiveAdmins,
 } from './users.service';
-import { HttpError } from '../auth/auth.service';
+import { HttpError, issueSessionForUser } from '../auth/auth.service';
+import { logger } from '../../config/logger';
 
 const role = z.enum(['admin', 'analista', 'lector']);
 
@@ -111,7 +112,10 @@ export async function changePassword(req: Request, res: Response): Promise<void>
   }
   try {
     await changeOwnPassword(req.user!.id, parsed.data.currentPassword, parsed.data.newPassword);
-    res.json({ ok: true });
+    // El cambio revoco las sesiones (incluida la actual): reemitimos un token
+    // fresco para que el usuario siga autenticado en este dispositivo.
+    const { token } = await issueSessionForUser(req.user!.id);
+    res.json({ ok: true, token });
   } catch (err) {
     handle(err, res);
   }
@@ -122,7 +126,6 @@ function handle(err: unknown, res: Response): void {
     res.status(err.status).json({ error: err.message });
     return;
   }
-  // eslint-disable-next-line no-console
-  console.error('Error en usuarios:', err);
+  logger.error({ err }, 'Error en usuarios');
   res.status(500).json({ error: 'Error interno del servidor' });
 }

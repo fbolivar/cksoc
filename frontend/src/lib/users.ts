@@ -29,7 +29,7 @@ export const usersApi = {
     api.post(`/users/${id}/reset-password`, { password }).then((r) => r.data),
   remove: (id: string) => api.delete(`/users/${id}`).then((r) => r.data),
   changeOwnPassword: (currentPassword: string, newPassword: string) =>
-    api.post('/users/me/change-password', { currentPassword, newPassword }).then((r) => r.data),
+    api.post<{ ok: boolean; token: string }>('/users/me/change-password', { currentPassword, newPassword }).then((r) => r.data),
 };
 
 export const ROLE_LABELS: Record<RoleName, string> = {

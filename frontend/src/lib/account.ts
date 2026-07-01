@@ -8,3 +8,8 @@ export const twofaApi = {
   disable: (password: string, code: string) =>
     api.post<{ enabled: boolean }>('/auth/2fa/disable', { password, code }).then((r) => r.data),
 };
+
+export const sessionApi = {
+  /** Cierra todas las sesiones (revoca tokens) y devuelve un token fresco para esta. */
+  logoutAll: () => api.post<{ token: string }>('/auth/logout-all').then((r) => r.data),
+};

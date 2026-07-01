@@ -98,8 +98,9 @@ export async function adminUpdateUser(
 
 export async function adminResetPassword(id: string, newPassword: string): Promise<void> {
   const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  // Incrementa token_version para invalidar las sesiones activas del usuario.
   const rows = await query<{ id: string }>(
-    'UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1 RETURNING id',
+    'UPDATE users SET password_hash = $2, token_version = token_version + 1, updated_at = now() WHERE id = $1 RETURNING id',
     [id, hash]
   );
   if (rows.length === 0) throw new HttpError(404, 'Usuario no encontrado');
@@ -130,7 +131,11 @@ export async function changeOwnPassword(
   const ok = await bcrypt.compare(current, rows[0].password_hash);
   if (!ok) throw new HttpError(401, 'La contrasena actual es incorrecta');
   const hash = await bcrypt.hash(next, SALT_ROUNDS);
-  await query('UPDATE users SET password_hash = $2, updated_at = now() WHERE id = $1', [userId, hash]);
+  // Incrementa token_version: invalida las demas sesiones tras el cambio.
+  await query(
+    'UPDATE users SET password_hash = $2, token_version = token_version + 1, updated_at = now() WHERE id = $1',
+    [userId, hash]
+  );
 }
 
 /** Cuenta admins activos (para evitar quedarse sin administradores). */

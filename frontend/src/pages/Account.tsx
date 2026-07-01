@@ -3,10 +3,11 @@
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { ShieldCheck, ShieldOff, KeyRound, Loader2, Check, Copy, Lock, UserCircle } from 'lucide-react';
+import { ShieldCheck, ShieldOff, KeyRound, Loader2, Check, Copy, Lock, UserCircle, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { twofaApi } from '@/lib/account';
+import { twofaApi, sessionApi } from '@/lib/account';
 import { usersApi } from '@/lib/users';
+import { tokenStorage } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +30,44 @@ export default function Account() {
       </div>
       <TwoFactorCard />
       <PasswordCard />
+      <SessionsCard />
     </div>
+  );
+}
+
+function SessionsCard() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function logoutAll() {
+    setBusy(true); setMsg(null);
+    try {
+      const { token } = await sessionApi.logoutAll();
+      tokenStorage.set(token); // esta sesion sigue viva con el token nuevo
+      setMsg('Se cerraron las demás sesiones. Este dispositivo sigue conectado.');
+    } catch (e) {
+      setMsg(errMsg(e, 'No se pudo cerrar las sesiones'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><LogOut className="h-4 w-4 text-neon" /> Sesiones</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Si sospechas que tu cuenta fue comprometida, cierra la sesión en todos los demás dispositivos.
+          Los tokens activos dejarán de funcionar de inmediato.
+        </p>
+        {msg && <p className="text-sm text-neon">{msg}</p>}
+        <Button variant="outline" onClick={logoutAll} disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Cerrar sesión en todos los dispositivos
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -177,8 +215,10 @@ function PasswordCard() {
     if (next !== confirm) { setMsg({ ok: false, text: 'Las contraseñas no coinciden' }); return; }
     setBusy(true);
     try {
-      await usersApi.changeOwnPassword(current, next);
-      setMsg({ ok: true, text: 'Contraseña actualizada correctamente' });
+      const { token } = await usersApi.changeOwnPassword(current, next);
+      // El cambio revoco las sesiones; guardamos el token fresco de esta.
+      if (token) tokenStorage.set(token);
+      setMsg({ ok: true, text: 'Contraseña actualizada. Se cerraron las demás sesiones.' });
       setCurrent(''); setNext(''); setConfirm('');
     } catch (e) { setMsg({ ok: false, text: errMsg(e, 'No se pudo cambiar la contraseña') }); }
     finally { setBusy(false); }

@@ -238,6 +238,11 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup_codes TEXT[];
 
+-- Version de token para revocacion de sesiones: cada JWT lleva 'tv' y debe
+-- coincidir con este valor. Al cambiar la contrasena o "cerrar todas las
+-- sesiones" se incrementa, invalidando de inmediato los tokens anteriores.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
+
 -- ---------------------------------------------------------------------
 -- Seed de roles (idempotente)
 -- ---------------------------------------------------------------------

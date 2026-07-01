@@ -14,6 +14,7 @@ export interface JwtPayload {
   sub: string; // user id
   email: string;
   role: RoleName;
+  tv: number; // token version (para revocacion de sesiones)
 }
 
 /** Extiende Express.Request para incluir el usuario autenticado. */

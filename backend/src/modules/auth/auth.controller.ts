@@ -6,9 +6,10 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import {
   registerUser, loginUser, getProfile, HttpError,
-  verifyChallenge, issueSessionForUser,
+  verifyChallenge, issueSessionForUser, revokeSessions,
 } from './auth.service';
 import { getStatus, setup, enable, disable, verifyCode } from './twofactor.service';
+import { logger } from '../../config/logger';
 
 const credentialsSchema = z.object({
   email: z.string().email('Correo invalido'),
@@ -83,6 +84,15 @@ export async function login2fa(req: Request, res: Response): Promise<void> {
   }
 }
 
+/** Cierra todas las sesiones del usuario y devuelve un token fresco para esta. */
+export async function logoutAll(req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await revokeSessions(req.user!.id));
+  } catch (err) {
+    handleError(err, res);
+  }
+}
+
 // --- Gestion de 2FA (usuario autenticado, para su propia cuenta) ---
 
 export async function twofaStatus(req: Request, res: Response): Promise<void> {
@@ -133,7 +143,6 @@ function handleError(err: unknown, res: Response): void {
     res.status(err.status).json({ error: err.message });
     return;
   }
-  // eslint-disable-next-line no-console
-  console.error('Error en auth:', err);
+  logger.error({ err }, 'Error en auth');
   res.status(500).json({ error: 'Error interno del servidor' });
 }
