@@ -47,6 +47,11 @@ import { startAttacksBroadcast } from './modules/attacks/attacks.broadcast';
 
 const app = express();
 
+// Detras de Nginx (un solo reverse proxy en el mismo host): confiar en el
+// primer salto para que req.ip use el X-Forwarded-For real y el rate-limit
+// cuente por IP de cliente (evita ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
+app.set('trust proxy', 1);
+
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',') }));
 app.use(express.json({ limit: '1mb' }));
