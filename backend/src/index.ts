@@ -34,6 +34,7 @@ import { fimRouter } from './modules/fim/fim.routes';
 import { hygieneRouter } from './modules/hygiene/hygiene.routes';
 import { complianceRouter } from './modules/compliance/compliance.routes';
 import { overviewRouter } from './modules/overview/overview.routes';
+import { startOverviewWarmup } from './modules/overview/overview.warmup';
 import { assetsRouter } from './modules/assets/assets.routes';
 import { incidentsRouter } from './modules/incidents/incidents.routes';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
@@ -111,6 +112,9 @@ io.on('connection', (socket) => {
 
 // Difusion de metricas en vivo (poll al Indexer cada 15s)
 startMetricsBroadcast(io);
+
+// Cache del Resumen Ejecutivo siempre caliente (evita esperas en frio)
+startOverviewWarmup();
 
 // Scheduler de notificaciones (evaluacion de reglas cada minuto)
 startScheduler();

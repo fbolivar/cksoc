@@ -44,10 +44,19 @@ export interface OverviewData {
 }
 
 let cache: { at: number; data: OverviewData } | null = null;
-const TTL = 30_000;
+// Red de seguridad, no el reloj de frescura: quien marca el ritmo es el
+// precalentado (overview.warmup), que fuerza una reconstruccion cada 25s. El
+// TTL solo debe dejar margen suficiente para que una peticion de usuario nunca
+// coincida con una cache recien expirada y acabe reconstruyendo ella misma.
+const TTL = 60_000;
 
-export async function getOverview(): Promise<OverviewData> {
-  if (cache && Date.now() - cache.at < TTL) return cache.data;
+/**
+ * Devuelve el resumen ejecutivo. Con `force` reconstruye aunque la cache siga
+ * vigente: lo usa el precalentado para renovarla antes de que caduque, de modo
+ * que ninguna peticion de usuario pague la reconstruccion.
+ */
+export async function getOverview(opts?: { force?: boolean }): Promise<OverviewData> {
+  if (!opts?.force && cache && Date.now() - cache.at < TTL) return cache.data;
 
   const [health, vuln, sca, comp, fim, summary, agents, attacks, criticas24h] = await Promise.all([
     getOverallHealth().catch(() => null),
