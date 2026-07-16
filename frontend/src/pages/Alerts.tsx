@@ -3,7 +3,7 @@
  * (tiempo, severidad, regla, agente, IP, texto) con panel de detalle del evento.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase } from 'lucide-react';
 import { alertsApi, BAND_COLOR, BAND_LABEL, type AlertHit, type AlertFilters } from '@/lib/alerts';
@@ -46,12 +46,14 @@ export default function Alerts() {
   const canManage = user?.role === 'admin' || user?.role === 'analista';
   const [escalating, setEscalating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // Filtros iniciales desde la URL (p. ej. al llegar desde la campanita).
+  const [searchParams] = useSearchParams();
   const [range, setRange] = useState('24h');
-  const [band, setBand] = useState('');
-  const [agent, setAgent] = useState('');
-  const [srcip, setSrcip] = useState('');
-  const [ruleId, setRuleId] = useState('');
-  const [q, setQ] = useState('');
+  const [band, setBand] = useState(searchParams.get('band') ?? '');
+  const [agent, setAgent] = useState(searchParams.get('agent') ?? '');
+  const [srcip, setSrcip] = useState(searchParams.get('srcip') ?? '');
+  const [ruleId, setRuleId] = useState(searchParams.get('ruleId') ?? '');
+  const [q, setQ] = useState(searchParams.get('q') ?? '');
   const [page, setPage] = useState(0);
 
   const [data, setData] = useState<{ total: number; capped: boolean; items: AlertHit[] } | null>(null);

@@ -118,7 +118,7 @@ export async function testSend(channel: 'email' | 'telegram', target: string): P
 /** Historial reciente de notificaciones. */
 export async function recentLog(limit = 50) {
   return query(
-    `SELECT id, rule_name, channel, recipients, matched_count, status, error, created_at
+    `SELECT id, tipo, rule_name, origen, alert_rule_id, channel, recipients, matched_count, status, error, created_at
        FROM notification_log ORDER BY created_at DESC LIMIT $1`,
     [limit]
   );

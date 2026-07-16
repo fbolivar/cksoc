@@ -5,9 +5,10 @@
  * son las posteriores a la última vez que se abrió el panel (localStorage).
  */
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Loader2 } from 'lucide-react';
 import { getSocket } from '@/lib/socket';
-import { fetchFeed, type FeedItem, type LiveNotification } from '@/lib/notifyFeed';
+import { fetchFeed, linkFor, type FeedItem, type LiveNotification } from '@/lib/notifyFeed';
 
 const SEEN_KEY = 'soc_notif_last_seen';
 
@@ -25,6 +26,12 @@ export function NotificationBell() {
   const [loading, setLoading] = useState(true);
   const [lastSeen, setLastSeen] = useState<number>(() => Number(localStorage.getItem(SEEN_KEY) ?? 0));
   const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  const openItem = (link: string) => {
+    setOpen(false);
+    navigate(link);
+  };
 
   useEffect(() => {
     fetchFeed()
@@ -42,6 +49,7 @@ export function NotificationBell() {
           title: n.ruleName || (n.origen ? `Alerta · ${n.origen}` : 'Notificación'),
           status: n.status,
           createdAt: n.at,
+          link: linkFor({ origen: n.origen }),
           live: true,
         },
         ...prev,
@@ -108,9 +116,11 @@ export function NotificationBell() {
               items.map((it) => {
                 const isUnread = new Date(it.createdAt).getTime() > lastSeen;
                 return (
-                  <div
+                  <button
                     key={it.id}
-                    className={`flex items-start gap-2 border-b border-border/40 px-4 py-2.5 text-sm ${isUnread ? 'bg-primary/5' : ''}`}
+                    onClick={() => openItem(it.link)}
+                    className={`flex w-full items-start gap-2 border-b border-border/40 px-4 py-2.5 text-left text-sm transition-colors hover:bg-secondary ${isUnread ? 'bg-primary/5' : ''}`}
+                    title="Ver en Alertas"
                   >
                     <span
                       className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
@@ -124,7 +134,7 @@ export function NotificationBell() {
                         {it.status === 'failed' ? ' · falló el envío' : it.status === 'skipped' ? ' · omitida' : ''}
                       </p>
                     </div>
-                  </div>
+                  </button>
                 );
               })
             )}
