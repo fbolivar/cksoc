@@ -97,7 +97,7 @@ export default function Alerts() {
       await incidentsApi.create({
         title: (hit.description || `Alerta regla ${hit.ruleId}`).slice(0, 180),
         severity: hit.band as Severity,
-        source: { alertId: hit.id, index: hit.index, ip: hit.srcip ?? undefined, agent: hit.agent, ruleId: hit.ruleId, description: hit.description },
+        source: { alertId: hit.id, index: hit.index, ip: hit.srcip ?? undefined, agent: hit.agent, ruleId: hit.ruleId, description: hit.description, alertTime: hit.timestamp },
       });
       navigate('/incidentes');
     } catch {

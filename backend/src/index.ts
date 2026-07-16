@@ -40,6 +40,8 @@ import { incidentsRouter } from './modules/incidents/incidents.routes';
 import { backupsRouter } from './modules/backups/backups.routes';
 import { startBackupScheduler } from './modules/backups/backups.scheduler';
 import { auditRouter } from './modules/audit/audit.routes';
+import { metricsRouter } from './modules/metrics/metrics.routes';
+import { huntRouter } from './modules/hunt/hunt.routes';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -98,6 +100,8 @@ app.use('/api/assets', assetsRouter);
 app.use('/api/incidents', incidentsRouter);
 app.use('/api/backups', backupsRouter);
 app.use('/api/audit', auditRouter);
+app.use('/api/metrics', metricsRouter);
+app.use('/api/hunt', huntRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

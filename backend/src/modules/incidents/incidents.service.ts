@@ -8,7 +8,7 @@ export type Severity = 'baja' | 'media' | 'alta' | 'critica';
 export type Status = 'abierto' | 'en_curso' | 'resuelto' | 'cerrado';
 
 export interface IncidentSource {
-  alertId?: string; index?: string; ip?: string; agent?: string; ruleId?: string; description?: string;
+  alertId?: string; index?: string; ip?: string; agent?: string; ruleId?: string; description?: string; alertTime?: string;
 }
 
 export interface IncidentListItem {

@@ -15,7 +15,7 @@ export interface IncidentNote {
 }
 
 export interface IncidentSource {
-  alertId?: string; index?: string; ip?: string; agent?: string; ruleId?: string; description?: string;
+  alertId?: string; index?: string; ip?: string; agent?: string; ruleId?: string; description?: string; alertTime?: string;
 }
 
 export interface IncidentDetail extends IncidentListItem {

@@ -23,6 +23,8 @@ import {
   Briefcase,
   DatabaseBackup,
   ScrollText,
+  Radar,
+  LineChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -42,6 +44,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/resumen', label: 'Resumen Ejecutivo', icon: Gauge },
       { to: '/', label: 'Panel', icon: LayoutDashboard },
+      { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
     ],
   },
   {
@@ -50,6 +53,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/alertas', label: 'Alertas', icon: ListFilter },
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
       { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
+      { to: '/hunting', label: 'Threat Hunting', icon: Radar, roles: ['admin', 'analista'] },
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert, roles: ['admin', 'analista'] },
     ],
