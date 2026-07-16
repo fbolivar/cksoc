@@ -24,5 +24,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Vendors pesados en chunks propios y estables: se cachean una vez y
+        // se comparten entre paginas (recharts lo usan varias). Evita que la
+        // pagina de aterrizaje (Dashboard) cargue recharts dentro de su chunk.
+        manualChunks: {
+          'vendor-charts': ['recharts'],
+          'vendor-maps': ['react-simple-maps', 'd3-geo'],
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
   },
 });

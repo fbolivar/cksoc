@@ -4,29 +4,33 @@
  * - /        : dashboard (protegido)
  * Las rutas protegidas requieren sesion; si no hay, redirigen a /login.
  */
+import { lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
-import Login from '@/pages/Login';
-import Dashboard from '@/pages/Dashboard';
-import Overview from '@/pages/Overview';
-import AttackMap from '@/pages/AttackMap';
-import Alerts from '@/pages/Alerts';
-import Incidents from '@/pages/Incidents';
-import Mitre from '@/pages/Mitre';
-import Response from '@/pages/Response';
-import Notifications from '@/pages/Notifications';
-import Reports from '@/pages/Reports';
-import SiemHealth from '@/pages/SiemHealth';
-import Vulnerabilities from '@/pages/Vulnerabilities';
-import Assets from '@/pages/Assets';
-import Sca from '@/pages/Sca';
-import Fim from '@/pages/Fim';
-import Hygiene from '@/pages/Hygiene';
-import Compliance from '@/pages/Compliance';
-import Management from '@/pages/Management';
-import Account from '@/pages/Account';
-import Backups from '@/pages/Backups';
+import Login from '@/pages/Login'; // eager: primera carga (publica)
+
+// Carga diferida por ruta: cada pagina es su propio chunk, se descarga solo al
+// visitarla. Reduce el bundle inicial (antes ~1 MB en un solo archivo).
+const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const Overview = lazy(() => import('@/pages/Overview'));
+const AttackMap = lazy(() => import('@/pages/AttackMap'));
+const Alerts = lazy(() => import('@/pages/Alerts'));
+const Incidents = lazy(() => import('@/pages/Incidents'));
+const Mitre = lazy(() => import('@/pages/Mitre'));
+const Response = lazy(() => import('@/pages/Response'));
+const Notifications = lazy(() => import('@/pages/Notifications'));
+const Reports = lazy(() => import('@/pages/Reports'));
+const SiemHealth = lazy(() => import('@/pages/SiemHealth'));
+const Vulnerabilities = lazy(() => import('@/pages/Vulnerabilities'));
+const Assets = lazy(() => import('@/pages/Assets'));
+const Sca = lazy(() => import('@/pages/Sca'));
+const Fim = lazy(() => import('@/pages/Fim'));
+const Hygiene = lazy(() => import('@/pages/Hygiene'));
+const Compliance = lazy(() => import('@/pages/Compliance'));
+const Management = lazy(() => import('@/pages/Management'));
+const Account = lazy(() => import('@/pages/Account'));
+const Backups = lazy(() => import('@/pages/Backups'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();

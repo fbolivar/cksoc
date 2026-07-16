@@ -1,6 +1,6 @@
 /** Layout principal: Sidebar (desktop) + drawer movil + Topbar + contenido. */
-import { useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { Suspense, useState, type ReactNode } from 'react';
+import { Loader2, X } from 'lucide-react';
 import { Sidebar, SidebarNav } from './Sidebar';
 import { Topbar } from './Topbar';
 
@@ -39,7 +39,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <Topbar onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            }
+          >
+            {children}
+          </Suspense>
+        </main>
       </div>
       </div>
     </div>
