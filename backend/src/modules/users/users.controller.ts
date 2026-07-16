@@ -13,6 +13,7 @@ import {
 } from './users.service';
 import { HttpError, issueSessionForUser } from '../auth/auth.service';
 import { logger } from '../../config/logger';
+import { auditFromReq } from '../audit/audit.service';
 
 const role = z.enum(['admin', 'analista', 'lector']);
 
@@ -45,7 +46,9 @@ export async function postUser(req: Request, res: Response): Promise<void> {
   }
   try {
     const { email, password, fullName, role: r } = parsed.data;
-    res.status(201).json({ user: await adminCreateUser(email, password, fullName, r) });
+    const user = await adminCreateUser(email, password, fullName, r);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'user_create', target: email, result: 'ok', detail: { role: r } });
+    res.status(201).json({ user });
   } catch (err) {
     handle(err, res);
   }
@@ -66,7 +69,9 @@ export async function putUser(req: Request, res: Response): Promise<void> {
     if ((demoting || deactivating) && (await countActiveAdmins()) <= 1) {
       throw new HttpError(400, 'No puedes dejar el sistema sin administradores activos');
     }
-    res.json({ user: await adminUpdateUser(req.params.id, parsed.data) });
+    const user = await adminUpdateUser(req.params.id, parsed.data);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'user_update', target: target.email, result: 'ok', detail: parsed.data });
+    res.json({ user });
   } catch (err) {
     handle(err, res);
   }
@@ -79,7 +84,9 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
     return;
   }
   try {
+    const target = await getUser(req.params.id);
     await adminResetPassword(req.params.id, parsed.data.password);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'user_password_reset', target: target.email, result: 'ok' });
     res.json({ ok: true });
   } catch (err) {
     handle(err, res);
@@ -96,6 +103,7 @@ export async function deleteUser(req: Request, res: Response): Promise<void> {
       throw new HttpError(400, 'No puedes eliminar al ultimo administrador');
     }
     await adminDeleteUser(req.params.id);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'user_delete', target: target.email, result: 'ok', detail: { role: target.role } });
     res.json({ ok: true });
   } catch (err) {
     handle(err, res);
@@ -112,6 +120,7 @@ export async function changePassword(req: Request, res: Response): Promise<void>
   }
   try {
     await changeOwnPassword(req.user!.id, parsed.data.currentPassword, parsed.data.newPassword);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'password_change', target: req.user!.email, result: 'ok' });
     // El cambio revoco las sesiones (incluida la actual): reemitimos un token
     // fresco para que el usuario siga autenticado en este dispositivo.
     const { token } = await issueSessionForUser(req.user!.id);

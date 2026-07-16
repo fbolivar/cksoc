@@ -251,3 +251,24 @@ INSERT INTO roles (name, description) VALUES
     ('analista', 'Operacion del SOC: alertas, notificaciones y reportes'),
     ('lector',   'Solo lectura del dashboard')
 ON CONFLICT (name) DO NOTHING;
+
+-- =====================================================================
+-- Registro de auditoria: quien hizo que en la aplicacion (acciones de
+-- usuario, incluidos inicios de sesion y fallidos). Complementa los logs
+-- por dominio (block_actions, notification_log) con una traza unificada.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS audit_log (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    actor_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    actor_email  TEXT,
+    action       TEXT NOT NULL,             -- login, login_failed, user_create, backup_create, ...
+    target       TEXT,                      -- sobre que actuo (email, id, archivo)
+    result       TEXT NOT NULL DEFAULT 'ok', -- ok | fail
+    ip           TEXT,
+    user_agent   TEXT,
+    detail       JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_action  ON audit_log (action);
+CREATE INDEX IF NOT EXISTS idx_audit_actor   ON audit_log (actor_email);

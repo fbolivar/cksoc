@@ -6,6 +6,7 @@
 import { query } from '../../config/db';
 import { env } from '../../config/env';
 import { sendEmail, isEmailConfigured, type MailAttachment } from './email.service';
+import { emitToAll } from '../realtime/bus';
 
 export interface NotifySettings {
   recipients: string[];
@@ -126,6 +127,16 @@ export async function logNotification(opts: {
     [opts.tipo, opts.ruleId ?? null, opts.ruleName ?? null, opts.origen ?? null,
      opts.recipients, opts.status, opts.error ?? null]
   );
+  // Empuje in-app (campanita): solo lo relevante para el analista.
+  if (opts.tipo === 'immediate' || opts.tipo === 'digest') {
+    emitToAll('notification:new', {
+      tipo: opts.tipo,
+      ruleName: opts.ruleName ?? null,
+      origen: opts.origen ?? null,
+      status: opts.status,
+      at: new Date().toISOString(),
+    });
+  }
 }
 
 // ---------------- envio con tope ----------------

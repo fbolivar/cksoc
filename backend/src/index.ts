@@ -39,6 +39,8 @@ import { assetsRouter } from './modules/assets/assets.routes';
 import { incidentsRouter } from './modules/incidents/incidents.routes';
 import { backupsRouter } from './modules/backups/backups.routes';
 import { startBackupScheduler } from './modules/backups/backups.scheduler';
+import { auditRouter } from './modules/audit/audit.routes';
+import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
@@ -95,6 +97,7 @@ app.use('/api/overview', overviewRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/incidents', incidentsRouter);
 app.use('/api/backups', backupsRouter);
+app.use('/api/audit', auditRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {
@@ -106,6 +109,7 @@ const httpServer = createServer(app);
 const io = new SocketServer(httpServer, {
   cors: { origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',') },
 });
+setIo(io); // el bus permite emitir eventos (notification:new) desde cualquier modulo
 
 io.on('connection', (socket) => {
   socket.on('disconnect', () => {

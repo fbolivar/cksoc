@@ -22,6 +22,7 @@ import {
   Server,
   Briefcase,
   DatabaseBackup,
+  ScrollText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -74,6 +75,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/reportes', label: 'Reportes', icon: FileBarChart },
       { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse },
       { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, roles: ['admin'] },
+      { to: '/auditoria', label: 'Auditoría', icon: ScrollText, roles: ['admin'] },
       { to: '/gestion', label: 'Gestión', icon: Users, roles: ['admin'] },
     ],
   },

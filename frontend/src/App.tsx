@@ -31,6 +31,7 @@ const Compliance = lazy(() => import('@/pages/Compliance'));
 const Management = lazy(() => import('@/pages/Management'));
 const Account = lazy(() => import('@/pages/Account'));
 const Backups = lazy(() => import('@/pages/Backups'));
+const Audit = lazy(() => import('@/pages/Audit'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -234,6 +235,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Backups />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/auditoria"
+        element={
+          <Protected>
+            <AppLayout>
+              <Audit />
             </AppLayout>
           </Protected>
         }

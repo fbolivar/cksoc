@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { createReadStream } from 'node:fs';
 import { z } from 'zod';
 import { logger } from '../../config/logger';
+import { auditFromReq } from '../audit/audit.service';
 import {
   createBackup, listBackups, deleteBackup, verifyBackup,
   backupFilePath, backupExists, HttpBackupError,
@@ -27,6 +28,7 @@ export async function postBackup(req: Request, res: Response): Promise<void> {
   }
   try {
     const item = await createBackup({ origin: 'manual', note: parsed.data.note });
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'backup_create', target: item.id, result: 'ok' });
     res.status(201).json(item);
   } catch (err) {
     logger.error({ err }, 'Fallo la creacion de respaldo');
@@ -77,6 +79,7 @@ export async function removeBackup(req: Request, res: Response): Promise<void> {
       res.status(404).json({ error: 'Respaldo no encontrado' });
       return;
     }
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'backup_delete', target: req.params.id, result: 'ok' });
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof HttpBackupError) {

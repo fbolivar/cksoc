@@ -10,6 +10,7 @@ import {
 } from './auth.service';
 import { getStatus, setup, enable, disable, verifyCode } from './twofactor.service';
 import { logger } from '../../config/logger';
+import { auditFromReq } from '../audit/audit.service';
 
 const credentialsSchema = z.object({
   email: z.string().email('Correo invalido'),
@@ -45,8 +46,16 @@ export async function login(req: Request, res: Response): Promise<void> {
   try {
     const { email, password } = parsed.data;
     const result = await loginUser(email, password);
+    void auditFromReq(req, {
+      actorEmail: email, action: 'login', target: email, result: 'ok',
+      detail: { twoFactor: 'twoFactor' in result },
+    });
     res.json(result);
   } catch (err) {
+    void auditFromReq(req, {
+      actorEmail: parsed.data.email, action: 'login_failed', target: parsed.data.email, result: 'fail',
+      detail: { reason: err instanceof HttpError ? err.message : 'error' },
+    });
     handleError(err, res);
   }
 }
@@ -75,10 +84,13 @@ export async function login2fa(req: Request, res: Response): Promise<void> {
   try {
     const userId = verifyChallenge(parsed.data.challenge);
     if (!(await verifyCode(userId, parsed.data.code))) {
+      void auditFromReq(req, { actorId: userId, action: 'login_2fa_failed', result: 'fail' });
       res.status(401).json({ error: 'Código 2FA inválido' });
       return;
     }
-    res.json(await issueSessionForUser(userId));
+    const session = await issueSessionForUser(userId);
+    void auditFromReq(req, { actorId: userId, actorEmail: session.user?.email, action: 'login_2fa', result: 'ok' });
+    res.json(session);
   } catch (err) {
     handleError(err, res);
   }
@@ -87,7 +99,9 @@ export async function login2fa(req: Request, res: Response): Promise<void> {
 /** Cierra todas las sesiones del usuario y devuelve un token fresco para esta. */
 export async function logoutAll(req: Request, res: Response): Promise<void> {
   try {
-    res.json(await revokeSessions(req.user!.id));
+    const result = await revokeSessions(req.user!.id);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'logout_all', result: 'ok' });
+    res.json(result);
   } catch (err) {
     handleError(err, res);
   }
