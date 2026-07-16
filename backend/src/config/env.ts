@@ -27,6 +27,11 @@ const schema = z.object({
   JWT_SECRET: z.string().min(16, 'JWT_SECRET debe tener al menos 16 caracteres'),
   JWT_EXPIRES_IN: z.string().default('8h'),
 
+  // --- Respaldos de la base de datos (.pnnc) ---
+  BACKUP_DIR: z.string().optional(), // por defecto: <home>/soc-pnnc-backups
+  BACKUP_RETENTION: z.coerce.number().default(14), // cuantos respaldos automaticos conservar
+  BACKUP_CRON: z.string().default('30 2 * * *'), // diario 02:30
+
   // --- Wazuh Indexer (OpenSearch) - opcional hasta tener credenciales ---
   WAZUH_INDEXER_URL: z.string().optional(),
   WAZUH_INDEXER_USER: z.string().optional(),

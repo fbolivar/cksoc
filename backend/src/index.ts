@@ -37,6 +37,8 @@ import { overviewRouter } from './modules/overview/overview.routes';
 import { startOverviewWarmup } from './modules/overview/overview.warmup';
 import { assetsRouter } from './modules/assets/assets.routes';
 import { incidentsRouter } from './modules/incidents/incidents.routes';
+import { backupsRouter } from './modules/backups/backups.routes';
+import { startBackupScheduler } from './modules/backups/backups.scheduler';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
@@ -92,6 +94,7 @@ app.use('/api/compliance', complianceRouter);
 app.use('/api/overview', overviewRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/incidents', incidentsRouter);
+app.use('/api/backups', backupsRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {
@@ -126,6 +129,9 @@ startDigestScheduler();
 // Scheduler de reporte programado (diario)
 startReportScheduler();
 
+// Respaldo automatico diario de la base de datos (.pnnc) + retencion
+startBackupScheduler();
+
 // Monitor de Salud del SIEM (quien vigila al vigilante)
 startHealthMonitor();
 
@@ -136,8 +142,10 @@ void initGeoIp().then(() => startAttacksBroadcast(io));
 process.on('SIGTERM', () => void closePdfEngine());
 process.on('SIGINT', () => void closePdfEngine());
 
-httpServer.listen(env.PORT, () => {
-  logger.info({ port: env.PORT, env: env.NODE_ENV }, 'Backend SOC PNNC escuchando');
+// Escuchar solo en loopback: Nginx (reverse proxy) llega por 127.0.0.1:4000.
+// Evita exponer la API directamente a la red saltandose el proxy/TLS.
+httpServer.listen(env.PORT, '127.0.0.1', () => {
+  logger.info({ port: env.PORT, host: '127.0.0.1', env: env.NODE_ENV }, 'Backend SOC PNNC escuchando');
 });
 
 export { app, io };

@@ -21,6 +21,7 @@ import {
   ListFilter,
   Server,
   Briefcase,
+  DatabaseBackup,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -72,6 +73,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/notificaciones', label: 'Notificaciones', icon: BellRing },
       { to: '/reportes', label: 'Reportes', icon: FileBarChart },
       { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse },
+      { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, roles: ['admin'] },
       { to: '/gestion', label: 'Gestión', icon: Users, roles: ['admin'] },
     ],
   },
