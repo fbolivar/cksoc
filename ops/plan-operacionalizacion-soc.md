@@ -27,7 +27,11 @@ Señales de mayor severidad observadas (nivel ≥ 10, 7 días):
 
 ## 2. Playbooks iniciales sugeridos (SOAR)
 
-**Todos arrancan en `Simulación` y deshabilitados.** Se observan 3-5 días, se revisa el historial de ejecuciones, y solo entonces se pasan a `Activo`.
+**Todos arrancan HABILITADOS en modo `Simulación`.** (Importante: en simulación
+el motor los evalúa y registra en el historial qué *haría*, sin ejecutar nada
+real — por eso deben estar habilitados para observarlos; deshabilitado = el
+motor los ignora.) Se observan 3-5 días, se revisa el historial de ejecuciones,
+y solo entonces se pasan a `Activo`.
 
 ### P1 — Bloqueo de fuerza bruta externa 🔴 (el de mayor valor)
 - **Condición:** reglas `100031` (o nivel ≥ 10 + grupo `fortigate` con IP de origen pública).
