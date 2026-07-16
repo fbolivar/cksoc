@@ -4,8 +4,9 @@
  * / MITRE) clicables para refinar la caza.
  */
 import { useEffect, useState, useCallback } from 'react';
-import { Crosshair, Search, X, Loader2, Filter } from 'lucide-react';
+import { Crosshair, Search, X, Loader2, Filter, Bookmark, Bell, BellOff, Play, Trash2 } from 'lucide-react';
 import { huntApi, type HuntResult, type HuntQuery, type Bucket } from '@/lib/hunt';
+import { savedHuntsApi, type SavedHunt } from '@/lib/savedHunts';
 
 const RANGES = [
   { v: '1h', l: '1h' }, { v: '24h', l: '24h' }, { v: '7d', l: '7d' }, { v: '30d', l: '30d' },
@@ -53,6 +54,25 @@ export default function Hunt() {
   const [res, setRes] = useState<HuntResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedHunt[]>([]);
+
+  const currentQuery = (): HuntQuery => ({ range, q: q || undefined, minLevel: minLevel || undefined, ...filters });
+  const loadSaved = () => savedHuntsApi.list().then(setSaved).catch(() => {});
+  useEffect(() => { void loadSaved(); }, []);
+
+  const saveCurrent = async () => {
+    const name = prompt('Nombre de la cacería:');
+    if (!name) return;
+    const alertEnabled = confirm('¿Activar alerta? Se avisará (campanita) cuando el número de coincidencias supere el umbral.');
+    await savedHuntsApi.create({ name, query: currentQuery(), alertEnabled, threshold: 1, intervalMin: 15 });
+    await loadSaved();
+  };
+  const applySaved = (h: SavedHunt) => {
+    setRange(h.query.range ?? '24h');
+    setQ(h.query.q ?? '');
+    setMinLevel(h.query.minLevel ?? 0);
+    setFilters({ agent: h.query.agent, ruleId: h.query.ruleId, srcip: h.query.srcip, mitre: h.query.mitre });
+  };
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -109,7 +129,26 @@ export default function Hunt() {
           <button onClick={() => void run()} className="flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Buscar
           </button>
+          <button onClick={() => void saveCurrent()} className="flex h-9 items-center gap-1.5 rounded-md bg-secondary px-3 text-sm text-foreground hover:bg-secondary/70" title="Guardar esta cacería">
+            <Bookmark className="h-4 w-4" /> Guardar
+          </button>
         </div>
+
+        {saved.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/40 pt-2">
+            <span className="text-[11px] text-muted-foreground">Guardadas:</span>
+            {saved.map((h) => (
+              <span key={h.id} className="flex items-center gap-1 rounded-full border border-border/60 bg-card/40 px-2 py-0.5 text-[11px]">
+                <button onClick={() => applySaved(h)} className="hover:text-brand" title="Cargar filtros">{h.name}</button>
+                {h.alertEnabled ? <Bell className="h-3 w-3 text-brand" /> : <BellOff className="h-3 w-3 text-muted-foreground/50" />}
+                {h.lastCount !== null && <span className="text-muted-foreground">{h.lastCount}</span>}
+                <button onClick={async () => { await savedHuntsApi.update(h.id, { alertEnabled: !h.alertEnabled }); void loadSaved(); }} className="text-muted-foreground hover:text-foreground" title="Activar/desactivar alerta">{h.alertEnabled ? <BellOff className="h-3 w-3" /> : <Bell className="h-3 w-3" />}</button>
+                <button onClick={async () => { await savedHuntsApi.run(h.id); void loadSaved(); }} className="text-muted-foreground hover:text-foreground" title="Correr ahora"><Play className="h-3 w-3" /></button>
+                <button onClick={async () => { if (confirm(`¿Eliminar "${h.name}"?`)) { await savedHuntsApi.remove(h.id); void loadSaved(); } }} className="text-muted-foreground hover:text-destructive-foreground" title="Eliminar"><Trash2 className="h-3 w-3" /></button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {activeChips.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">

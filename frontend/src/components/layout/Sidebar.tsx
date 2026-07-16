@@ -25,6 +25,7 @@ import {
   ScrollText,
   Radar,
   LineChart,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -56,6 +57,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/hunting', label: 'Threat Hunting', icon: Radar, roles: ['admin', 'analista'] },
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert, roles: ['admin', 'analista'] },
+      { to: '/playbooks', label: 'Playbooks (SOAR)', icon: Zap, roles: ['admin', 'analista'] },
     ],
   },
   {

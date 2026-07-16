@@ -272,3 +272,51 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_action  ON audit_log (action);
 CREATE INDEX IF NOT EXISTS idx_audit_actor   ON audit_log (actor_email);
+
+-- =====================================================================
+-- SOAR / Playbooks: respuesta automatizada ante patrones de alerta.
+-- Modo 'simulacion' (por defecto) registra lo que HARIA sin ejecutar;
+-- 'activo' ejecuta las acciones. Seguridad: enabled=false por defecto,
+-- cooldown por objetivo, y block_ip respeta la lista blanca existente.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS playbooks (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name         VARCHAR(120) NOT NULL,
+    description  TEXT,
+    enabled      BOOLEAN NOT NULL DEFAULT FALSE,
+    mode         VARCHAR(12) NOT NULL DEFAULT 'simulacion',  -- simulacion | activo
+    conditions   JSONB NOT NULL DEFAULT '{}'::jsonb,          -- {minLevel, ruleIds[], mitre[], agents[], groups[]}
+    actions      JSONB NOT NULL DEFAULT '[]'::jsonb,          -- [{type, params}]
+    cooldown_min INTEGER NOT NULL DEFAULT 30,
+    created_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS playbook_runs (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    playbook_id  UUID REFERENCES playbooks(id) ON DELETE CASCADE,
+    playbook_name VARCHAR(120),
+    target       VARCHAR(255),            -- ip o agente sobre el que se actuo
+    matched      JSONB,                   -- {level, ruleId, ip, agent, description}
+    actions      JSONB,                   -- [{type, status, detail}]
+    mode         VARCHAR(12) NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_playbook_runs_pb ON playbook_runs(playbook_id, created_at DESC);
+
+-- =====================================================================
+-- Cacerias guardadas (saved hunts) + alerta opcional por umbral.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS saved_hunts (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name          VARCHAR(120) NOT NULL,
+    query         JSONB NOT NULL,          -- {range, q, agent, ruleId, minLevel, srcip, mitre}
+    alert_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    threshold     INTEGER NOT NULL DEFAULT 1,
+    interval_min  INTEGER NOT NULL DEFAULT 15,
+    last_run      TIMESTAMPTZ,
+    last_count    INTEGER,
+    created_by    UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);

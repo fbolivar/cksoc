@@ -34,6 +34,7 @@ const Backups = lazy(() => import('@/pages/Backups'));
 const Audit = lazy(() => import('@/pages/Audit'));
 const SocMetrics = lazy(() => import('@/pages/SocMetrics'));
 const Hunt = lazy(() => import('@/pages/Hunt'));
+const Playbooks = lazy(() => import('@/pages/Playbooks'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -267,6 +268,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Hunt />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/playbooks"
+        element={
+          <Protected>
+            <AppLayout>
+              <Playbooks />
             </AppLayout>
           </Protected>
         }

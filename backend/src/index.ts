@@ -42,6 +42,9 @@ import { startBackupScheduler } from './modules/backups/backups.scheduler';
 import { auditRouter } from './modules/audit/audit.routes';
 import { metricsRouter } from './modules/metrics/metrics.routes';
 import { huntRouter } from './modules/hunt/hunt.routes';
+import { savedHuntRouter } from './modules/hunt/saved.routes';
+import { startSavedHuntScheduler } from './modules/hunt/saved.service';
+import { playbooksRouter } from './modules/playbooks/playbooks.routes';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -101,7 +104,9 @@ app.use('/api/incidents', incidentsRouter);
 app.use('/api/backups', backupsRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/metrics', metricsRouter);
+app.use('/api/hunt/saved', savedHuntRouter); // antes de /api/hunt (mas especifico)
 app.use('/api/hunt', huntRouter);
+app.use('/api/playbooks', playbooksRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {
@@ -139,6 +144,9 @@ startReportScheduler();
 
 // Respaldo automatico diario de la base de datos (.pnnc) + retencion
 startBackupScheduler();
+
+// Cacerías guardadas con alerta por umbral (revisa cada minuto las que tocan)
+startSavedHuntScheduler();
 
 // Monitor de Salud del SIEM (quien vigila al vigilante)
 startHealthMonitor();

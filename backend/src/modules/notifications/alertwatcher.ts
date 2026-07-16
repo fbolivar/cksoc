@@ -19,6 +19,7 @@ import {
   immediateEmail,
   type ImmediateAlert,
 } from './notify.engine';
+import { runPlaybooksForAlert } from '../playbooks/playbooks.service';
 
 const BRUTE = new Set(env.NOTIFY_BRUTEFORCE_RULES.split(',').map((s) => s.trim()).filter(Boolean));
 let lastTs: string | null = null;
@@ -27,7 +28,7 @@ interface Hit {
   _id: string;
   _source: {
     timestamp: string;
-    rule?: { id?: string; level?: number; description?: string };
+    rule?: { id?: string; level?: number; description?: string; mitre?: { id?: string[] }; groups?: string[] };
     agent?: { name?: string };
     data?: { srcip?: string; remip?: string };
   };
@@ -52,7 +53,7 @@ export function startAlertWatcher(): void {
         {
           size: 50,
           sort: [{ timestamp: 'asc' }],
-          _source: ['timestamp', 'rule.id', 'rule.level', 'rule.description', 'agent.name', 'data.srcip', 'data.remip'],
+          _source: ['timestamp', 'rule.id', 'rule.level', 'rule.description', 'rule.mitre.id', 'rule.groups', 'agent.name', 'data.srcip', 'data.remip'],
           query: {
             bool: {
               filter: [{ range: { timestamp: { gt: gte } } }],
@@ -83,6 +84,18 @@ export function startAlertWatcher(): void {
       const level = s.rule?.level ?? 0;
       const ruleId = s.rule?.id ?? '';
       const ip = extractPublicIp(s.data ?? {});
+
+      // SOAR: evaluar la alerta contra los playbooks habilitados (best-effort,
+      // no bloquea la notificacion). El motor respeta modo/cooldown/lista blanca.
+      void runPlaybooksForAlert({
+        alertId: h._id, level, ruleId,
+        description: s.rule?.description ?? '',
+        agent: s.agent?.name ?? '—',
+        ip: ip ?? null,
+        mitre: s.rule?.mitre?.id ?? [],
+        groups: s.rule?.groups ?? [],
+        timestamp: s.timestamp,
+      });
 
       // Decidir si es inmediato
       let immediate = level >= env.NOTIFY_IMMEDIATE_MIN_LEVEL || BRUTE.has(ruleId);
