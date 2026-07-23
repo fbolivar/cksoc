@@ -3,6 +3,7 @@
  */
 import { Pool } from 'pg';
 import { env } from './env';
+import { logger } from './logger';
 
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
@@ -11,9 +12,12 @@ export const pool = new Pool({
   connectionTimeoutMillis: 5_000,
 });
 
+// Error a nivel de pool (p. ej. PostgreSQL se reinicia por una actualizacion y
+// mata las conexiones ociosas). El pool se reconecta solo; registramos un
+// mensaje COMPACTO en vez del objeto de conexion completo, para no inundar el
+// log con cientos de lineas por un evento transitorio.
 pool.on('error', (err) => {
-  // eslint-disable-next-line no-console
-  console.error('Error inesperado en el pool de PostgreSQL:', err);
+  logger.warn({ err: err.message }, 'Error transitorio en el pool de PostgreSQL (se reconecta solo)');
 });
 
 /** Helper tipado para queries. */
