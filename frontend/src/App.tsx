@@ -35,6 +35,7 @@ const Audit = lazy(() => import('@/pages/Audit'));
 const SocMetrics = lazy(() => import('@/pages/SocMetrics'));
 const Hunt = lazy(() => import('@/pages/Hunt'));
 const Playbooks = lazy(() => import('@/pages/Playbooks'));
+const RiskBoard = lazy(() => import('@/pages/RiskBoard'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -278,6 +279,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Playbooks />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/riesgo"
+        element={
+          <Protected>
+            <AppLayout>
+              <RiskBoard />
             </AppLayout>
           </Protected>
         }

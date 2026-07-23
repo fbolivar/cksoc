@@ -26,6 +26,7 @@ import {
   Radar,
   LineChart,
   Zap,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -46,6 +47,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/resumen', label: 'Resumen Ejecutivo', icon: Gauge },
       { to: '/', label: 'Panel', icon: LayoutDashboard },
       { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
+      { to: '/riesgo', label: 'Riesgo · Ejecutivo', icon: ShieldCheck, roles: ['admin'] },
     ],
   },
   {
