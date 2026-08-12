@@ -5,6 +5,7 @@
  * Actualizacion en vivo del total via Socket.io.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import {
   ShieldAlert,
@@ -13,9 +14,11 @@ import {
   Flame,
   RefreshCw,
   Radio,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { alertsApi } from '@/lib/alerts';
 import {
   wazuhApi,
   intervalFor,
@@ -50,6 +53,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState<LiveMetrics | null>(null);
   const [connected, setConnected] = useState(false);
+  const [repoDeletes, setRepoDeletes] = useState<number | null>(null);
 
   // Carga de datos dependientes del rango
   const loadRange = useCallback(async (r: TimeRange) => {
@@ -79,6 +83,9 @@ export default function Dashboard() {
   useEffect(() => {
     wazuhApi.timeline('7d', '1h').then(setHeatmap).catch(() => undefined);
     wazuhApi.agentsSummary().then(setAgentsSummary).catch(() => undefined);
+    // Borrados en repositorios protegidos (auditoria Windows, regla 100210) del dia.
+    alertsApi.search({ range: '24h', ruleId: '100210', page: 0, size: 1 })
+      .then((res) => setRepoDeletes(res.total)).catch(() => setRepoDeletes(null));
   }, []);
 
   // Socket.io: total en vivo
@@ -175,6 +182,24 @@ export default function Dashboard() {
           subtitle="monitoreados"
         />
       </div>
+
+      {/* Borrados en repositorios protegidos (auditoria) — destacado, clic para ver en Alertas */}
+      <Link to="/alertas?ruleId=100210" className="block">
+        <Card className="border-rose-500/30 bg-rose-500/[0.04] transition hover:bg-rose-500/[0.09]">
+          <CardContent className="flex items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-500/15">
+                <Trash2 className="h-5 w-5 text-rose-600" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">Borrados en repositorios protegidos</p>
+                <p className="text-xs text-muted-foreground">Auditoría de eliminación de archivos · últimas 24 h · clic para ver el detalle</p>
+              </div>
+            </div>
+            <span className="text-3xl font-bold tabular-nums text-rose-600">{repoDeletes ?? '—'}</span>
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* Timeline + Severidad */}
       <div className="grid gap-4 lg:grid-cols-3">

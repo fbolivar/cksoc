@@ -3,9 +3,11 @@
  * (added / modified / deleted) con el usuario responsable y el activo.
  */
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { FileSearch, RefreshCw, Loader2, Server, User, FilePlus2, FilePen, FileX2 } from 'lucide-react';
+import { FileSearch, RefreshCw, Loader2, Server, User, FilePlus2, FilePen, FileX2, ShieldAlert } from 'lucide-react';
 import { fimApi, EVENT_META, type FimData } from '@/lib/fim';
+import { alertsApi, type AlertHit } from '@/lib/alerts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RangeTabs, RANGE_24_7_30 } from '@/components/shared/RangeTabs';
@@ -29,10 +31,15 @@ export default function Fim() {
   const [data, setData] = useState<FimData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Borrados en repos protegidos (auditoria Windows, regla 100210) — independiente de syscheck.
+  const [repoDel, setRepoDel] = useState<{ total: number; items: AlertHit[] } | null>(null);
 
   async function load(r: Range) {
     setLoading(true);
     setError(null);
+    alertsApi.search({ range: r, ruleId: '100210', page: 0, size: 6 })
+      .then((res) => setRepoDel({ total: res.total, items: res.items }))
+      .catch(() => setRepoDel(null));
     try {
       setData(await fimApi.get(HOURS[r]));
     } catch (e) {
@@ -66,6 +73,37 @@ export default function Fim() {
       </div>
 
       {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
+
+      {/* Borrados en repositorios protegidos (auditoria Windows, regla 100210) — aparte de syscheck */}
+      <Card className="border-rose-500/30 bg-rose-500/[0.03]">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-2 font-semibold text-rose-600">
+              <ShieldAlert className="h-5 w-5" /> Borrados en repositorios protegidos
+            </span>
+            <Link to="/alertas?ruleId=100210" className="text-xs text-neon hover:underline">Ver en Alertas →</Link>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-bold tabular-nums text-rose-600">{repoDel?.total ?? '—'}</span>
+            <span className="text-xs text-muted-foreground">eliminaciones detectadas por auditoría · {range}</span>
+          </div>
+          {repoDel && repoDel.items.length > 0 ? (
+            <div className="mt-3 space-y-1.5">
+              {repoDel.items.map((it) => (
+                <div key={it.id} className="flex items-start gap-2 text-xs">
+                  <FileX2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />
+                  <div className="min-w-0">
+                    <span className="block truncate font-mono text-muted-foreground" title={it.description}>{it.description}</span>
+                    <span className="text-[10px] text-muted-foreground/60">{it.agent} · {new Date(it.timestamp).toLocaleString('es-CO')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">Sin borrados en repositorios protegidos en este periodo.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {loading && !data ? (
         <p className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
