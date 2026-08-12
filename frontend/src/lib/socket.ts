@@ -3,6 +3,7 @@
  * Se conecta al mismo origen (Nginx hace proxy de /socket.io al backend).
  */
 import { io, type Socket } from 'socket.io-client';
+import { tokenStorage } from './api';
 
 export interface LiveMetrics {
   total: number;
@@ -18,6 +19,9 @@ export function getSocket(): Socket {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       reconnectionDelay: 2000,
+      // Envia el JWT en el handshake; como funcion, se re-evalua en cada
+      // (re)conexion usando el token vigente.
+      auth: (cb) => cb({ token: tokenStorage.get() ?? '' }),
     });
   }
   return socket;

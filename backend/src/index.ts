@@ -8,6 +8,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import jwt from 'jsonwebtoken';
 import { pinoHttp } from 'pino-http';
 import { createServer } from 'node:http';
 import { Server as SocketServer } from 'socket.io';
@@ -117,11 +118,35 @@ app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
+// Manejador de errores global: red de seguridad para cualquier error no
+// capturado en un handler (evita peticiones colgadas / unhandledRejection).
+// Loguea el detalle en el servidor y devuelve un mensaje generico al cliente.
+app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  logger.error({ err, url: req.url }, 'Error no controlado en un handler');
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'Error interno del servidor' });
+});
+
 // Servidor HTTP + WebSocket (Socket.io listo para Fase 2)
 const httpServer = createServer(app);
 const io = new SocketServer(httpServer, {
   cors: { origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(',') },
 });
+
+// Autenticacion del WebSocket: el socket difunde metricas del SIEM, mapa de
+// ataques y notificaciones en vivo. Sin esto, cualquiera que alcance /socket.io
+// recibiria datos del SOC. Se exige un JWT valido en el handshake.
+io.use((socket, next) => {
+  const token = (socket.handshake.auth?.token as string | undefined) ?? '';
+  if (!token) { next(new Error('unauthorized')); return; }
+  try {
+    jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
+    next();
+  } catch {
+    next(new Error('unauthorized'));
+  }
+});
+
 setIo(io); // el bus permite emitir eventos (notification:new) desde cualquier modulo
 
 io.on('connection', (socket) => {

@@ -152,6 +152,9 @@ export function ExecutiveReports({ onFlash }: { onFlash: (k: 'ok' | 'err', t: st
               <iframe
                 title="preview"
                 srcDoc={current.html}
+                // sandbox="" (sin allow-scripts/allow-same-origin): el reporte es solo
+                // presentacion; bloquear JS evita XSS si algun dato del SOC arrastra markup.
+                sandbox=""
                 className="h-[600px] w-full rounded-lg border border-border/60 bg-white"
               />
             </div>

@@ -108,7 +108,7 @@ export function signChallenge(userId: string): string {
 /** Valida un reto de 2FA y devuelve el id del usuario. */
 export function verifyChallenge(token: string): string {
   try {
-    const p = jwt.verify(token, env.JWT_SECRET) as { sub: string; purpose?: string };
+    const p = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as { sub: string; purpose?: string };
     if (p.purpose !== '2fa') throw new Error('proposito invalido');
     return p.sub;
   } catch {

@@ -139,12 +139,12 @@ export function NotificationBell() {
               })
             )}
           </div>
-          <a
-            href="/notificaciones"
-            className="block border-t border-border/60 px-4 py-2 text-center text-xs text-brand hover:underline"
+          <button
+            onClick={() => openItem('/notificaciones')}
+            className="block w-full border-t border-border/60 px-4 py-2 text-center text-xs text-brand hover:underline"
           >
             Ver todas las notificaciones
-          </a>
+          </button>
         </div>
       )}
     </div>

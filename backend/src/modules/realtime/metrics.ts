@@ -6,6 +6,7 @@
  */
 import type { Server as SocketServer } from 'socket.io';
 import { getSummary } from '../wazuh/wazuh.service';
+import { logger } from '../../config/logger';
 
 const INTERVAL_MS = 15_000;
 const RANGE = '24h';
@@ -36,9 +37,10 @@ export function startMetricsBroadcast(io: SocketServer): void {
       };
       io.emit('metrics:update', lastMetrics);
     } catch (err) {
-      // No tumbar el intervalo por un fallo puntual del Indexer.
-      const msg = err instanceof Error ? err.message : 'error';
-      io.emit('metrics:error', { message: msg });
+      // No tumbar el intervalo por un fallo puntual del Indexer. No filtrar el
+      // detalle del error (host/puerto internos) a los clientes; loguear aparte.
+      logger.error({ err }, 'Fallo al obtener metricas del Indexer');
+      io.emit('metrics:error', { message: 'No se pudieron actualizar las metricas' });
     }
   };
 

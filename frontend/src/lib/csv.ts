@@ -9,7 +9,11 @@ export interface CsvCol<T> {
 }
 
 function escapeCell(value: unknown): string {
-  const s = value === null || value === undefined ? '' : String(value);
+  let s = value === null || value === undefined ? '' : String(value);
+  // Anti-inyeccion de formulas (Excel/LibreOffice): una celda que empieza por
+  // = + - @ (o tab/CR) se ejecuta como formula al abrir el CSV. Se neutraliza
+  // anteponiendo una comilla simple.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

@@ -3,6 +3,7 @@
  * Mantiene el usuario actual, gestiona login/logout y restaura sesion al cargar.
  */
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { AxiosError } from 'axios';
 import { api, tokenStorage } from './api';
 
 export type RoleName = 'admin' | 'analista' | 'lector';
@@ -43,7 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     api
       .get<{ user: AuthUser }>('/auth/me')
       .then((res) => setUser(res.data.user))
-      .catch(() => tokenStorage.clear())
+      .catch((err) => {
+        // Solo cerrar sesion si el token es invalido/expirado (401). Un 500,
+        // timeout o corte de red momentaneo NO debe desloguear a un usuario
+        // con token valido.
+        if ((err as AxiosError).response?.status === 401) tokenStorage.clear();
+      })
       .finally(() => setLoading(false));
   }, []);
 

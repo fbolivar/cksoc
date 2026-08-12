@@ -78,14 +78,16 @@ export default function Incidents() {
 
   async function patch(p: { status?: Status; severity?: Severity; assigneeId?: string | null }) {
     if (!sel) return;
-    setBusy(true);
+    setBusy(true); setError(null);
     try { setDetail(await incidentsApi.update(sel, p)); await loadList(); }
+    catch (e) { setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo actualizar el incidente'); }
     finally { setBusy(false); }
   }
   async function sendNote() {
     if (!sel || !note.trim()) return;
-    setBusy(true);
+    setBusy(true); setError(null);
     try { setDetail(await incidentsApi.addNote(sel, note.trim())); setNote(''); }
+    catch (e) { setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo agregar la nota'); }
     finally { setBusy(false); }
   }
 

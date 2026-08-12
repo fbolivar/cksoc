@@ -21,7 +21,7 @@ export async function authenticate(
   const token = header.slice('Bearer '.length);
   let payload: JwtPayload;
   try {
-    payload = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+    payload = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload;
   } catch {
     res.status(401).json({ error: 'Token invalido o expirado' });
     return;
