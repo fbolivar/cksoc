@@ -1,7 +1,7 @@
 {
   "name": "soc-pnnc-frontend",
   "version": "1.0.0",
-  "description": "Frontend SOC PNNC - Dashboard de monitoreo de seguridad",
+  "description": "Frontend HexWatch - Dashboard de monitoreo de seguridad",
   "private": true,
   "type": "module",
   "scripts": {

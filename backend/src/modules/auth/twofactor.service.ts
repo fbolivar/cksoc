@@ -15,7 +15,7 @@ import { HttpError } from './auth.service';
 // Tolera +/- 1 ventana (30s) de desfase de reloj entre el telefono y el servidor.
 authenticator.options = { window: 1 };
 
-const ISSUER = 'SOC PNNC';
+const ISSUER = 'HexWatch';
 const KEY = createHash('sha256').update(`${env.JWT_SECRET}|totp-v1`).digest(); // 32 bytes
 
 export function encryptSecret(plain: string): string {

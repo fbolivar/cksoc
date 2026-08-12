@@ -1,7 +1,7 @@
 {
   "name": "soc-pnnc-backend",
   "version": "1.0.0",
-  "description": "Backend SOC PNNC - proxy seguro a Wazuh, auth, notificaciones y reportes",
+  "description": "Backend HexWatch - proxy seguro a Wazuh, auth, notificaciones y reportes",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

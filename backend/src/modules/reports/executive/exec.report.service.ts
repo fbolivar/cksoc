@@ -91,7 +91,7 @@ export async function sendToCommittee(id: string): Promise<{ recipients: string[
   const resumen = r.resumen_editado || defaultSummary(r.datos_json);
   const html = executiveEmailHtml(r.datos_json, resumen);
   const pdf = readFileSync(r.pdf_path);
-  const subject = `[SOC PNNC] Reporte Ejecutivo de Seguridad - ${r.datos_json.periodoLabel}`;
+  const subject = `[HexWatch] Reporte Ejecutivo de Seguridad - ${r.datos_json.periodoLabel}`;
   await sendEmail(settings.recipients, subject, html,
     `Reporte ejecutivo de seguridad - ${r.datos_json.periodoLabel} (PDF adjunto)`,
     [{ filename: `Reporte-Ejecutivo-${r.mes}.pdf`, content: pdf, contentType: 'application/pdf' }]);

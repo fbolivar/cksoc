@@ -189,7 +189,7 @@ export default function AttackMap() {
             <Globe2 className="h-6 w-6 text-neon" /> Mapa de ataques
           </h1>
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            Orígenes geolocalizados de IPs atacantes hacia PNNC
+            Orígenes geolocalizados de IPs atacantes hacia HexWatch
             <span
               className="inline-flex items-center gap-1 text-[11px]"
               style={{ color: connected ? 'hsl(var(--neon-green))' : '#9ca3af' }}
@@ -243,7 +243,7 @@ export default function AttackMap() {
           <CardContent className="flex items-start gap-3 p-4">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
             <div className="text-sm">
-              <p className="font-medium text-amber-200">Mapa no disponible</p>
+              <p className="font-medium text-amber-700">Mapa no disponible</p>
               <p className="mt-1 text-muted-foreground">{error}</p>
             </div>
           </CardContent>

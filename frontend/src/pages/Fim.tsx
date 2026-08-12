@@ -65,7 +65,7 @@ export default function Fim() {
         </div>
       </div>
 
-      {error && <Card><CardContent className="p-4 text-sm text-amber-200">{error}</CardContent></Card>}
+      {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
 
       {loading && !data ? (
         <p className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">

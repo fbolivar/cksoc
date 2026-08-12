@@ -86,7 +86,7 @@ export default function Mitre() {
         </div>
       </div>
 
-      {error && <Card><CardContent className="p-4 text-sm text-amber-200">{error}</CardContent></Card>}
+      {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
 
       {loading && !data ? (
         <p className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
@@ -162,7 +162,7 @@ export default function Mitre() {
 
 function Cell({ t, intensity }: { t: MitreTechnique; intensity: number }) {
   // Opacidad minima alta para que las celdas poco activas sigan legibles.
-  const bg = `rgba(220,38,38,${(0.32 + intensity * 0.5).toFixed(2)})`;
+  const bg = `rgba(220,38,38,${(0.55 + intensity * 0.4).toFixed(2)})`;
   return (
     <a
       href={`https://attack.mitre.org/techniques/${t.id.replace('.', '/')}/`}

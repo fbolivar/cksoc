@@ -29,7 +29,7 @@ function DomainCard({ d }: { d: Domain }) {
           <p className="mt-0.5 text-xs italic text-muted-foreground">{d.businessQuestion}</p>
         </div>
         <div className="text-right">
-          <span className={`text-lg font-bold ${d.posture === null ? 'text-muted-foreground/50' : d.status === 'good' ? 'text-primary' : d.status === 'warn' ? 'text-warn' : 'text-destructive-foreground'}`}>
+          <span className={`text-lg font-bold ${d.posture === null ? 'text-muted-foreground/50' : d.status === 'good' ? 'text-primary' : d.status === 'warn' ? 'text-warn' : 'text-destructive'}`}>
             {d.posture === null ? '—' : `${d.posture}`}
           </span>
           {d.posture !== null && <span className="text-[10px] text-muted-foreground">/100</span>}
@@ -46,7 +46,7 @@ function DomainCard({ d }: { d: Domain }) {
                 <span title={k.note}><HelpCircle className="h-3 w-3 text-muted-foreground/50" /></span>
               )}
             </span>
-            <span className={`font-medium ${k.source === 'pending' ? 'text-muted-foreground/50' : k.status === 'bad' ? 'text-destructive-foreground' : k.status === 'warn' ? 'text-warn' : 'text-foreground'}`}>
+            <span className={`font-medium ${k.source === 'pending' ? 'text-muted-foreground/50' : k.status === 'bad' ? 'text-destructive' : k.status === 'warn' ? 'text-warn' : 'text-foreground'}`}>
               {k.value}
             </span>
           </li>

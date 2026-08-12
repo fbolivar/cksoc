@@ -1,12 +1,12 @@
 /**
- * Pantalla de inicio de sesion con identidad PNNC.
+ * Pantalla de inicio de sesion HexWatch (tema claro, tarjeta blanca).
  * Soporta 2FA: si la cuenta tiene segundo factor, tras validar la contrasena
  * se solicita el codigo del autenticador (o un codigo de respaldo).
  */
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { ShieldCheck, Loader2, KeyRound, ArrowLeft } from 'lucide-react';
+import { Loader2, KeyRound, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,44 +64,40 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      {/* Franja tricolor gov.co en el borde superior de la pantalla */}
-      <div className="gov-strip fixed inset-x-0 top-0" />
-      <div className="w-full max-w-md">
-        {/* Encabezado institucional */}
-        <div className="flex flex-col items-center text-center mb-8">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <div className="w-full max-w-[400px]">
+        {/* Marca */}
+        <div className="flex flex-col items-center text-center mb-7">
           <img
             src="/logo-pnnc.png"
-            alt="Parques Nacionales Naturales de Colombia"
-            className="h-16 w-auto object-contain mb-4 drop-shadow"
+            alt="HexWatch"
+            className="h-14 w-auto object-contain mb-3"
             onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
           />
-          <div className="flex items-center gap-2 text-neon">
-            <ShieldCheck className="h-5 w-5" />
-            <span className="text-xs font-semibold tracking-[0.2em] uppercase">
-              Centro de Operaciones de Seguridad
-            </span>
-          </div>
-          <h1 className="mt-2 text-2xl font-semibold">Parques Nacionales Naturales</h1>
-          <p className="text-sm text-muted-foreground">Plataforma de monitoreo y respuesta</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">HexWatch</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Centro de Operaciones de Seguridad</p>
         </div>
 
         {!challenge ? (
-          <form onSubmit={onSubmit} className="glass rounded-lg p-6 space-y-4">
+          <form onSubmit={onSubmit} className="glass rounded-[22px] p-7 space-y-5">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Bienvenido de nuevo</h2>
+              <p className="text-sm text-muted-foreground">Inicia sesión para continuar</p>
+            </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Correo institucional</Label>
+              <Label htmlFor="email">Correo</Label>
               <Input
                 id="email"
                 type="email"
                 autoComplete="username"
-                placeholder="usuario@parquesnacionales.gov.co"
+                placeholder="tucorreo@empresa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Contrasena</Label>
+              <Label htmlFor="password">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
@@ -114,21 +110,21 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
               </div>
             )}
 
             <Button type="submit" size="lg" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? 'Ingresando…' : 'Iniciar sesion'}
+              {loading ? 'Ingresando…' : 'Iniciar sesión'}
             </Button>
           </form>
         ) : (
-          <form onSubmit={onSubmit2fa} className="glass rounded-lg p-6 space-y-4">
-            <div className="flex items-center gap-2 text-neon">
+          <form onSubmit={onSubmit2fa} className="glass rounded-[22px] p-7 space-y-5">
+            <div className="flex items-center gap-2 text-primary">
               <KeyRound className="h-5 w-5" />
-              <span className="text-sm font-semibold">Verificación en dos pasos</span>
+              <span className="text-base font-semibold">Verificación en dos pasos</span>
             </div>
             <p className="text-sm text-muted-foreground">
               Ingresa el código de 6 dígitos de tu app autenticadora. ¿Sin acceso? Usa un código de respaldo.
@@ -149,7 +145,7 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 {error}
               </div>
             )}
@@ -168,8 +164,8 @@ export default function Login() {
           </form>
         )}
 
-        <p className="mt-6 text-center text-[11px] text-muted-foreground/60">
-          Acceso restringido a personal autorizado · Parques Nacionales Naturales de Colombia
+        <p className="mt-6 text-center text-[11px] text-muted-foreground/70">
+          Acceso restringido a personal autorizado · HexWatch
         </p>
       </div>
     </div>

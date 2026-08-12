@@ -94,7 +94,7 @@ export default function Incidents() {
         </div>
       </div>
 
-      {error && <Card><CardContent className="p-4 text-sm text-amber-200">{error}</CardContent></Card>}
+      {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
 
       {/* Lista */}
       {!sel && (

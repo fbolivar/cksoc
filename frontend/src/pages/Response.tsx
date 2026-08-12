@@ -100,7 +100,7 @@ export default function Response() {
       {msg && (
         <div className={`rounded-md border px-3 py-2 text-sm ${msg.k === 'ok'
           ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-          : 'border-destructive/40 bg-destructive/10 text-destructive-foreground'}`}>
+          : 'border-destructive/40 bg-destructive/10 text-destructive'}`}>
           {msg.t}
         </div>
       )}

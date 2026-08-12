@@ -8,7 +8,7 @@ import {
   Cell,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { fmt, tooltipStyle } from './theme';
+import { fmt, tooltipStyle, CHART_AXIS } from './theme';
 
 interface Props {
   title: string;
@@ -42,13 +42,13 @@ export function BarList({ title, data, color, emptyText }: Props) {
                   type="category"
                   dataKey="label"
                   width={150}
-                  tick={{ fontSize: 11, fill: 'rgba(255,255,255,0.7)' }}
+                  tick={{ fontSize: 11, fill: CHART_AXIS }}
                   tickLine={false}
                   axisLine={false}
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                  cursor={{ fill: 'rgba(17,17,17,0.04)' }}
                   formatter={(v: number) => [fmt(v), 'Alertas']}
                 />
                 <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={18}>

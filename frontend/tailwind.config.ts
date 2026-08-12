@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
-// Tema PNNC: verde conservacion (primario), azul GOV.CO (encabezado),
-// fondo dark "SOC" (grises muy oscuros) con acentos verdes neon sutiles.
+// HexWatch — tema claro minimalista: coral (#F0512E) + tinta casi negra,
+// tarjetas redondeadas y sombras suaves. Tipografía Inter.
 const config: Config = {
   darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -37,11 +37,12 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        // Marca institucional PNNC
+        // Semánticos HexWatch
         brand: 'hsl(var(--brand-green))',
         neon: 'hsl(var(--neon-green))',
         warn: 'hsl(var(--warn-orange))',
-        // Paleta corporativa (cian) e identidad de Gobierno (gov.co)
+        ink: 'hsl(var(--ink))',
+        success: 'hsl(var(--success))',
         cyan: {
           DEFAULT: 'hsl(var(--cyan))',
           light: 'hsl(var(--cyan-light))',
@@ -54,16 +55,18 @@ const config: Config = {
       },
       borderRadius: {
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        md: 'calc(var(--radius) - 4px)',
+        sm: 'calc(var(--radius) - 8px)',
+        '2xl': 'calc(var(--radius) + 4px)',
+        '3xl': 'calc(var(--radius) + 8px)',
       },
       fontFamily: {
-        // Tipografia principal PNNC (Manual de Identidad Visual); Verdana como
-        // complementaria/office segun el manual, luego el system stack.
-        sans: ['"Nunito Sans"', 'Verdana', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
       },
       boxShadow: {
-        glow: '0 0 24px -6px hsl(var(--neon-green) / 0.45)',
+        glow: '0 10px 24px -12px hsl(var(--primary) / 0.5)',
+        soft: '0 1px 2px rgb(17 17 17 / 0.04), 0 14px 32px -20px rgb(17 17 17 / 0.18)',
+        card: '0 1px 3px rgb(17 17 17 / 0.05)',
       },
       keyframes: {
         'pulse-soft': {

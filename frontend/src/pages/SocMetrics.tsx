@@ -15,7 +15,7 @@ const SEV_LABEL: Record<string, string> = { baja: 'Baja', media: 'Media', alta: 
 function Kpi({ icon: Icon, label, value, sub, tone }: {
   icon: typeof Timer; label: string; value: string; sub?: string; tone?: 'good' | 'warn' | 'bad';
 }) {
-  const color = tone === 'bad' ? 'text-destructive-foreground' : tone === 'warn' ? 'text-warn' : 'text-brand';
+  const color = tone === 'bad' ? 'text-destructive' : tone === 'warn' ? 'text-warn' : 'text-brand';
   return (
     <div className="glass rounded-lg p-4">
       <div className="flex items-center justify-between">
@@ -130,7 +130,7 @@ export default function SocMetrics() {
                     const t = m.sla.targets[s.severity];
                     const pctCell = (pct: number | null) =>
                       pct === null ? <span className="text-muted-foreground">—</span> : (
-                        <span className={pct >= 90 ? 'text-brand' : pct >= 70 ? 'text-warn' : 'text-destructive-foreground'}>{pct}%</span>
+                        <span className={pct >= 90 ? 'text-brand' : pct >= 70 ? 'text-warn' : 'text-destructive'}>{pct}%</span>
                       );
                     return (
                       <tr key={s.severity} className="border-b border-border/30">

@@ -1,5 +1,5 @@
 /**
- * Punto de entrada del backend SOC PNNC.
+ * Punto de entrada del backend HexWatch.
  * - Express con seguridad (helmet, cors, rate-limit)
  * - Healthcheck con estado de la base de datos
  * - Rutas: /api/auth, /api/wazuh
@@ -76,7 +76,7 @@ app.get('/health', async (_req, res) => {
   res.status(db ? 200 : 503).json({
     status: db ? 'ok' : 'degraded',
     db: db ? 'ok' : 'down',
-    service: 'soc-pnnc-backend',
+    service: 'hexwatch-backend',
     timestamp: new Date().toISOString(),
   });
 });
@@ -163,7 +163,7 @@ process.on('SIGINT', () => void closePdfEngine());
 // Escuchar solo en loopback: Nginx (reverse proxy) llega por 127.0.0.1:4000.
 // Evita exponer la API directamente a la red saltandose el proxy/TLS.
 httpServer.listen(env.PORT, '127.0.0.1', () => {
-  logger.info({ port: env.PORT, host: '127.0.0.1', env: env.NODE_ENV }, 'Backend SOC PNNC escuchando');
+  logger.info({ port: env.PORT, host: '127.0.0.1', env: env.NODE_ENV }, 'Backend HexWatch escuchando');
 });
 
 export { app, io };

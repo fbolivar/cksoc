@@ -21,7 +21,7 @@ export const riskApi = {
 export const STATUS_COLOR: Record<Status, string> = {
   good: 'text-primary',
   warn: 'text-warn',
-  bad: 'text-destructive-foreground',
+  bad: 'text-destructive',
   pending: 'text-muted-foreground/50',
 };
 export const STATUS_DOT: Record<Status, string> = {
@@ -33,6 +33,6 @@ export const STATUS_DOT: Record<Status, string> = {
 export const LEVEL_COLOR: Record<string, string> = {
   bajo: 'text-primary',
   medio: 'text-warn',
-  alto: 'text-orange-400',
-  critico: 'text-destructive-foreground',
+  alto: 'text-orange-500',
+  critico: 'text-destructive',
 };

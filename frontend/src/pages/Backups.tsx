@@ -132,7 +132,7 @@ export default function Backups() {
           className={`rounded-md border px-3 py-2 text-sm ${
             msg.kind === 'ok'
               ? 'border-primary/40 bg-primary/10 text-foreground'
-              : 'border-destructive/40 bg-destructive/10 text-destructive-foreground'
+              : 'border-destructive/40 bg-destructive/10 text-destructive'
           }`}
         >
           {msg.text}
@@ -201,7 +201,7 @@ export default function Backups() {
                   </span>
                 )}
                 {b.integrity === 'corrupto' && (
-                  <span className="text-[11px] text-destructive-foreground">corrupto</span>
+                  <span className="text-[11px] text-destructive">corrupto</span>
                 )}
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="sm" onClick={() => void onVerify(b.id)} disabled={!!busy[b.id]} title="Verificar integridad">
@@ -216,7 +216,7 @@ export default function Backups() {
                     onClick={() => void onDelete(b.id)}
                     disabled={!!busy[b.id]}
                     title="Eliminar"
-                    className="text-destructive-foreground/80 hover:text-destructive-foreground"
+                    className="text-destructive/80 hover:text-destructive"
                   >
                     {busy[b.id] === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   </Button>

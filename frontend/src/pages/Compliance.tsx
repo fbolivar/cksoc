@@ -43,7 +43,7 @@ export default function Compliance() {
             <Scale className="h-6 w-6 text-neon" /> Cumplimiento normativo
           </h1>
           <p className="text-sm text-muted-foreground">
-            Controles de los marcos regulatorios ejercidos por el monitoreo, priorizados para PNNC
+            Controles de los marcos regulatorios ejercidos por el monitoreo, priorizados para HexWatch
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -55,7 +55,7 @@ export default function Compliance() {
         </div>
       </div>
 
-      {error && <Card><CardContent className="p-4 text-sm text-amber-200">{error}</CardContent></Card>}
+      {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
 
       {/* Pestañas de marcos (orden por prioridad) */}
       <div className="flex flex-wrap gap-1 border-b border-border/60">

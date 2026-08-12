@@ -39,15 +39,15 @@ export function donutSvg(
     .join('');
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     ${arcs}
-    <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="22" font-weight="700" fill="#0f3d24">${fmt(total)}</text>
-    <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="11" fill="#6b7c74">total</text>
+    <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="22" font-weight="700" fill="#171717">${fmt(total)}</text>
+    <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="11" fill="#6b7280">total</text>
   </svg>`;
 }
 
 /** Barras horizontales. data: [{label,value}] */
 export function barsSvg(
   data: { label: string; value: number }[],
-  color = '#1f7a4d',
+  color = '#f0512e',
   width = 480
 ): string {
   if (data.length === 0) return '<p style="color:#888">Sin datos</p>';
@@ -61,11 +61,11 @@ export function barsSvg(
       const w = Math.max(2, (d.value / max) * barW);
       const y = i * rowH;
       return `
-      <text x="${labelW - 8}" y="${y + 17}" text-anchor="end" font-size="11" fill="#33413b">${esc(
+      <text x="${labelW - 8}" y="${y + 17}" text-anchor="end" font-size="11" fill="#374151">${esc(
         d.label.length > 24 ? d.label.slice(0, 23) + '…' : d.label
       )}</text>
       <rect x="${labelW}" y="${y + 5}" width="${w}" height="16" rx="3" fill="${color}" opacity="${1 - i * 0.06}"/>
-      <text x="${labelW + w + 6}" y="${y + 17}" font-size="11" fill="#33413b">${fmt(d.value)}</text>`;
+      <text x="${labelW + w + 6}" y="${y + 17}" font-size="11" fill="#374151">${fmt(d.value)}</text>`;
     })
     .join('');
   return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">${rows}</svg>`;
@@ -76,7 +76,7 @@ export function sparkAreaSvg(
   data: { ts: string; count: number }[],
   width = 760,
   height = 140,
-  color = '#1f7a4d'
+  color = '#f0512e'
 ): string {
   if (data.length < 2) return '<p style="color:#888">Sin datos suficientes</p>';
   const max = Math.max(...data.map((d) => d.count)) || 1;
@@ -91,6 +91,6 @@ export function sparkAreaSvg(
   return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
     <path d="${area}" fill="${color}" opacity="0.15"/>
     <path d="${line}" fill="none" stroke="${color}" stroke-width="2"/>
-    <text x="2" y="12" font-size="10" fill="#6b7c74">pico: ${fmt(max)}</text>
+    <text x="2" y="12" font-size="10" fill="#6b7280">pico: ${fmt(max)}</text>
   </svg>`;
 }

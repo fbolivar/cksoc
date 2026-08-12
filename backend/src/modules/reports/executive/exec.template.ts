@@ -31,7 +31,7 @@ export function defaultSummary(m: ReportMetrics): string {
   if (m.semaforo === 'amarillo') {
     return `Durante ${m.periodoLabel}, el Centro de Operaciones de Seguridad mantuvo monitoreo continuo sobre los servidores críticos de la entidad. Se detectaron y gestionaron intentos de acceso no autorizado dirigidos principalmente a los servicios de acceso remoto (VPN), sin afectación a la operación. Las amenazas fueron registradas, correlacionadas y se cuenta con capacidad de bloqueo. La postura de seguridad del periodo se considera estable bajo gestión activa.`;
   }
-  return `Durante ${m.periodoLabel}, la infraestructura tecnológica de Parques Nacionales operó con normalidad. El monitoreo continuo de seguridad no identificó incidentes que comprometieran la operación. Se mantuvieron activas las capacidades de detección, análisis y respuesta del Centro de Operaciones de Seguridad.`;
+  return `Durante ${m.periodoLabel}, la infraestructura tecnológica de HexWatch operó con normalidad. El monitoreo continuo de seguridad no identificó incidentes que comprometieran la operación. Se mantuvieron activas las capacidades de detección, análisis y respuesta del Centro de Operaciones de Seguridad.`;
 }
 
 /** Recomendaciones por defecto (editables). */
@@ -53,10 +53,10 @@ export function defaultRecommendations(m: ReportMetrics): string {
 // ----------------- secciones HTML -----------------
 
 function h(n: number, t: string): string {
-  return `<h2 style="font-size:14px;color:#0f3d24;border-bottom:2px solid #1f7a4d;padding-bottom:4px;margin:22px 0 10px">${n}. ${t}</h2>`;
+  return `<h2 style="font-size:14px;color:#171717;border-bottom:2px solid #f0512e;padding-bottom:4px;margin:22px 0 10px">${n}. ${t}</h2>`;
 }
 function p(t: string): string {
-  return `<p style="font-size:12px;line-height:1.55;margin:0 0 8px;color:#26342e">${t}</p>`;
+  return `<p style="font-size:12px;line-height:1.55;margin:0 0 8px;color:#374151">${t}</p>`;
 }
 
 function isoTable(m: ReportMetrics): string {
@@ -67,9 +67,9 @@ function isoTable(m: ReportMetrics): string {
     ['A.5.24–A.5.28', 'Gestión de incidentes', `Detección, análisis, respuesta (${m.ipsBloqueadas.length} bloqueo(s)) y evidencia documentada de incidentes.`],
   ];
   const rows = controls.map(([id, name, ev]) =>
-    `<tr><td style="padding:6px 8px;border:1px solid #e2e8e4;font-weight:600;white-space:nowrap">${id}</td><td style="padding:6px 8px;border:1px solid #e2e8e4">${esc(name)}</td><td style="padding:6px 8px;border:1px solid #e2e8e4">${esc(ev)}</td></tr>`
+    `<tr><td style="padding:6px 8px;border:1px solid #e5e5e5;font-weight:600;white-space:nowrap">${id}</td><td style="padding:6px 8px;border:1px solid #e5e5e5">${esc(name)}</td><td style="padding:6px 8px;border:1px solid #e5e5e5">${esc(ev)}</td></tr>`
   ).join('');
-  return `<table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#f0f5f2;color:#0f3d24"><th style="padding:6px 8px;border:1px solid #e2e8e4;text-align:left">Control</th><th style="padding:6px 8px;border:1px solid #e2e8e4;text-align:left">Nombre</th><th style="padding:6px 8px;border:1px solid #e2e8e4;text-align:left">Evidencia del periodo</th></tr>${rows}</table>`;
+  return `<table style="width:100%;border-collapse:collapse;font-size:11px"><tr style="background:#f5f5f4;color:#171717"><th style="padding:6px 8px;border:1px solid #e5e5e5;text-align:left">Control</th><th style="padding:6px 8px;border:1px solid #e5e5e5;text-align:left">Nombre</th><th style="padding:6px 8px;border:1px solid #e5e5e5;text-align:left">Evidencia del periodo</th></tr>${rows}</table>`;
 }
 
 function trendSvg(m: ReportMetrics): string {
@@ -86,8 +86,8 @@ function trendSvg(m: ReportMetrics): string {
     return [x, y] as const;
   });
   const line = pts.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt[0].toFixed(0)} ${pt[1].toFixed(0)}`).join(' ');
-  const labels = series.map((s, i) => `<text x="${pad + i * stepX}" y="${H - 8}" font-size="9" fill="#6b7c74" text-anchor="middle">${s.mes}</text>`).join('');
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><path d="${line}" fill="none" stroke="#1f7a4d" stroke-width="2"/>${pts.map((pt) => `<circle cx="${pt[0]}" cy="${pt[1]}" r="3" fill="#1f7a4d"/>`).join('')}${labels}<text x="${pad}" y="14" font-size="9" fill="#6b7c74">Eventos por mes (pico ${fmt(max)})</text></svg>`;
+  const labels = series.map((s, i) => `<text x="${pad + i * stepX}" y="${H - 8}" font-size="9" fill="#6b7280" text-anchor="middle">${s.mes}</text>`).join('');
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><path d="${line}" fill="none" stroke="#f0512e" stroke-width="2"/>${pts.map((pt) => `<circle cx="${pt[0]}" cy="${pt[1]}" r="3" fill="#f0512e"/>`).join('')}${labels}<text x="${pad}" y="14" font-size="9" fill="#6b7280">Eventos por mes (pico ${fmt(max)})</text></svg>`;
 }
 
 /** Seccion de postura de endpoints (vulnerabilidades + hardening + marcos). */
@@ -99,7 +99,7 @@ function posturaSection(m: ReportMetrics): string {
   if (ps.vulnTotal > 0) {
     out += p(`La gestión de vulnerabilidades identificó <b>${fmt(ps.vulnTotal)}</b> vulnerabilidades vigentes en los servidores monitoreados, de las cuales <b style="color:#b91c1c">${fmt(ps.vulnCriticas)} crítica(s)</b> y <b style="color:#c2410c">${fmt(ps.vulnAltas)} alta(s)</b> deben priorizarse para parcheo.`);
     if (ps.topCves.length) {
-      out += `<p style="font-size:10px;color:#6b7c74;margin:0 0 8px">Principales CVE: ${ps.topCves.map((c) => `${esc(c.cve)} (${esc(c.severity)})`).join(', ')}.</p>`;
+      out += `<p style="font-size:10px;color:#6b7280;margin:0 0 8px">Principales CVE: ${ps.topCves.map((c) => `${esc(c.cve)} (${esc(c.severity)})`).join(', ')}.</p>`;
     }
   } else {
     out += p('No se reportaron vulnerabilidades vigentes en los servidores evaluados durante el periodo.');
@@ -153,12 +153,12 @@ export function buildExecutiveHtml(
 
   const content = `
     ${h(1, 'Resumen Ejecutivo')}
-    <div style="display:flex;align-items:center;gap:14px;margin:0 0 12px;padding:12px 16px;background:#f7faf8;border-left:5px solid ${sem.color};border-radius:6px">
+    <div style="display:flex;align-items:center;gap:14px;margin:0 0 12px;padding:12px 16px;background:#faf7f6;border-left:5px solid ${sem.color};border-radius:6px">
       <div style="width:18px;height:18px;border-radius:50%;background:${sem.color}"></div>
-      <div><b style="color:${sem.color}">Postura ${sem.label}</b> &middot; <span style="color:#26342e">${sem.texto}</span></div>
+      <div><b style="color:${sem.color}">Postura ${sem.label}</b> &middot; <span style="color:#374151">${sem.texto}</span></div>
     </div>
     ${p(esc(resumen).replace(/\n/g, '<br>'))}
-    <p style="font-size:11px;color:#6b7c74">Periodo: ${m.rangoTexto} &middot; Generado: ${fechaGen}</p>
+    <p style="font-size:11px;color:#6b7280">Periodo: ${m.rangoTexto} &middot; Generado: ${fechaGen}</p>
 
     ${h(2, 'Postura de Seguridad')}
     ${p(`Se mantiene monitoreo continuo de seguridad sobre los servidores críticos de la entidad. Cobertura actual: <b>${m.agentesActivos} de ${m.agentesTotal}</b> servidores monitoreados, con disponibilidad del monitoreo cercana al 100%.`)}
@@ -177,7 +177,7 @@ export function buildExecutiveHtml(
     ${h(6, 'Acciones y Mitigaciones')}
     ${p(accionesIps)}
     ${p('Se optimizaron las reglas de detección para reducir falsos positivos y mejorar la precisión del monitoreo, enfocando la atención del equipo en los eventos realmente relevantes.')}
-    ${m.ipsBloqueadas.length ? `<p style="font-size:10px;color:#6b7c74">Direcciones bloqueadas: ${m.ipsBloqueadas.slice(0, 10).map((b) => esc(b.ip)).join(', ')}${m.ipsBloqueadas.length > 10 ? '…' : ''}</p>` : ''}
+    ${m.ipsBloqueadas.length ? `<p style="font-size:10px;color:#6b7280">Direcciones bloqueadas: ${m.ipsBloqueadas.slice(0, 10).map((b) => esc(b.ip)).join(', ')}${m.ipsBloqueadas.length > 10 ? '…' : ''}</p>` : ''}
 
     ${h(7, 'Cumplimiento ISO/IEC 27001:2022')}
     ${p('La operación del Centro de Operaciones de Seguridad durante el periodo evidencia los siguientes controles del Anexo A:')}
@@ -193,22 +193,22 @@ export function buildExecutiveHtml(
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><style>
     @page { margin: 0; }
     * { box-sizing: border-box; }
-    body { font-family: 'Liberation Sans', Arial, sans-serif; margin: 0; color: #1f2a26; }
-    .cover { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: linear-gradient(160deg,#0f3d24,#0a5c34); color: #fff; page-break-after: always; }
+    body { font-family: 'Liberation Sans', Arial, sans-serif; margin: 0; color: #171717; }
+    .cover { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; background: linear-gradient(160deg,#171717,#3a3a3a); color: #fff; page-break-after: always; }
     .cover img { height: 70px; background: #fff; padding: 6px; border-radius: 8px; margin-bottom: 24px; }
     .content { padding: 28px 34px 60px; }
-    .footer-band { position: fixed; bottom: 0; left: 0; right: 0; background: #0f3d24; color: #cfe6da; font-size: 9px; padding: 5px 34px; display: flex; justify-content: space-between; }
+    .footer-band { position: fixed; bottom: 0; left: 0; right: 0; background: #171717; color: #d4d4d4; font-size: 9px; padding: 5px 34px; display: flex; justify-content: space-between; }
   </style></head><body>
     <div class="cover">
-      ${logo ? `<img src="${logo}" alt="PNNC">` : ''}
-      <div style="font-size:13px;letter-spacing:3px;color:#9fe9c5">PARQUES NACIONALES NATURALES DE COLOMBIA</div>
+      ${logo ? `<img src="${logo}" alt="HexWatch">` : ''}
+      <div style="font-size:13px;letter-spacing:3px;color:#f4a58c">HEXWATCH</div>
       <h1 style="font-size:26px;margin:14px 0 6px">Reporte Ejecutivo de Seguridad</h1>
-      <div style="font-size:16px;color:#cfe6da">${m.periodoLabel}</div>
-      <div style="margin-top:30px;font-size:12px;color:#9fb3aa">Centro de Operaciones de Seguridad &middot; Comité de Seguridad / SGSI</div>
-      <div style="margin-top:6px;font-size:11px;color:#7f9488">Documento alineado a ISO/IEC 27001:2022</div>
+      <div style="font-size:16px;color:#d4d4d4">${m.periodoLabel}</div>
+      <div style="margin-top:30px;font-size:12px;color:#a3a3a3">Centro de Operaciones de Seguridad &middot; Comité de Seguridad / SGSI</div>
+      <div style="margin-top:6px;font-size:11px;color:#a3a3a3">Documento alineado a ISO/IEC 27001:2022</div>
     </div>
     <div class="content">${content}</div>
-    <div class="footer-band"><span>SOC PNNC &middot; Reporte Ejecutivo ${m.periodoLabel}</span><span>Clasificación: USO INTERNO — Comité de Seguridad</span></div>
+    <div class="footer-band"><span>HexWatch &middot; Reporte Ejecutivo ${m.periodoLabel}</span><span>Clasificación: USO INTERNO — Comité de Seguridad</span></div>
   </body></html>`;
 }
 
@@ -216,12 +216,12 @@ export function buildExecutiveHtml(
 export function executiveEmailHtml(m: ReportMetrics, resumen: string): string {
   const sem = SEMAFORO[m.semaforo];
   return `<div style="font-family:Inter,Arial,sans-serif;max-width:620px;margin:auto;background:#0f1613;color:#e6f2ec;border-radius:12px;overflow:hidden;border:1px solid #1d2b25">
-    <div style="background:#0f3d24;padding:16px 24px;border-bottom:3px solid #85b425"><h2 style="margin:0;font-size:15px;color:#fff">Reporte Ejecutivo de Seguridad &middot; ${m.periodoLabel}</h2><p style="margin:2px 0 0;font-size:11px;color:#cfe6da">Parques Nacionales Naturales de Colombia &middot; Comité de Seguridad / SGSI</p></div>
+    <div style="background:#171717;padding:16px 24px;border-bottom:3px solid #f0512e"><h2 style="margin:0;font-size:15px;color:#fff">Reporte Ejecutivo de Seguridad &middot; ${m.periodoLabel}</h2><p style="margin:2px 0 0;font-size:11px;color:#d4d4d4">HexWatch &middot; Comité de Seguridad / SGSI</p></div>
     <div style="padding:22px 24px">
-      <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:6px;background:${sem.color}22;border:1px solid ${sem.color}55;margin-bottom:14px"><span style="width:12px;height:12px;border-radius:50%;background:${sem.color}"></span><b style="color:${sem.color}">Postura ${sem.label}</b> <span style="color:#9fb3aa">— ${sem.texto}</span></div>
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:6px;background:${sem.color}22;border:1px solid ${sem.color}55;margin-bottom:14px"><span style="width:12px;height:12px;border-radius:50%;background:${sem.color}"></span><b style="color:${sem.color}">Postura ${sem.label}</b> <span style="color:#a3a3a3">— ${sem.texto}</span></div>
       <p style="font-size:13px;line-height:1.6">${esc(resumen).replace(/\n/g, '<br>')}</p>
-      <p style="font-size:12px;color:#9fb3aa;margin-top:16px">Se adjunta el reporte ejecutivo completo (9 secciones, incluye postura de endpoints y cumplimiento, alineado a ISO 27001) en formato PDF para el acta del Comité.</p>
+      <p style="font-size:12px;color:#a3a3a3;margin-top:16px">Se adjunta el reporte ejecutivo completo (9 secciones, incluye postura de endpoints y cumplimiento, alineado a ISO 27001) en formato PDF para el acta del Comité.</p>
     </div>
-    <div style="padding:12px 24px;border-top:1px solid #1d2b25;color:#6b7c74;font-size:10px;display:flex;justify-content:space-between"><span>Periodo: ${m.rangoTexto}</span><span>Confidencial &middot; Uso interno</span></div>
+    <div style="padding:12px 24px;border-top:1px solid #1d2b25;color:#6b7280;font-size:10px;display:flex;justify-content:space-between"><span>Periodo: ${m.rangoTexto}</span><span>Confidencial &middot; Uso interno</span></div>
   </div>`;
 }

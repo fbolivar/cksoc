@@ -29,9 +29,9 @@ function StatusRow({ icon, label, ok, detail }: { icon: React.ReactNode; label: 
         {detail && <p className="truncate text-[11px] text-muted-foreground">{detail}</p>}
       </div>
       {ok ? (
-        <span className="flex items-center gap-1 text-xs text-emerald-300"><CheckCircle2 className="h-4 w-4" /> OK</span>
+        <span className="flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="h-4 w-4" /> OK</span>
       ) : (
-        <span className="flex items-center gap-1 text-xs text-red-300"><XCircle className="h-4 w-4" /> Sin conexión</span>
+        <span className="flex items-center gap-1 text-xs text-red-600"><XCircle className="h-4 w-4" /> Sin conexión</span>
       )}
     </div>
   );

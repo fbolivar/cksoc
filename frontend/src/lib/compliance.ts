@@ -48,7 +48,7 @@ export const FRAMEWORKS: FrameworkMeta[] = [
   },
   {
     key: 'hipaa', label: 'HIPAA', prioridad: 'Informativo',
-    contexto: 'Marco de salud de EE. UU.: no aplica a PNNC. Se muestra de forma informativa.',
+    contexto: 'Marco de salud de EE. UU.: no aplica a HexWatch. Se muestra de forma informativa.',
     ref: () => null,
   },
 ];

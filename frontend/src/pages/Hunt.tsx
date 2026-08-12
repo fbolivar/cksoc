@@ -13,7 +13,7 @@ const RANGES = [
 ];
 
 function bandColor(level: number): string {
-  if (level >= 12) return 'text-destructive-foreground';
+  if (level >= 12) return 'text-destructive';
   if (level >= 8) return 'text-warn';
   if (level >= 5) return 'text-yellow-400';
   return 'text-muted-foreground';
@@ -144,7 +144,7 @@ export default function Hunt() {
                 {h.lastCount !== null && <span className="text-muted-foreground">{h.lastCount}</span>}
                 <button onClick={async () => { await savedHuntsApi.update(h.id, { alertEnabled: !h.alertEnabled }); void loadSaved(); }} className="text-muted-foreground hover:text-foreground" title="Activar/desactivar alerta">{h.alertEnabled ? <BellOff className="h-3 w-3" /> : <Bell className="h-3 w-3" />}</button>
                 <button onClick={async () => { await savedHuntsApi.run(h.id); void loadSaved(); }} className="text-muted-foreground hover:text-foreground" title="Correr ahora"><Play className="h-3 w-3" /></button>
-                <button onClick={async () => { if (confirm(`¿Eliminar "${h.name}"?`)) { await savedHuntsApi.remove(h.id); void loadSaved(); } }} className="text-muted-foreground hover:text-destructive-foreground" title="Eliminar"><Trash2 className="h-3 w-3" /></button>
+                <button onClick={async () => { if (confirm(`¿Eliminar "${h.name}"?`)) { await savedHuntsApi.remove(h.id); void loadSaved(); } }} className="text-muted-foreground hover:text-destructive" title="Eliminar"><Trash2 className="h-3 w-3" /></button>
               </span>
             ))}
           </div>
@@ -164,7 +164,7 @@ export default function Hunt() {
         )}
       </div>
 
-      {err && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">{err}</div>}
+      {err && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{err}</div>}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
         {/* Resultados */}

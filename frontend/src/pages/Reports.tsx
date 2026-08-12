@@ -30,7 +30,7 @@ export default function Reports() {
   const [tab, setTab] = useState<'tecnico' | 'ejecutivo'>('tecnico');
 
   const [reports, setReports] = useState<Report[]>([]);
-  const [title, setTitle] = useState('Reporte de seguridad SOC PNNC');
+  const [title, setTitle] = useState('Reporte de seguridad HexWatch');
   const [range, setRange] = useState<TimeRange>('24h');
   const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -100,7 +100,7 @@ export default function Reports() {
           className={`rounded-md border px-3 py-2 text-sm ${
             msg.kind === 'ok'
               ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-              : 'border-destructive/40 bg-destructive/10 text-destructive-foreground'
+              : 'border-destructive/40 bg-destructive/10 text-destructive'
           }`}
         >
           {msg.text}

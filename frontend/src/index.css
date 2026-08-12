@@ -3,90 +3,79 @@
 @tailwind utilities;
 
 /* =====================================================================
-   Tema PNNC - Dark "SOC"
-   Alineado al Manual de Identidad Visual PNNC (E4-MN-01 V2).
-   Paleta corporativa (Ministerio de Ambiente / Parques Nacionales):
-     - Verde corporativo        #03A64A  (primario)
-     - Verde institucional      #96BE54  (acento propio / "neon")
-     - Cian corporativo         #049DD9  (acento / info)
-     - Celeste                  #05C7F2  (info claro)
-     - Gris claro               #F2F2F2  (texto sobre oscuro)
-     - Negro                    #0D0D0D  (base)
-   Identidad de Gobierno (gov.co / bandera):
-     - Amarillo #FFC800 · Azul #003189 · Rojo #D80025
+   HexWatch — Sistema de diseño "Light SOC"
+   Estilo: claro, minimalista, tarjetas redondeadas y sombras suaves,
+   acento coral (#F0512E) con tinta casi negra para elementos fuertes.
    ===================================================================== */
 @layer base {
-  /* ===== Modo claro (por defecto en :root) — apegado al manual impreso:
-     fondo blanco/gris claro #F2F2F2, texto negro #0D0D0D, verde #03A64A ===== */
+  /* ===== Modo claro (por defecto) ===== */
   :root {
-    --background: 150 24% 98%;     /* casi blanco con leve matiz bosque */
-    --foreground: 156 26% 12%;     /* texto ~#0D0D0D verdoso */
+    --background: 40 20% 97%;      /* off-white cálido */
+    --foreground: 0 0% 11%;        /* tinta casi negra */
 
     --card: 0 0% 100%;             /* tarjetas blancas */
-    --card-foreground: 156 26% 12%;
+    --card-foreground: 0 0% 11%;
 
-    /* Primario: verde corporativo PNNC #03A64A (invariante entre modos) */
-    --primary: 146 96% 33%;
+    /* Primario: coral HexWatch #F0512E */
+    --primary: 13 87% 56%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 150 16% 93%;
-    --secondary-foreground: 156 22% 18%;
+    --secondary: 40 12% 95%;       /* superficie gris muy clara (pills, inputs) */
+    --secondary-foreground: 0 0% 16%;
 
-    --muted: 150 14% 94%;
-    --muted-foreground: 156 8% 42%;
+    --muted: 40 12% 95%;
+    --muted-foreground: 0 0% 47%;
 
-    /* Acento: superficie cian muy clara */
-    --accent: 197 58% 91%;
-    --accent-foreground: 197 82% 22%;
+    --accent: 13 90% 96%;          /* coral muy claro */
+    --accent-foreground: 13 74% 40%;
 
-    --destructive: 350 100% 42%;   /* #D80025 rojo gov.co (invariante) */
+    --destructive: 358 70% 56%;    /* rojo tendencias a la baja */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 150 13% 85%;
-    --input: 150 13% 88%;
-    --ring: 146 90% 34%;
+    --border: 40 10% 91%;
+    --input: 40 10% 89%;
+    --ring: 13 87% 56%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
-    /* Marca institucional PNNC */
-    --brand-green: 146 96% 33%;    /* #03A64A verde corporativo */
-    --neon-green: 83 52% 36%;      /* verde institucional oscurecido para contraste en claro */
-    --warn-orange: 30 90% 44%;
+    /* Semánticos reutilizados por componentes existentes */
+    --brand-green: 13 87% 56%;     /* text-brand -> coral */
+    --neon-green: 13 74% 48%;      /* text-neon  -> coral legible */
+    --warn-orange: 32 95% 52%;
+    --ink: 0 0% 10%;               /* negro para barras/botón críticos */
+    --success: 145 62% 41%;        /* verde badge "Activo" */
 
-    /* Corporativos e identidad de Gobierno (invariantes) */
-    --cyan: 197 93% 40%;           /* #049DD9 cian corporativo */
-    --cyan-light: 191 85% 44%;     /* #05C7F2 celeste */
-    --gov-yellow: 47 100% 50%;     /* #FFC800 */
-    --gov-blue: 219 100% 27%;      /* #003189 */
-    --gov-red: 350 100% 42%;       /* #D80025 */
+    --cyan: 197 80% 45%;
+    --cyan-light: 191 80% 48%;
+    --gov-yellow: 47 100% 50%;
+    --gov-blue: 219 100% 27%;
+    --gov-red: 350 100% 42%;
   }
 
-  /* ===== Modo oscuro "SOC" (activo con class="dark") — solo sobrescribe
-     los tokens que dependen del modo; el resto se hereda de :root ===== */
+  /* ===== Modo oscuro (class="dark") — coral sobre carbón ===== */
   .dark {
-    --background: 156 20% 7%;      /* negro verdoso #0D0D0D con matiz bosque */
-    --foreground: 0 0% 95%;        /* #F2F2F2 gris claro corporativo */
+    --background: 0 0% 8%;
+    --foreground: 0 0% 96%;
 
-    --card: 156 16% 10%;
-    --card-foreground: 0 0% 95%;
+    --card: 0 0% 11%;
+    --card-foreground: 0 0% 96%;
 
-    --secondary: 156 13% 16%;
-    --secondary-foreground: 0 0% 95%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 0 0% 96%;
 
-    --muted: 156 10% 18%;
-    --muted-foreground: 150 6% 64%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 0 0% 63%;
 
-    --accent: 197 42% 22%;         /* cian corporativo oscuro */
+    --accent: 13 45% 20%;
     --accent-foreground: 0 0% 98%;
 
-    --border: 156 12% 20%;
-    --input: 156 12% 18%;
-    --ring: 146 90% 40%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 13 87% 56%;
 
-    --neon-green: 83 45% 54%;      /* #96BE54 verde institucional propio */
-    --warn-orange: 34 91% 60%;
-    --cyan: 197 93% 43%;
-    --cyan-light: 191 92% 48%;
+    --neon-green: 13 85% 62%;
+    --ink: 0 0% 96%;
+    --warn-orange: 32 95% 60%;
   }
 }
 
@@ -96,34 +85,31 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: 'cv11', 'ss01';
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--brand-green) / 0.14), transparent 60%),
-      radial-gradient(ellipse 60% 50% at 100% 0%, hsl(var(--cyan) / 0.10), transparent 55%);
+      radial-gradient(ellipse 60% 45% at 100% -5%, hsl(var(--primary) / 0.05), transparent 60%);
     background-attachment: fixed;
   }
 }
 
 @layer components {
-  /* Tarjeta con glassmorphism sutil */
+  /* Tarjeta base: blanca, borde tenue, sombra suave (reemplaza glassmorphism) */
   .glass {
-    @apply bg-card/70 backdrop-blur-xl border border-border/70 shadow-lg;
+    @apply bg-card border border-border;
+    box-shadow:
+      0 1px 2px rgb(17 17 17 / 0.04),
+      0 14px 32px -20px rgb(17 17 17 / 0.18);
   }
-  /* Texto con leve resplandor neon para metricas destacadas */
+  /* Métrica destacada (antes neón); ahora coral limpio */
   .neon-text {
-    color: hsl(var(--neon-green));
-    text-shadow: 0 0 18px hsl(var(--neon-green) / 0.35);
+    color: hsl(var(--primary));
   }
-  /* Franja tricolor gov.co (amarillo/azul/rojo) - identidad de Gobierno */
+  /* Franja gov.co: neutralizada en el nuevo diseño */
   .gov-strip {
-    height: 4px;
-    width: 100%;
-    background: linear-gradient(
-      to right,
-      hsl(var(--gov-yellow)) 0 50%,
-      hsl(var(--gov-blue)) 50% 75%,
-      hsl(var(--gov-red)) 75% 100%
-    );
+    height: 0;
+  }
+  /* Píldora de estado suave */
+  .pill {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium;
   }
 }
 

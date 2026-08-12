@@ -23,7 +23,7 @@ export function startReportScheduler(): void {
     try {
       const fecha = new Date().toLocaleDateString('es-CO');
       const report = await generateReport({
-        title: `Reporte de seguridad SOC PNNC · ${fecha}`,
+        title: `Reporte de seguridad HexWatch · ${fecha}`,
         range: env.REPORT_SCHEDULE_RANGE,
         type: 'scheduled',
         userId: null,
@@ -41,7 +41,7 @@ export function startReportScheduler(): void {
         await sendEmail(
           to,
           report.title,
-          `<p>Adjunto el <b>${report.title}</b> generado automáticamente por el SOC de PNNC.</p>`,
+          `<p>Adjunto el <b>${report.title}</b> generado automáticamente por el SOC de HexWatch.</p>`,
           `${report.title} (adjunto PDF)`,
           [{ filename: `${report.title}.pdf`, content: pdf, contentType: 'application/pdf' }]
         ).catch((e) => console.error('No se pudo enviar el reporte por correo:', e?.message));

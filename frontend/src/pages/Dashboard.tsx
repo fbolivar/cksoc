@@ -1,5 +1,5 @@
 /**
- * Dashboard SOC PNNC (Fase 2).
+ * Dashboard HexWatch (Fase 2).
  * Paneles: KPIs en vivo, severidad, linea de tiempo, top agentes, MITRE,
  * mapa de calor y estado de agentes. Datos reales de Wazuh (Indexer + API).
  * Actualizacion en vivo del total via Socket.io.
@@ -137,7 +137,7 @@ export default function Dashboard() {
           <CardContent className="flex items-start gap-3 p-4">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
             <div className="text-sm">
-              <p className="font-medium text-amber-200">No se pudieron cargar las métricas</p>
+              <p className="font-medium text-amber-700">No se pudieron cargar las métricas</p>
               <p className="mt-1 text-muted-foreground">{error}</p>
             </div>
           </CardContent>

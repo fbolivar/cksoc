@@ -28,7 +28,11 @@ Thumbs.db
 .idea/
 
 # Assets descargados en runtime (se regeneran)
-frontend/public/logo-pnnc.png
 
 # Watchdog (config real con clave SMTP, vive en /etc en los servidores)
 ops/watchdog/watchdog.conf
+
+# Datos en runtime (GeoLite2 con licencia, respaldos, original pesado del logo)
+data/
+backups/
+/logo-emblem-original-6mb.png

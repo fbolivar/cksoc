@@ -100,8 +100,8 @@ export async function sendDailyDigest(): Promise<boolean> {
   const d = await collect();
   const html = digestHtml(d);
   const fechaCorta = new Date().toLocaleDateString('es-CO', { timeZone: env.DIGEST_TZ });
-  const text = `Resumen diario SOC PNNC ${fechaCorta}\nTotal 24h: ${d.total} | Criticas: ${d.byBand.critica} | Altas: ${d.byBand.alta}\nIPs bloqueadas hoy: ${d.blocked.length}`;
-  return sendCapped(settings.recipients, `[SOC PNNC] Resumen diario - ${fechaCorta}`, html, text, { tipo: 'digest' });
+  const text = `Resumen diario HexWatch ${fechaCorta}\nTotal 24h: ${d.total} | Criticas: ${d.byBand.critica} | Altas: ${d.byBand.alta}\nIPs bloqueadas hoy: ${d.blocked.length}`;
+  return sendCapped(settings.recipients, `[HexWatch] Resumen diario - ${fechaCorta}`, html, text, { tipo: 'digest' });
 }
 
 /** True si ya se envio un digest en las ultimas 23h. */

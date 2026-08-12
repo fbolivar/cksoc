@@ -69,7 +69,7 @@ export function canBlock(ip: string, adminIp?: string): BlockCheck {
   }
   // 3. Lista blanca de IPs criticas (IP exacta o rango CIDR)
   if (isWhitelisted(ip)) {
-    return { allowed: false, reason: 'La IP esta en la lista blanca (infraestructura critica de PNNC)' };
+    return { allowed: false, reason: 'La IP esta en la lista blanca (infraestructura critica de HexWatch)' };
   }
   // 4. IP del propio admin
   if (adminIp && normalizeIp(adminIp) === ip) {

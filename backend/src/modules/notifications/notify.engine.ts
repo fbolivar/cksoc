@@ -163,7 +163,7 @@ export async function sendCapped(
     // Aviso unico de tope alcanzado
     if (await markCapWarned()) {
       try {
-        await sendEmail(to, '[SOC PNNC] Limite diario de correos alcanzado',
+        await sendEmail(to, '[HexWatch] Limite diario de correos alcanzado',
           capWarningHtml(status.sent, status.cap), `Se alcanzo el tope de ${status.cap} correos hoy.`);
       } catch { /* nada */ }
       await logNotification({ tipo: 'cap', recipients: to, status: 'sent' });
@@ -189,8 +189,8 @@ const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'
 function shell(title: string, accent: string, bodyHtml: string): string {
   return `<div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:auto;background:#0f1613;color:#e6f2ec;border-radius:12px;overflow:hidden;border:1px solid #1d2b25">
     <div style="background:#0f3d24;padding:16px 24px;border-bottom:3px solid ${accent}">
-      <h2 style="margin:0;font-size:15px;color:#fff">Centro de Operaciones de Seguridad &middot; PNNC</h2>
-      <p style="margin:2px 0 0;font-size:11px;color:#cfe6da">Parques Nacionales Naturales de Colombia</p>
+      <h2 style="margin:0;font-size:15px;color:#fff">Centro de Operaciones de Seguridad &middot; HexWatch</h2>
+      <p style="margin:2px 0 0;font-size:11px;color:#cfe6da">HexWatch</p>
     </div>
     <div style="padding:22px 24px">${bodyHtml}</div>
     <div style="padding:12px 24px;border-top:1px solid #1d2b25;color:#6b7c74;font-size:10px;display:flex;justify-content:space-between">
@@ -214,7 +214,7 @@ export function immediateEmail(a: ImmediateAlert): { subject: string; html: stri
   const critical = a.level >= 12;
   const accent = critical ? '#ef4444' : '#f97316';
   const sevLabel = critical ? 'CRITICA' : 'ALTA';
-  const subject = `[SOC PNNC] ${sevLabel}: ${a.description.slice(0, 80)}`;
+  const subject = `[HexWatch] ${sevLabel}: ${a.description.slice(0, 80)}`;
   const fecha = new Date(a.timestamp).toLocaleString('es-CO', { timeZone: env.DIGEST_TZ });
   const rows: [string, string][] = [
     ['Severidad', `nivel ${a.level} (${sevLabel})`],
@@ -235,7 +235,7 @@ export function immediateEmail(a: ImmediateAlert): { subject: string; html: stri
     <p style="color:${accent};font-weight:700;font-size:18px;margin:0 0 12px">⚠ Alerta ${sevLabel}</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px">${table}</table>
     <a href="${env.PUBLIC_DASHBOARD_URL}/respuesta" style="display:inline-block;margin-top:18px;background:#1f7a4d;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:13px">Revisar en el dashboard</a>`;
-  const text = `[SOC PNNC] ${sevLabel}: ${a.description}\nNivel ${a.level} | Regla ${a.ruleId} | Agente ${a.agent}` +
+  const text = `[HexWatch] ${sevLabel}: ${a.description}\nNivel ${a.level} | Regla ${a.ruleId} | Agente ${a.agent}` +
     (a.origin ? ` | IP ${a.origin}` : '') + `\n${fecha}\n${env.PUBLIC_DASHBOARD_URL}/respuesta`;
   return { subject, html: shell(subject, accent, body), text };
 }

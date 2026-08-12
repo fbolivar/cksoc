@@ -108,7 +108,7 @@ export default function Playbooks() {
       </div>
 
       {msg && (
-        <div className={`rounded-md border px-3 py-2 text-sm ${msg.k === 'ok' ? 'border-primary/40 bg-primary/10 text-foreground' : 'border-destructive/40 bg-destructive/10 text-destructive-foreground'}`}>{msg.t}</div>
+        <div className={`rounded-md border px-3 py-2 text-sm ${msg.k === 'ok' ? 'border-primary/40 bg-primary/10 text-foreground' : 'border-destructive/40 bg-destructive/10 text-destructive'}`}>{msg.t}</div>
       )}
 
       {/* Aviso de seguridad */}
@@ -170,7 +170,7 @@ export default function Playbooks() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{p.name}</span>
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${p.mode === 'activo' ? 'bg-destructive/20 text-destructive-foreground' : 'bg-secondary text-muted-foreground'}`}>{p.mode === 'activo' ? 'ACTIVO' : 'Simulación'}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${p.mode === 'activo' ? 'bg-destructive/20 text-destructive' : 'bg-secondary text-muted-foreground'}`}>{p.mode === 'activo' ? 'ACTIVO' : 'Simulación'}</span>
                     <span className={`flex items-center gap-1 text-[11px] ${p.enabled ? 'text-primary' : 'text-muted-foreground/60'}`}><Power className="h-3 w-3" /> {p.enabled ? 'habilitado' : 'deshabilitado'}</span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -185,7 +185,7 @@ export default function Playbooks() {
                   <Button variant="ghost" size="sm" onClick={() => void test(p)} disabled={busy === p.id} title="Probar">{busy === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}</Button>
                   <Button variant="ghost" size="sm" onClick={() => void toggleMode(p)} disabled={busy === p.id} title="Simulación/Activo"><Play className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="sm" onClick={() => void toggleEnabled(p)} disabled={busy === p.id} title="Habilitar/Deshabilitar"><Power className={`h-4 w-4 ${p.enabled ? 'text-primary' : ''}`} /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => void remove(p)} disabled={busy === p.id} className="text-destructive-foreground/80" title="Eliminar"><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => void remove(p)} disabled={busy === p.id} className="text-destructive/80" title="Eliminar"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
             </div>

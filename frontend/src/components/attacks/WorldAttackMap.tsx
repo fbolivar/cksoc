@@ -182,7 +182,7 @@ export function WorldAttackMap({
           <circle r={6} fill="none" stroke="#34d399" strokeWidth={1.5} className="attack-ping" />
           <circle r={3} fill="#34d399" />
           <text textAnchor="middle" y={-10} fill="#9fe9c5" fontSize={9} fontWeight={600}>
-            PNNC · Bogotá
+            HexWatch · Bogotá
           </text>
         </Marker>
       </ComposableMap>

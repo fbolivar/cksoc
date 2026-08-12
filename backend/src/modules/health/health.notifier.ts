@@ -29,7 +29,7 @@ function emailHtml(c: HealthComponent, kind: 'alerta' | 'recuperacion', prev: st
   return `<!DOCTYPE html><html lang="es"><body style="margin:0;background:#0a1711;font-family:Segoe UI,Arial,sans-serif;color:#e5efe9">
   <div style="max-width:560px;margin:0 auto;padding:24px">
     <div style="background:linear-gradient(135deg,#0a3d2e,#0a5c34);border-radius:12px 12px 0 0;padding:18px 22px;border-bottom:3px solid #85b425">
-      <div style="font-size:12px;letter-spacing:2px;color:#a9e36b">SOC · PARQUES NACIONALES NATURALES DE COLOMBIA</div>
+      <div style="font-size:12px;letter-spacing:2px;color:#a9e36b">SOC · HEXWATCH</div>
       <div style="font-size:18px;font-weight:700;margin-top:4px">Salud del SIEM</div>
     </div>
     <div style="background:#0d1c15;border:1px solid #1f3a2e;border-top:0;border-radius:0 0 12px 12px;padding:22px">
@@ -55,8 +55,8 @@ export async function notifyHealthChange(
 ): Promise<void> {
   const estadoTxt = ESTADO_TXT[c.estado] ?? c.estado;
   const subject = kind === 'recuperacion'
-    ? `[SOC PNNC] RECUPERADO: ${c.nombre} de nuevo OPERATIVO`
-    : `[SOC PNNC] ALERTA SALUD: ${c.nombre} en estado ${estadoTxt}`;
+    ? `[HexWatch] RECUPERADO: ${c.nombre} de nuevo OPERATIVO`
+    : `[HexWatch] ALERTA SALUD: ${c.nombre} en estado ${estadoTxt}`;
   const linea = `${c.nombre}: ${estadoTxt}. ${c.resumen}${c.detalle ? ` — ${c.detalle}` : ''}`;
 
   // Correo

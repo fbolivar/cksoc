@@ -35,9 +35,9 @@ export function buildReportHtml(
       color: SEV[k].color,
     }))
   );
-  const agentsBars = barsSvg(topAgents.map((a) => ({ label: a.agent, value: a.count })), '#1f7a4d');
+  const agentsBars = barsSvg(topAgents.map((a) => ({ label: a.agent, value: a.count })), '#f0512e');
   const mitreBars = mitre.length
-    ? barsSvg(mitre.map((m) => ({ label: m.technique, value: m.count })), '#5fb0c9')
+    ? barsSvg(mitre.map((m) => ({ label: m.technique, value: m.count })), '#0891b2')
     : '<p style="color:#888;font-size:12px">Sin técnicas MITRE en el periodo</p>';
   const spark = sparkAreaSvg(timeline);
 
@@ -75,7 +75,7 @@ export function buildReportHtml(
     <div class="card" style="margin-bottom:22px">
       <table class="data">
         <tr><th>Activo</th><th>Política</th><th class="num">Aprob.</th><th class="num">Fallid.</th><th class="num">Cumplim.</th></tr>
-        ${data.sca.agentes.map((a) => `<tr><td>${escapeHtml(a.agent)}</td><td style="color:#6b7c74">${escapeHtml(a.policy.slice(0, 38))}</td><td class="num" style="color:#16a34a">${a.pass}</td><td class="num" style="color:#ef4444">${a.fail}</td><td class="num"><b>${a.score}%</b></td></tr>`).join('')}
+        ${data.sca.agentes.map((a) => `<tr><td>${escapeHtml(a.agent)}</td><td style="color:#6b7280">${escapeHtml(a.policy.slice(0, 38))}</td><td class="num" style="color:#16a34a">${a.pass}</td><td class="num" style="color:#ef4444">${a.fail}</td><td class="num"><b>${a.score}%</b></td></tr>`).join('')}
       </table>
     </div>` : '';
 
@@ -91,7 +91,7 @@ export function buildReportHtml(
       </div>
       <table class="data">
         <tr><th>Evento</th><th>Ruta</th><th>Usuario</th><th>Activo</th></tr>
-        ${data.fim.recientes.slice(0, 8).map((c) => `<tr><td>${escapeHtml(c.event)}</td><td style="font-size:10px">${escapeHtml(c.path.slice(0, 56))}</td><td>${escapeHtml(c.user || '—')}</td><td style="color:#6b7c74">${escapeHtml(c.agent)}</td></tr>`).join('')}
+        ${data.fim.recientes.slice(0, 8).map((c) => `<tr><td>${escapeHtml(c.event)}</td><td style="font-size:10px">${escapeHtml(c.path.slice(0, 56))}</td><td>${escapeHtml(c.user || '—')}</td><td style="color:#6b7280">${escapeHtml(c.agent)}</td></tr>`).join('')}
       </table>
     </div>` : '';
 
@@ -99,34 +99,34 @@ export function buildReportHtml(
 <html lang="es"><head><meta charset="utf-8">
 <style>
   * { box-sizing: border-box; }
-  body { font-family: 'Liberation Sans', Arial, sans-serif; color: #1f2a26; margin: 0; font-size: 12px; }
-  .header { background: #0f3d24; color: #fff; padding: 18px 28px; border-bottom: 4px solid #85b425; display: flex; align-items: center; gap: 14px; }
+  body { font-family: 'Liberation Sans', Arial, sans-serif; color: #171717; margin: 0; font-size: 12px; }
+  .header { background: #171717; color: #fff; padding: 18px 28px; border-bottom: 4px solid #f0512e; display: flex; align-items: center; gap: 14px; }
   .header img { height: 46px; background:#fff; border-radius:6px; padding:3px; }
   .header h1 { font-size: 16px; margin: 0; }
-  .header p { font-size: 11px; margin: 2px 0 0; color: #cfe6da; }
+  .header p { font-size: 11px; margin: 2px 0 0; color: #d4d4d4; }
   .content { padding: 24px 28px; }
-  .title { font-size: 20px; font-weight: 700; color: #0f3d24; margin: 0 0 2px; }
-  .subtitle { color: #5b6b63; margin: 0 0 18px; }
+  .title { font-size: 20px; font-weight: 700; color: #171717; margin: 0 0 2px; }
+  .subtitle { color: #6b7280; margin: 0 0 18px; }
   .kpis { display: flex; gap: 12px; margin-bottom: 22px; }
-  .kpi { flex: 1; border: 1px solid #e2e8e4; border-radius: 8px; padding: 12px 14px; }
+  .kpi { flex: 1; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px 14px; }
   .kpi .v { font-size: 22px; font-weight: 800; }
-  .kpi .l { font-size: 10px; color: #6b7c74; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .l { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }
   .grid2 { display: flex; gap: 20px; margin-bottom: 22px; }
-  .card { border: 1px solid #e2e8e4; border-radius: 8px; padding: 14px 16px; }
-  .card h3 { font-size: 12px; margin: 0 0 10px; color: #0f3d24; text-transform: uppercase; letter-spacing: .04em; }
+  .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px 16px; }
+  .card h3 { font-size: 12px; margin: 0 0 10px; color: #171717; text-transform: uppercase; letter-spacing: .04em; }
   table.data { width: 100%; border-collapse: collapse; font-size: 11px; }
-  table.data td, table.data th { padding: 5px 6px; border-bottom: 1px solid #eef2ef; text-align: left; }
+  table.data td, table.data th { padding: 5px 6px; border-bottom: 1px solid #eeeeee; text-align: left; }
   table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
   .dot { display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle; }
-  .footer { padding: 12px 28px; border-top: 1px solid #e2e8e4; color: #8a978f; font-size: 10px; display:flex; justify-content:space-between; }
-  .section-title { font-size: 13px; font-weight:700; color:#0f3d24; margin: 4px 0 10px; }
+  .footer { padding: 12px 28px; border-top: 1px solid #e5e5e5; color: #9ca3af; font-size: 10px; display:flex; justify-content:space-between; }
+  .section-title { font-size: 13px; font-weight:700; color:#171717; margin: 4px 0 10px; }
 </style></head>
 <body>
   <div class="header">
-    ${opts.logoDataUri ? `<img src="${opts.logoDataUri}" alt="PNNC">` : ''}
+    ${opts.logoDataUri ? `<img src="${opts.logoDataUri}" alt="HexWatch">` : ''}
     <div>
-      <h1>Centro de Operaciones de Seguridad · PNNC</h1>
-      <p>Parques Nacionales Naturales de Colombia</p>
+      <h1>Centro de Operaciones de Seguridad · HexWatch</h1>
+      <p>HexWatch</p>
     </div>
   </div>
 
@@ -138,7 +138,7 @@ export function buildReportHtml(
       <div class="kpi"><div class="v">${fmt(summary.total)}</div><div class="l">Alertas totales</div></div>
       <div class="kpi"><div class="v" style="color:#f97316">${fmt(summary.byBand.alta + summary.byBand.critica)}</div><div class="l">Alta + Crítica</div></div>
       <div class="kpi"><div class="v" style="color:#ef4444">${fmt(summary.byBand.critica)}</div><div class="l">Críticas</div></div>
-      <div class="kpi"><div class="v" style="color:#1f7a4d">${agents ? `${agents.active}/${agents.total}` : '—'}</div><div class="l">Agentes activos</div></div>
+      <div class="kpi"><div class="v" style="color:#f0512e">${agents ? `${agents.active}/${agents.total}` : '—'}</div><div class="l">Agentes activos</div></div>
     </div>
 
     <div class="section-title">Tendencia de alertas</div>
@@ -178,7 +178,7 @@ export function buildReportHtml(
   </div>
 
   <div class="footer">
-    <span>SOC PNNC · Documento generado automáticamente</span>
+    <span>HexWatch · Documento generado automáticamente</span>
     <span>Confidencial · Uso interno</span>
   </div>
 </body></html>`;

@@ -98,7 +98,7 @@ export async function blockIP(ip: string): Promise<void> {
         name: addrName(ip),
         type: 'ipmask',
         subnet: `${ip} 255.255.255.255`,
-        comment: 'Bloqueo SOC PNNC (Wazuh)',
+        comment: 'Bloqueo HexWatch (Wazuh)',
       })
       .catch(ignore([500]));
 

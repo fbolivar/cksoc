@@ -62,7 +62,7 @@ export function BlockModal({
         <form onSubmit={submit} className="space-y-4 p-5">
           <div className="rounded-md border border-border/60 bg-background/40 p-3 text-sm">
             <p>
-              Vas a bloquear la IP <span className="font-bold text-red-300">{ip}</span> en el FortiGate
+              Vas a bloquear la IP <span className="font-bold text-red-600">{ip}</span> en el FortiGate
               {group ? <> (grupo <span className="font-mono text-xs">{group}</span>)</> : ''}.
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -73,7 +73,7 @@ export function BlockModal({
           {internal && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-              <span className="text-amber-200">
+              <span className="text-amber-700">
                 Esta IP parece <b>interna</b>. El sistema la rechazará: no se puede bloquear infraestructura interna.
               </span>
             </div>
@@ -92,7 +92,7 @@ export function BlockModal({
           </div>
 
           {error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}

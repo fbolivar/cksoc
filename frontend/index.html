@@ -1,29 +1,28 @@
 <!doctype html>
-<html lang="es" class="dark">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo-pnnc.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="theme-color" content="#f7f6f3" />
     <!-- Tema (claro/oscuro) aplicado antes del primer paint para evitar parpadeo.
-         Por defecto: modo oscuro "SOC". -->
+         Por defecto: modo CLARO. Solo se activa oscuro si el usuario lo eligió. -->
     <script>
       (function () {
         try {
-          var t = localStorage.getItem('soc-theme');
-          document.documentElement.classList.toggle('dark', t !== 'light');
-        } catch (e) {
-          document.documentElement.classList.add('dark');
-        }
+          document.documentElement.classList.toggle(
+            'dark',
+            localStorage.getItem('soc-theme') === 'dark'
+          );
+        } catch (e) {}
       })();
     </script>
-    <title>SOC PNNC · Centro de Operaciones de Seguridad</title>
-    <!-- Tipografia principal PNNC: Nunito Sans (Manual de Identidad Visual) -->
+    <title>HexWatch · Centro de Operaciones de Seguridad</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,wght@0,300;0,400;0,600;0,700;0,800;1,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&display=swap"
     />
   </head>
   <body>
