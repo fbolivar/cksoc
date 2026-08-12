@@ -10,7 +10,31 @@ import {
 } from './auth.service';
 import { getStatus, setup, enable, disable, verifyCode } from './twofactor.service';
 import { logger } from '../../config/logger';
+import { env } from '../../config/env';
 import { auditFromReq } from '../audit/audit.service';
+
+// El token de sesion tambien viaja en una cookie HttpOnly (no accesible por JS
+// del navegador), lo que evita su robo por XSS. El backend acepta la cookie o el
+// header Authorization (compatibilidad con sesiones previas). Same-origin +
+// SameSite=strict mitiga CSRF.
+const COOKIE_NAME = 'token';
+function setSessionCookie(res: Response, token: string): void {
+  res.cookie(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+    maxAge: 8 * 60 * 60 * 1000, // 8h, acorde a JWT_EXPIRES_IN por defecto
+  });
+}
+function clearSessionCookie(res: Response): void {
+  res.clearCookie(COOKIE_NAME, {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',
+  });
+}
 
 const credentialsSchema = z.object({
   email: z.string().email('Correo invalido'),
@@ -46,6 +70,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   try {
     const { email, password } = parsed.data;
     const result = await loginUser(email, password);
+    if ('token' in result) setSessionCookie(res, result.token);
     void auditFromReq(req, {
       actorEmail: email, action: 'login', target: email, result: 'ok',
       detail: { twoFactor: 'twoFactor' in result },
@@ -89,6 +114,7 @@ export async function login2fa(req: Request, res: Response): Promise<void> {
       return;
     }
     const session = await issueSessionForUser(userId);
+    setSessionCookie(res, session.token);
     void auditFromReq(req, { actorId: userId, actorEmail: session.user?.email, action: 'login_2fa', result: 'ok' });
     res.json(session);
   } catch (err) {
@@ -100,11 +126,18 @@ export async function login2fa(req: Request, res: Response): Promise<void> {
 export async function logoutAll(req: Request, res: Response): Promise<void> {
   try {
     const result = await revokeSessions(req.user!.id);
+    if ('token' in result && typeof result.token === 'string') setSessionCookie(res, result.token);
     void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'logout_all', result: 'ok' });
     res.json(result);
   } catch (err) {
     handleError(err, res);
   }
+}
+
+/** Cierra la sesion de este navegador: limpia la cookie HttpOnly. */
+export function logout(_req: Request, res: Response): void {
+  clearSessionCookie(res);
+  res.json({ ok: true });
 }
 
 // --- Gestion de 2FA (usuario autenticado, para su propia cuenta) ---

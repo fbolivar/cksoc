@@ -4,8 +4,9 @@
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink } from 'lucide-react';
+import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink, Ban, CheckCircle2 } from 'lucide-react';
 import { incidentsApi, SEV, ST, type IncidentListItem, type IncidentDetail, type Severity, type Status } from '@/lib/incidents';
+import { responseApi } from '@/lib/response';
 import { velociraptorApi } from '@/lib/velociraptor';
 import { useAuth } from '@/lib/auth';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
@@ -48,6 +49,24 @@ export default function Incidents() {
   const [note, setNote] = useState('');
   const [veloBusy, setVeloBusy] = useState(false);
   const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockResult, setBlockResult] = useState<{ ok?: boolean; error?: string } | null>(null);
+
+  // Bloquea en el FortiGate la IP de origen del incidente (enlazada a la alerta
+  // origen si existe). El backend aplica la lista blanca y rechaza IPs protegidas.
+  async function bloquearIp(ip: string) {
+    setBlockBusy(true);
+    setBlockResult(null);
+    try {
+      const alertId = detail?.source?.alertId ? String(detail.source.alertId) : undefined;
+      await responseApi.block(ip, `Incidente: ${detail?.title ?? ip}`.slice(0, 200), alertId);
+      setBlockResult({ ok: true });
+    } catch (e) {
+      setBlockResult({ error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo bloquear la IP' });
+    } finally {
+      setBlockBusy(false);
+    }
+  }
 
   async function investigar(host: string) {
     setVeloBusy(true);
@@ -72,6 +91,7 @@ export default function Incidents() {
   useEffect(() => { if (canManage) incidentsApi.users().then(setUsers).catch(() => undefined); }, [canManage]);
   useEffect(() => {
     setVeloResult(null);
+    setBlockResult(null);
     if (!sel) { setDetail(null); return; }
     incidentsApi.get(sel).then(setDetail).catch(() => setDetail(null));
   }, [sel]);
@@ -241,6 +261,21 @@ export default function Incidents() {
                     <span className="block text-[11px] text-destructive">{veloResult.error}</span>
                   ) : veloResult.url ? (
                     <a href={veloResult.url} target="_blank" rel="noreferrer" className="block text-[11px] text-neon hover:underline"><ExternalLink className="mr-1 inline h-3 w-3" />Colección lanzada · ver evidencia</a>
+                  ) : null)}
+                </div>
+              )}
+              {canManage && detail.source?.ip && (
+                <div className="space-y-1.5 border-t border-border/40 pt-3">
+                  <label className="text-xs text-muted-foreground">Contención · FortiGate</label>
+                  <Button size="sm" variant="destructive" className="w-full justify-center" disabled={blockBusy || blockResult?.ok}
+                    onClick={() => { const ip = detail.source?.ip; if (ip) void bloquearIp(ip); }}
+                    title={`Bloquea ${detail.source.ip} en el FortiGate`}>
+                    {blockBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear IP en FortiGate
+                  </Button>
+                  {blockResult && (blockResult.error ? (
+                    <span className="block text-[11px] text-destructive">{blockResult.error}</span>
+                  ) : blockResult.ok ? (
+                    <span className="block text-[11px] text-emerald-600"><CheckCircle2 className="mr-1 inline h-3 w-3" />IP {detail.source.ip} bloqueada</span>
                   ) : null)}
                 </div>
               )}

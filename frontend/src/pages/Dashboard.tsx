@@ -4,7 +4,7 @@
  * mapa de calor y estado de agentes. Datos reales de Wazuh (Indexer + API).
  * Actualizacion en vivo del total via Socket.io.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import {
@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Radio,
   Trash2,
+  Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,6 +27,7 @@ import {
   type AlertsSummary,
   type TimelinePoint,
   type AgentsSummary,
+  type SedeBucket,
 } from '@/lib/wazuh';
 import { getSocket, type LiveMetrics } from '@/lib/socket';
 import { MetricCard } from '@/components/dashboard/MetricCard';
@@ -49,14 +51,19 @@ export default function Dashboard() {
   const [data, setData] = useState<RangeData | null>(null);
   const [heatmap, setHeatmap] = useState<TimelinePoint[]>([]);
   const [agentsSummary, setAgentsSummary] = useState<AgentsSummary | null>(null);
+  const [sedes, setSedes] = useState<SedeBucket[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState<LiveMetrics | null>(null);
   const [connected, setConnected] = useState(false);
   const [repoDeletes, setRepoDeletes] = useState<number | null>(null);
 
-  // Carga de datos dependientes del rango
+  // Carga de datos dependientes del rango. Guard de secuencia: al cambiar de
+  // rango rapidamente, solo la ultima carga escribe el estado, evitando que una
+  // respuesta lenta de un rango anterior pise las metricas del rango vigente.
+  const rangeSeq = useRef(0);
   const loadRange = useCallback(async (r: TimeRange) => {
+    const my = ++rangeSeq.current;
     setLoading(true);
     setError(null);
     try {
@@ -66,12 +73,12 @@ export default function Dashboard() {
         wazuhApi.topAgents(r),
         wazuhApi.mitre(r),
       ]);
-      setData({ summary, timeline, topAgents, mitre });
+      if (my === rangeSeq.current) setData({ summary, timeline, topAgents, mitre });
     } catch (err) {
       const ax = err as AxiosError<{ error?: string }>;
-      setError(ax.response?.data?.error ?? 'No se pudieron cargar las métricas de Wazuh');
+      if (my === rangeSeq.current) setError(ax.response?.data?.error ?? 'No se pudieron cargar las métricas de Wazuh');
     } finally {
-      setLoading(false);
+      if (my === rangeSeq.current) setLoading(false);
     }
   }, []);
 
@@ -83,6 +90,7 @@ export default function Dashboard() {
   useEffect(() => {
     wazuhApi.timeline('7d', '1h').then(setHeatmap).catch(() => undefined);
     wazuhApi.agentsSummary().then(setAgentsSummary).catch(() => undefined);
+    wazuhApi.agentsBySede().then(setSedes).catch(() => setSedes(null));
     // Borrados en repositorios protegidos (auditoria Windows, regla 100210) del dia.
     alertsApi.search({ range: '24h', ruleId: '100210', page: 0, size: 1 })
       .then((res) => setRepoDeletes(res.total)).catch(() => setRepoDeletes(null));
@@ -227,6 +235,40 @@ export default function Dashboard() {
           />
         )}
       </div>
+
+      {/* Agentes por sede (grupo de Wazuh como dimension de ubicacion) */}
+      {sedes && sedes.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm font-semibold">Agentes por sede</p>
+              <span className="text-[11px] text-muted-foreground">· activos / total</span>
+            </div>
+            <div className="space-y-2">
+              {sedes.map((s) => {
+                const maxTotal = Math.max(1, ...sedes.map((x) => x.total));
+                const offline = s.total - s.active;
+                return (
+                  <div key={s.sede} className="flex items-center gap-3">
+                    <span className="w-40 shrink-0 truncate text-xs" title={s.sede}>{s.sede}</span>
+                    <div className="relative h-4 flex-1 overflow-hidden rounded bg-secondary/40">
+                      <span className="absolute inset-y-0 left-0 rounded" style={{ width: `${(s.active / maxTotal) * 100}%`, background: CHART_TEAL }} />
+                      {offline > 0 && (
+                        <span className="absolute inset-y-0 rounded-r bg-muted-foreground/30"
+                          style={{ left: `${(s.active / maxTotal) * 100}%`, width: `${(offline / maxTotal) * 100}%` }} />
+                      )}
+                    </div>
+                    <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                      <span className="font-semibold text-foreground">{s.active}</span>/{s.total}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Mapa de calor */}
       {heatmap.length > 0 && <ActivityHeatmap data={heatmap} />}

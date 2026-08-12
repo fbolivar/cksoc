@@ -25,7 +25,7 @@ import {
   searchAlerts,
   getAlertDetail,
 } from './wazuh.service';
-import { getAgentsSummary, getAgents } from './agents.service';
+import { getAgentsSummary, getAgents, getAgentsBySede } from './agents.service';
 import { HttpError } from '../auth/auth.service';
 
 export const wazuhRouter = Router();
@@ -137,6 +137,14 @@ wazuhRouter.get('/alerts/mitre', async (req, res) => {
 wazuhRouter.get('/agents/summary', async (_req, res) => {
   try {
     res.json(await getAgentsSummary());
+  } catch (err) {
+    sendError(err, res);
+  }
+});
+
+wazuhRouter.get('/agents/by-sede', async (_req, res) => {
+  try {
+    res.json({ data: await getAgentsBySede() });
   } catch (err) {
     sendError(err, res);
   }

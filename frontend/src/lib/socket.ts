@@ -19,8 +19,10 @@ export function getSocket(): Socket {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
       reconnectionDelay: 2000,
-      // Envia el JWT en el handshake; como funcion, se re-evalua en cada
-      // (re)conexion usando el token vigente.
+      // Envia la cookie de sesion (HttpOnly) en el handshake same-origin.
+      withCredentials: true,
+      // Compatibilidad: si aun existe un token legado en localStorage, viaja
+      // tambien en el handshake. Como funcion, se re-evalua en cada (re)conexion.
       auth: (cb) => cb({ token: tokenStorage.get() ?? '' }),
     });
   }

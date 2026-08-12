@@ -3,7 +3,7 @@
  * campo, texto y tiempo, más paneles de agregación (top reglas / agentes / IPs
  * / MITRE) clicables para refinar la caza.
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Crosshair, Search, X, Loader2, Filter, Bookmark, Bell, BellOff, Play, Trash2 } from 'lucide-react';
 import { huntApi, type HuntResult, type HuntQuery, type Bucket } from '@/lib/hunt';
 import { savedHuntsApi, type SavedHunt } from '@/lib/savedHunts';
@@ -74,17 +74,25 @@ export default function Hunt() {
     setFilters({ agent: h.query.agent, ruleId: h.query.ruleId, srcip: h.query.srcip, mitre: h.query.mitre });
   };
 
+  // Guard de secuencia: solo la ultima busqueda lanzada actualiza el estado, para
+  // que una respuesta lenta anterior no pise resultados mas recientes (cambios
+  // rapidos de rango/nivel/filtros o clics repetidos en "Buscar").
+  const runSeq = useRef(0);
   const run = useCallback(async () => {
+    const my = ++runSeq.current;
     setLoading(true);
     setErr(null);
     try {
       const query: HuntQuery = { range, q: q || undefined, minLevel: minLevel || undefined, size: 100, ...filters };
-      setRes(await huntApi.search(query));
+      const result = await huntApi.search(query);
+      if (my === runSeq.current) setRes(result);
     } catch {
-      setErr('No se pudo consultar el índice de alertas (Wazuh Indexer).');
-      setRes(null);
+      if (my === runSeq.current) {
+        setErr('No se pudo consultar el índice de alertas (Wazuh Indexer).');
+        setRes(null);
+      }
     } finally {
-      setLoading(false);
+      if (my === runSeq.current) setLoading(false);
     }
   }, [range, q, minLevel, filters]);
 

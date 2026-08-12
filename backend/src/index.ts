@@ -14,8 +14,10 @@ import { createServer } from 'node:http';
 import { Server as SocketServer } from 'socket.io';
 
 import { env } from './config/env';
-import { pingDb } from './config/db';
+import { pingDb, query } from './config/db';
+import { getCookie } from './config/cookies';
 import { logger } from './config/logger';
+import type { JwtPayload } from './types';
 import { apiLimiter } from './middleware/rateLimit';
 import { authRouter } from './modules/auth/auth.routes';
 import { wazuhRouter } from './modules/wazuh/wazuh.routes';
@@ -135,12 +137,25 @@ const io = new SocketServer(httpServer, {
 
 // Autenticacion del WebSocket: el socket difunde metricas del SIEM, mapa de
 // ataques y notificaciones en vivo. Sin esto, cualquiera que alcance /socket.io
-// recibiria datos del SOC. Se exige un JWT valido en el handshake.
-io.use((socket, next) => {
-  const token = (socket.handshake.auth?.token as string | undefined) ?? '';
+// recibiria datos del SOC. Se exige un JWT valido (cookie HttpOnly o handshake.auth)
+// y ademas se comprueba la revocacion (token_version / cuenta activa).
+io.use(async (socket, next) => {
+  const token =
+    (socket.handshake.auth?.token as string | undefined) ||
+    getCookie(socket.handshake.headers.cookie, 'token') ||
+    '';
   if (!token) { next(new Error('unauthorized')); return; }
   try {
-    jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
+    const payload = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload;
+    const rows = await query<{ token_version: number; is_active: boolean }>(
+      'SELECT token_version, is_active FROM users WHERE id = $1',
+      [payload.sub]
+    );
+    const u = rows[0];
+    if (!u || !u.is_active || u.token_version !== payload.tv) {
+      next(new Error('unauthorized'));
+      return;
+    }
     next();
   } catch {
     next(new Error('unauthorized'));

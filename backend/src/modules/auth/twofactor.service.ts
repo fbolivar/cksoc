@@ -110,11 +110,13 @@ export async function verifyCode(userId: string, code: string): Promise<boolean>
   const secret = decryptSecret(r.totp_secret);
   if (authenticator.verify({ token: input, secret })) return true;
 
-  const codes = r.totp_backup_codes ?? [];
+  // Consumo ATOMICO del codigo de respaldo: se elimina solo si sigue presente,
+  // en una sola query. Evita la carrera donde dos peticiones concurrentes con el
+  // mismo codigo lo leen antes de que ninguna lo borre (doble uso).
   const h = hashCode(input);
-  if (codes.includes(h)) {
-    await query('UPDATE users SET totp_backup_codes = $1 WHERE id = $2', [codes.filter((x) => x !== h), userId]);
-    return true;
-  }
-  return false;
+  const consumed = await query(
+    'UPDATE users SET totp_backup_codes = array_remove(totp_backup_codes, $1) WHERE id = $2 AND $1 = ANY(totp_backup_codes) RETURNING id',
+    [h, userId]
+  );
+  return consumed.length > 0;
 }

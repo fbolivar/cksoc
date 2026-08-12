@@ -6,10 +6,11 @@ import { getIncidents } from './incidents.service';
 import { checkReputation } from '../threatintel/abuseipdb.service';
 import { geolocate } from '../geo/geoip.service';
 import { verifyConnection, isFortigateConfigured } from './fortigate.service';
-import { whitelistIps, canBlock, normalizeIp } from './whitelist';
+import { whitelistIps, canBlock, normalizeIp, isValidIpv4 } from './whitelist';
 import { HttpError } from '../auth/auth.service';
 
-const ipSchema = z.string().regex(/^(\d{1,3}\.){3}\d{1,3}$/, 'IP invalida');
+// Validacion estricta de octetos (rechaza 999.999.999.999); consistente con canBlock.
+const ipSchema = z.string().refine(isValidIpv4, 'IP invalida');
 
 const blockSchema = z.object({
   ip: ipSchema,
@@ -84,7 +85,7 @@ export async function getIncidentsCtrl(req: Request, res: Response): Promise<voi
 /** Contexto de una IP: reputacion + geo + si seria bloqueable (para "Investigar"). */
 export async function getReputation(req: Request, res: Response): Promise<void> {
   const ip = req.params.ip;
-  if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
+  if (!isValidIpv4(ip)) {
     res.status(400).json({ error: 'IP invalida' });
     return;
   }

@@ -11,7 +11,7 @@
  */
 import { Router } from 'express';
 import {
-  register, login, login2fa, me, logoutAll,
+  register, login, login2fa, me, logoutAll, logout,
   twofaStatus, twofaSetup, twofaEnable, twofaDisable,
 } from './auth.controller';
 import { authenticate } from '../../middleware/auth';
@@ -26,6 +26,7 @@ authRouter.post('/register', authenticate, requireRole('admin'), register);
 authRouter.post('/login', authLimiter, login);
 authRouter.post('/login/2fa', authLimiter, login2fa);
 authRouter.get('/me', authenticate, me);
+authRouter.post('/logout', logout); // publico: siempre limpia la cookie de sesion
 authRouter.post('/logout-all', authenticate, logoutAll);
 
 // Gestion del 2FA de la propia cuenta (cualquier usuario autenticado).

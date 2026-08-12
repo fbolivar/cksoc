@@ -57,8 +57,8 @@ export const responseApi = {
     api.get<{ incidents: Incident[] }>('/response/incidents', { params: { hours } }).then((r) => r.data.incidents),
   blocked: () => api.get<{ blocked: BlockedItem[] }>('/response/blocked').then((r) => r.data.blocked),
   history: () => api.get<{ history: AuditRow[] }>('/response/history').then((r) => r.data.history),
-  block: (ip: string, motivo: string) =>
-    api.post('/response/block', { ip, motivo }).then((r) => r.data),
+  block: (ip: string, motivo: string, alertaOrigenId?: string) =>
+    api.post('/response/block', { ip, motivo, alertaOrigenId }).then((r) => r.data),
   unblock: (ip: string) => api.post('/response/unblock', { ip }).then((r) => r.data),
 };
 

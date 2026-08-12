@@ -130,3 +130,10 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export type Env = typeof env;
+
+// Guard de seguridad: en produccion un CORS_ORIGIN "*" refleja cualquier Origin.
+// Con tokens Bearer el riesgo es acotado, pero es mala practica: avisar fuerte.
+if (env.NODE_ENV === 'production' && env.CORS_ORIGIN === '*') {
+  // eslint-disable-next-line no-console
+  console.warn('[seguridad] CORS_ORIGIN="*" en produccion: define una lista blanca explicita de origenes en el .env.');
+}

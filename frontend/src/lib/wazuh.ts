@@ -39,6 +39,12 @@ export interface AgentItem {
   lastKeepAlive: string;
 }
 
+export interface SedeBucket {
+  sede: string;
+  total: number;
+  active: number;
+}
+
 /** Intervalo de date_histogram apropiado para cada rango. */
 export function intervalFor(range: TimeRange): string {
   switch (range) {
@@ -79,4 +85,7 @@ export const wazuhApi = {
 
   agents: (limit = 50) =>
     api.get<{ data: AgentItem[] }>('/wazuh/agents', { params: { limit } }).then((r) => r.data.data),
+
+  agentsBySede: () =>
+    api.get<{ data: SedeBucket[] }>('/wazuh/agents/by-sede').then((r) => r.data.data),
 };

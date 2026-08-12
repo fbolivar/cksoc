@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { query } from '../config/db';
+import { getCookie } from '../config/cookies';
 import type { JwtPayload, AuthUser } from '../types';
 
 export async function authenticate(
@@ -12,13 +13,16 @@ export async function authenticate(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // El token puede venir en la cookie HttpOnly (preferente, no accesible por JS)
+  // o en el header Authorization (compatibilidad con sesiones/clientes previos).
   const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
+  const token =
+    (header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null) ??
+    getCookie(req.headers.cookie, 'token');
+  if (!token) {
     res.status(401).json({ error: 'Token no proporcionado' });
     return;
   }
-
-  const token = header.slice('Bearer '.length);
   let payload: JwtPayload;
   try {
     payload = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload;

@@ -44,6 +44,36 @@ export async function getAgentsSummary(): Promise<AgentsSummary> {
   };
 }
 
+export interface SedeBucket {
+  sede: string;
+  total: number;
+  active: number;
+}
+
+/**
+ * Distribucion de agentes por "sede". Wazuh no expone un campo sede propio, por
+ * lo que se usa el grupo del agente como dimension de ubicacion/sede (es el
+ * agrupador real y editable en Wazuh). Los agentes sin grupo caen en "Sin grupo".
+ */
+export async function getAgentsBySede(): Promise<SedeBucket[]> {
+  const data = await wazuhApiGet<{
+    affected_items: Array<{ id: string; status: string; group?: string[] }>;
+  }>('/agents', { select: 'id,status,group', limit: 1000, sort: 'name' });
+
+  const map = new Map<string, { total: number; active: number }>();
+  for (const a of data.affected_items) {
+    if (a.id === '000') continue; // el manager no es una sede
+    const sede = a.group && a.group.length > 0 ? a.group[0] : 'Sin grupo';
+    const cur = map.get(sede) ?? { total: 0, active: 0 };
+    cur.total += 1;
+    if (a.status === 'active') cur.active += 1;
+    map.set(sede, cur);
+  }
+  return [...map.entries()]
+    .map(([sede, v]) => ({ sede, total: v.total, active: v.active }))
+    .sort((a, b) => b.total - a.total);
+}
+
 /** Listado de agentes con sus datos principales. */
 export async function getAgents(limit = 50): Promise<AgentItem[]> {
   const data = await wazuhApiGet<{

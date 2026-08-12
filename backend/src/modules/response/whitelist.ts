@@ -23,7 +23,7 @@ export function whitelistIps(): string[] {
     .filter(Boolean);
 }
 
-function isValidIpv4(ip: string): boolean {
+export function isValidIpv4(ip: string): boolean {
   const parts = ip.split('.');
   if (parts.length !== 4) return false;
   return parts.every((p) => {

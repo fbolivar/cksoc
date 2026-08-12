@@ -2,12 +2,13 @@
  * Explorador de Alertas: busqueda y filtrado de eventos individuales de Wazuh
  * (tiempo, severidad, regla, agente, IP, texto) con panel de detalle del evento.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink, ShieldAlert } from 'lucide-react';
+import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink, ShieldAlert, Ban, CheckCircle2 } from 'lucide-react';
 import { alertsApi, BAND_COLOR, BAND_LABEL, type AlertHit, type AlertFilters } from '@/lib/alerts';
 import { incidentsApi, type Severity } from '@/lib/incidents';
+import { responseApi } from '@/lib/response';
 import { velociraptorApi } from '@/lib/velociraptor';
 import { useAuth } from '@/lib/auth';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
@@ -75,6 +76,25 @@ export default function Alerts() {
   const [detail, setDetail] = useState<{ hit: AlertHit; source: Record<string, unknown> | null } | null>(null);
   const [veloBusy, setVeloBusy] = useState(false);
   const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockResult, setBlockResult] = useState<{ ok?: boolean; error?: string } | null>(null);
+
+  // Bloquea en el FortiGate la IP origen del evento (crea la regla y registra la
+  // accion enlazada a la alerta). Solo admin/analista; la lista blanca la aplica
+  // el backend, que rechazara IPs protegidas.
+  async function bloquearIp(hit: AlertHit) {
+    if (!hit.srcip) return;
+    setBlockBusy(true);
+    setBlockResult(null);
+    try {
+      await responseApi.block(hit.srcip, `Alerta ${hit.ruleId}: ${hit.description}`.slice(0, 200), hit.id);
+      setBlockResult({ ok: true });
+    } catch (e) {
+      setBlockResult({ error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo bloquear la IP' });
+    } finally {
+      setBlockBusy(false);
+    }
+  }
 
   async function investigar(host: string) {
     setVeloBusy(true);
@@ -89,14 +109,20 @@ export default function Alerts() {
     }
   }
 
+  // Guard de secuencia: si varias busquedas se solapan (cambios rapidos de rango,
+  // pagina o filtros), solo la ultima lanzada puede actualizar el estado; asi una
+  // respuesta lenta anterior no pisa los resultados de una peticion mas reciente.
+  const reqSeq = useRef(0);
   const load = useCallback(async (f: AlertFilters) => {
+    const my = ++reqSeq.current;
     setLoading(true); setError(null);
     try {
-      setData(await alertsApi.search(f));
+      const res = await alertsApi.search(f);
+      if (my === reqSeq.current) setData(res);
     } catch (e) {
-      setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo buscar alertas');
+      if (my === reqSeq.current) setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo buscar alertas');
     } finally {
-      setLoading(false);
+      if (my === reqSeq.current) setLoading(false);
     }
   }, []);
 
@@ -118,14 +144,17 @@ export default function Alerts() {
     load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: nr || undefined, q: q || undefined, page: 0, size: SIZE });
   }
 
+  const detailSeq = useRef(0);
   async function openDetail(hit: AlertHit) {
+    const my = ++detailSeq.current;
     setVeloResult(null);
+    setBlockResult(null);
     setDetail({ hit, source: null });
     try {
       const source = await alertsApi.detail(hit.index, hit.id);
-      setDetail({ hit, source });
+      if (my === detailSeq.current) setDetail({ hit, source });
     } catch {
-      setDetail({ hit, source: { error: 'No se pudo cargar el detalle' } });
+      if (my === detailSeq.current) setDetail({ hit, source: { error: 'No se pudo cargar el detalle' } });
     }
   }
 
@@ -303,11 +332,22 @@ export default function Alerts() {
                       <Button size="sm" variant="outline" onClick={() => void investigar(detail.hit.agent)} disabled={veloBusy} title="Lanza una colección forense en el host con Velociraptor">
                         {veloBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />} Investigar con Velociraptor
                       </Button>
+                      {detail.hit.srcip && (
+                        <Button size="sm" variant="destructive" onClick={() => void bloquearIp(detail.hit)} disabled={blockBusy || blockResult?.ok}
+                          title={`Bloquea ${detail.hit.srcip} en el FortiGate`}>
+                          {blockBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear IP en FortiGate
+                        </Button>
+                      )}
                     </div>
                     {veloResult && (veloResult.error ? (
                       <span className="text-[11px] text-destructive">{veloResult.error}</span>
                     ) : veloResult.url ? (
                       <a href={veloResult.url} target="_blank" rel="noreferrer" className="text-[11px] text-neon hover:underline inline-flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Colección lanzada · ver evidencia en Velociraptor</a>
+                    ) : null)}
+                    {blockResult && (blockResult.error ? (
+                      <span className="text-[11px] text-destructive">{blockResult.error}</span>
+                    ) : blockResult.ok ? (
+                      <span className="text-[11px] text-emerald-600 inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> IP {detail.hit.srcip} bloqueada en el FortiGate</span>
                     ) : null)}
                   </div>
                 )}

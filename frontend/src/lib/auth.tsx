@@ -34,20 +34,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Al montar: si hay token, intenta recuperar el perfil
+  // Al montar: intenta recuperar el perfil. La sesion vive en la cookie HttpOnly
+  // (o, en sesiones antiguas, en el token de localStorage que el interceptor
+  // adjunta). Un 401 significa que no hay sesion valida.
   useEffect(() => {
-    const token = tokenStorage.get();
-    if (!token) {
-      setLoading(false);
-      return;
-    }
     api
       .get<{ user: AuthUser }>('/auth/me')
       .then((res) => setUser(res.data.user))
       .catch((err) => {
-        // Solo cerrar sesion si el token es invalido/expirado (401). Un 500,
+        // Solo limpiar el token legado si es invalido/expirado (401). Un 500,
         // timeout o corte de red momentaneo NO debe desloguear a un usuario
-        // con token valido.
+        // con sesion valida.
         if ((err as AxiosError).response?.status === 401) tokenStorage.clear();
       })
       .finally(() => setLoading(false));
@@ -60,23 +57,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if ('twoFactor' in res.data && res.data.twoFactor) {
       return { twoFactor: true, challenge: res.data.challenge };
     }
-    const data = res.data as { user: AuthUser; token: string };
-    tokenStorage.set(data.token);
+    // La sesion queda en la cookie HttpOnly fijada por el backend; ya no se
+    // guarda el JWT en localStorage (evita su robo por XSS).
+    const data = res.data as { user: AuthUser };
     setUser(data.user);
     return { twoFactor: false };
   }
 
   /** Segundo paso: canjea el reto + codigo TOTP/respaldo por la sesion. */
   async function loginVerify2fa(challenge: string, code: string): Promise<void> {
-    const res = await api.post<{ user: AuthUser; token: string }>('/auth/login/2fa', {
+    const res = await api.post<{ user: AuthUser }>('/auth/login/2fa', {
       challenge,
       code,
     });
-    tokenStorage.set(res.data.token);
     setUser(res.data.user);
   }
 
   function logout(): void {
+    // Limpia la cookie de sesion en el servidor y cualquier token legado local.
+    void api.post('/auth/logout').catch(() => undefined);
     tokenStorage.clear();
     setUser(null);
   }
