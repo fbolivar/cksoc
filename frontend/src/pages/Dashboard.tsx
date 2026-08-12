@@ -56,7 +56,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [live, setLive] = useState<LiveMetrics | null>(null);
   const [connected, setConnected] = useState(false);
-  const [repoDeletes, setRepoDeletes] = useState<number | null>(null);
+  const [massDeletes, setMassDeletes] = useState<number | null>(null);
 
   // Carga de datos dependientes del rango. Guard de secuencia: al cambiar de
   // rango rapidamente, solo la ultima carga escribe el estado, evitando que una
@@ -91,9 +91,10 @@ export default function Dashboard() {
     wazuhApi.timeline('7d', '1h').then(setHeatmap).catch(() => undefined);
     wazuhApi.agentsSummary().then(setAgentsSummary).catch(() => undefined);
     wazuhApi.agentsBySede().then(setSedes).catch(() => setSedes(null));
-    // Borrados en repositorios protegidos (auditoria Windows, regla 100210) del dia.
-    alertsApi.search({ range: '24h', ruleId: '100210', page: 0, size: 1 })
-      .then((res) => setRepoDeletes(res.total)).catch(() => setRepoDeletes(null));
+    // Borrado MASIVO en repos protegidos (regla 100215: >=15 archivos/60s por usuario).
+    // Es la senal accionable real; los guardados sueltos de Office ya no cuentan aqui.
+    alertsApi.search({ range: '24h', ruleId: '100215', page: 0, size: 1 })
+      .then((res) => setMassDeletes(res.total)).catch(() => setMassDeletes(null));
   }, []);
 
   // Socket.io: total en vivo
@@ -191,8 +192,8 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Borrados en repositorios protegidos (auditoria) — destacado, clic para ver en Alertas */}
-      <Link to="/alertas?ruleId=100210" className="block">
+      {/* Borrado MASIVO en repos protegidos (regla 100215) — destacado, clic para ver en Alertas */}
+      <Link to="/alertas?ruleId=100215" className="block">
         <Card className="border-rose-500/30 bg-rose-500/[0.04] transition hover:bg-rose-500/[0.09]">
           <CardContent className="flex items-center justify-between gap-3 p-4">
             <div className="flex items-center gap-3">
@@ -200,11 +201,11 @@ export default function Dashboard() {
                 <Trash2 className="h-5 w-5 text-rose-600" />
               </span>
               <div>
-                <p className="text-sm font-semibold">Borrados en repositorios protegidos</p>
-                <p className="text-xs text-muted-foreground">Auditoría de eliminación de archivos · últimas 24 h · clic para ver el detalle</p>
+                <p className="text-sm font-semibold">Borrado masivo en repositorios protegidos</p>
+                <p className="text-xs text-muted-foreground">≥15 archivos eliminados en 60 s por un usuario · últimas 24 h · 0 = sin incidentes</p>
               </div>
             </div>
-            <span className="text-3xl font-bold tabular-nums text-rose-600">{repoDeletes ?? '—'}</span>
+            <span className="text-3xl font-bold tabular-nums text-rose-600">{massDeletes ?? '—'}</span>
           </CardContent>
         </Card>
       </Link>
