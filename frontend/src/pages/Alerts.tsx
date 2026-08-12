@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink } from 'lucide-react';
+import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink, ShieldAlert } from 'lucide-react';
 import { alertsApi, BAND_COLOR, BAND_LABEL, type AlertHit, type AlertFilters } from '@/lib/alerts';
 import { incidentsApi, type Severity } from '@/lib/incidents';
 import { velociraptorApi } from '@/lib/velociraptor';
@@ -37,6 +37,18 @@ function SevDot({ band, level }: { band: AlertHit['band']; level: number }) {
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs" style={{ color: BAND_COLOR[band] }}>
       <span className="h-2 w-2 rounded-full" style={{ background: BAND_COLOR[band] }} />
       {level} · {BAND_LABEL[band]}
+    </span>
+  );
+}
+
+// Borrado de archivo en un repositorio protegido (auditoria Windows, regla 100210).
+const REPO_DELETE_RULE = '100210';
+const isRepoDelete = (it: AlertHit) => it.ruleId === REPO_DELETE_RULE;
+
+function RepoBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600">
+      <ShieldAlert className="h-3 w-3" /> Repositorio protegido
     </span>
   );
 }
@@ -97,6 +109,13 @@ export default function Alerts() {
   function applyFilters() {
     if (page !== 0) setPage(0);
     else load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, page: 0, size: SIZE });
+  }
+
+  // Filtro rapido: alterna solo los borrados en repositorios protegidos (regla 100210).
+  function toggleRepoDeletes() {
+    const nr = ruleId === REPO_DELETE_RULE ? '' : REPO_DELETE_RULE;
+    setRuleId(nr); setPage(0);
+    load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: nr || undefined, q: q || undefined, page: 0, size: SIZE });
   }
 
   async function openDetail(hit: AlertHit) {
@@ -183,6 +202,10 @@ export default function Alerts() {
           <Input value={ruleId} onChange={(e) => setRuleId(e.target.value)} placeholder="ID regla" className="h-9 w-28" onKeyDown={(e) => e.key === 'Enter' && applyFilters()} />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar en descripción…" className="h-9 flex-1" style={{ minWidth: 180 }} onKeyDown={(e) => e.key === 'Enter' && applyFilters()} />
           <Button size="sm" onClick={applyFilters} disabled={loading}><Search className="h-4 w-4" /> Buscar</Button>
+          <Button size="sm" variant={ruleId === REPO_DELETE_RULE ? 'default' : 'outline'} onClick={toggleRepoDeletes} disabled={loading}
+            title="Muestra solo borrados de archivos en repositorios protegidos (regla 100210)">
+            <ShieldAlert className="h-4 w-4" /> Borrados en repos
+          </Button>
         </CardContent>
       </Card>
 
@@ -218,13 +241,17 @@ export default function Alerts() {
                 </thead>
                 <tbody>
                   {data?.items.map((it) => (
-                    <tr key={it.id} onClick={() => openDetail(it)} className="cursor-pointer border-b border-border/30 last:border-0 hover:bg-secondary/40">
+                    <tr key={it.id} onClick={() => openDetail(it)}
+                      className={isRepoDelete(it)
+                        ? 'cursor-pointer border-b border-border/30 border-l-2 border-l-rose-500 bg-rose-500/[0.05] last:border-b-0 hover:bg-rose-500/[0.11]'
+                        : 'cursor-pointer border-b border-border/30 last:border-0 hover:bg-secondary/40'}>
                       <td className="whitespace-nowrap px-4 py-2 text-xs text-muted-foreground">{new Date(it.timestamp).toLocaleString('es-CO')}</td>
                       <td className="px-2 py-2"><SevDot band={it.band} level={it.level} /></td>
                       <td className="px-2 py-2 font-mono text-xs text-muted-foreground">{it.ruleId}</td>
                       <td className="px-2 py-2 font-mono text-[11px]">{it.agent}</td>
                       <td className="px-2 py-2 font-mono text-[11px] text-muted-foreground">{it.srcip ?? '—'}</td>
                       <td className="max-w-md px-2 py-2">
+                        {isRepoDelete(it) && <div className="mb-1"><RepoBadge /></div>}
                         <span className="block truncate text-xs">{it.description}</span>
                         {it.mitre.length > 0 && <span className="text-[10px] text-neon">{it.mitre.join(', ')}</span>}
                       </td>
@@ -245,6 +272,7 @@ export default function Alerts() {
               <div className="flex items-center gap-3">
                 <SevDot band={detail.hit.band} level={detail.hit.level} />
                 <span className="font-mono text-xs text-muted-foreground">regla {detail.hit.ruleId}</span>
+                {isRepoDelete(detail.hit) && <RepoBadge />}
               </div>
               <Button variant="ghost" size="icon" onClick={() => setDetail(null)}><X className="h-4 w-4" /></Button>
             </div>
