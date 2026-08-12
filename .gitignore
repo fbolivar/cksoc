@@ -36,3 +36,6 @@ ops/watchdog/watchdog.conf
 data/
 backups/
 /logo-emblem-original-6mb.png
+
+# Integración Velociraptor (api_config con certificado + helper)
+velo/

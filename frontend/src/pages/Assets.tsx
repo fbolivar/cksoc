@@ -5,8 +5,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Server, RefreshCw, Loader2, ArrowLeft, ShieldAlert, ClipboardCheck, FileSearch, Cpu, ListFilter } from 'lucide-react';
+import { Server, RefreshCw, Loader2, ArrowLeft, ShieldAlert, ClipboardCheck, FileSearch, Cpu, ListFilter, Crosshair, ExternalLink } from 'lucide-react';
 import { assetsApi, type AssetListItem, type AssetDetail } from '@/lib/assets';
+import { velociraptorApi } from '@/lib/velociraptor';
 import { scoreColor } from '@/lib/sca';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,16 +32,32 @@ export default function Assets() {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [veloBusy, setVeloBusy] = useState(false);
+  const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
 
   useEffect(() => {
     assetsApi.list().then(setList).catch((e) => setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo listar activos')).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
+    setVeloResult(null);
     if (!sel) { setDetail(null); return; }
     setLoadingDetail(true);
     assetsApi.get(sel).then(setDetail).catch(() => setDetail(null)).finally(() => setLoadingDetail(false));
   }, [sel]);
+
+  async function investigar(host: string) {
+    setVeloBusy(true);
+    setVeloResult(null);
+    try {
+      const r = await velociraptorApi.collect(host);
+      setVeloResult({ url: r.url });
+    } catch (e) {
+      setVeloResult({ error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo lanzar la colección' });
+    } finally {
+      setVeloBusy(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
@@ -102,7 +119,21 @@ export default function Assets() {
                   <p className="text-xs text-muted-foreground">{detail.meta.os} · {detail.meta.ip} · agente {detail.meta.version}</p>
                 </div>
               </div>
-              <Link to="/alertas" className="text-xs text-neon hover:underline inline-flex items-center gap-1"><ListFilter className="h-3.5 w-3.5" /> Ver en el explorador de alertas</Link>
+              <div className="flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-3">
+                  <Button size="sm" onClick={() => void investigar(detail.meta.name)} disabled={veloBusy} title="Lanza una colección forense en este host con Velociraptor">
+                    {veloBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />} Investigar con Velociraptor
+                  </Button>
+                  <Link to="/alertas" className="text-xs text-neon hover:underline inline-flex items-center gap-1"><ListFilter className="h-3.5 w-3.5" /> Ver en alertas</Link>
+                </div>
+                {veloResult && (veloResult.error ? (
+                  <span className="text-[11px] text-destructive">{veloResult.error}</span>
+                ) : veloResult.url ? (
+                  <a href={veloResult.url} target="_blank" rel="noreferrer" className="text-[11px] text-neon hover:underline inline-flex items-center gap-1">
+                    <ExternalLink className="h-3 w-3" /> Colección lanzada · ver evidencia en Velociraptor
+                  </a>
+                ) : null)}
+              </div>
             </CardContent>
           </Card>
 

@@ -46,6 +46,7 @@ import { savedHuntRouter } from './modules/hunt/saved.routes';
 import { startSavedHuntScheduler } from './modules/hunt/saved.service';
 import { playbooksRouter } from './modules/playbooks/playbooks.routes';
 import { riskRouter } from './modules/risk/risk.routes';
+import { velociraptorRouter } from './modules/velociraptor/velociraptor.routes';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -109,6 +110,7 @@ app.use('/api/hunt/saved', savedHuntRouter); // antes de /api/hunt (mas especifi
 app.use('/api/hunt', huntRouter);
 app.use('/api/playbooks', playbooksRouter);
 app.use('/api/risk', riskRouter);
+app.use('/api/velociraptor', velociraptorRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

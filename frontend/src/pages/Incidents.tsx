@@ -4,8 +4,9 @@
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock } from 'lucide-react';
+import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink } from 'lucide-react';
 import { incidentsApi, SEV, ST, type IncidentListItem, type IncidentDetail, type Severity, type Status } from '@/lib/incidents';
+import { velociraptorApi } from '@/lib/velociraptor';
 import { useAuth } from '@/lib/auth';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,6 +46,21 @@ export default function Incidents() {
   const [showCreate, setShowCreate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  const [veloBusy, setVeloBusy] = useState(false);
+  const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
+
+  async function investigar(host: string) {
+    setVeloBusy(true);
+    setVeloResult(null);
+    try {
+      const r = await velociraptorApi.collect(host);
+      setVeloResult({ url: r.url });
+    } catch (e) {
+      setVeloResult({ error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo lanzar la colección' });
+    } finally {
+      setVeloBusy(false);
+    }
+  }
 
   async function loadList() {
     setLoading(true); setError(null);
@@ -55,6 +71,7 @@ export default function Incidents() {
   useEffect(() => { loadList(); /* eslint-disable-next-line */ }, [statusF]);
   useEffect(() => { if (canManage) incidentsApi.users().then(setUsers).catch(() => undefined); }, [canManage]);
   useEffect(() => {
+    setVeloResult(null);
     if (!sel) { setDetail(null); return; }
     incidentsApi.get(sel).then(setDetail).catch(() => setDetail(null));
   }, [sel]);
@@ -210,6 +227,21 @@ export default function Incidents() {
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
+              {canManage && detail.source?.agent && (
+                <div className="space-y-1.5 border-t border-border/40 pt-3">
+                  <label className="text-xs text-muted-foreground">DFIR · Velociraptor</label>
+                  <Button size="sm" variant="outline" className="w-full justify-center" disabled={veloBusy}
+                    onClick={() => { const h = detail.source?.agent; if (h) void investigar(String(h)); }}
+                    title="Lanza una colección forense en el host afectado">
+                    {veloBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />} Investigar con Velociraptor
+                  </Button>
+                  {veloResult && (veloResult.error ? (
+                    <span className="block text-[11px] text-destructive">{veloResult.error}</span>
+                  ) : veloResult.url ? (
+                    <a href={veloResult.url} target="_blank" rel="noreferrer" className="block text-[11px] text-neon hover:underline"><ExternalLink className="mr-1 inline h-3 w-3" />Colección lanzada · ver evidencia</a>
+                  ) : null)}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

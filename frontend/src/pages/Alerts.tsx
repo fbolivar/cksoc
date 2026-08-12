@@ -5,9 +5,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase } from 'lucide-react';
+import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink } from 'lucide-react';
 import { alertsApi, BAND_COLOR, BAND_LABEL, type AlertHit, type AlertFilters } from '@/lib/alerts';
 import { incidentsApi, type Severity } from '@/lib/incidents';
+import { velociraptorApi } from '@/lib/velociraptor';
 import { useAuth } from '@/lib/auth';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent } from '@/components/ui/card';
@@ -60,6 +61,21 @@ export default function Alerts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ hit: AlertHit; source: Record<string, unknown> | null } | null>(null);
+  const [veloBusy, setVeloBusy] = useState(false);
+  const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
+
+  async function investigar(host: string) {
+    setVeloBusy(true);
+    setVeloResult(null);
+    try {
+      const r = await velociraptorApi.collect(host);
+      setVeloResult({ url: r.url });
+    } catch (e) {
+      setVeloResult({ error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo lanzar la colección' });
+    } finally {
+      setVeloBusy(false);
+    }
+  }
 
   const load = useCallback(async (f: AlertFilters) => {
     setLoading(true); setError(null);
@@ -84,6 +100,7 @@ export default function Alerts() {
   }
 
   async function openDetail(hit: AlertHit) {
+    setVeloResult(null);
     setDetail({ hit, source: null });
     try {
       const source = await alertsApi.detail(hit.index, hit.id);
@@ -250,9 +267,21 @@ export default function Alerts() {
                   <p className="mt-1 text-[10px] text-muted-foreground/70">grupos: {detail.hit.groups.join(', ')}</p>
                 )}
                 {canManage && (
-                  <Button size="sm" className="mt-3" onClick={() => escalate(detail.hit)} disabled={escalating}>
-                    {escalating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Briefcase className="h-4 w-4" />} Escalar a incidente
-                  </Button>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" onClick={() => escalate(detail.hit)} disabled={escalating}>
+                        {escalating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Briefcase className="h-4 w-4" />} Escalar a incidente
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => void investigar(detail.hit.agent)} disabled={veloBusy} title="Lanza una colección forense en el host con Velociraptor">
+                        {veloBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />} Investigar con Velociraptor
+                      </Button>
+                    </div>
+                    {veloResult && (veloResult.error ? (
+                      <span className="text-[11px] text-destructive">{veloResult.error}</span>
+                    ) : veloResult.url ? (
+                      <a href={veloResult.url} target="_blank" rel="noreferrer" className="text-[11px] text-neon hover:underline inline-flex items-center gap-1"><ExternalLink className="h-3 w-3" /> Colección lanzada · ver evidencia en Velociraptor</a>
+                    ) : null)}
+                  </div>
                 )}
               </div>
               <div>
