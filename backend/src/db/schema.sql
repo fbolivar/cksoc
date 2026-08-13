@@ -320,3 +320,30 @@ CREATE TABLE IF NOT EXISTS saved_hunts (
     created_by    UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- =====================================================================
+-- Threat Intelligence: indicadores de compromiso (IOCs) y estado de feeds.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS iocs (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ioc_type      VARCHAR(16)  NOT NULL,            -- ip | domain | url | md5 | sha1 | sha256
+    value         VARCHAR(1024) NOT NULL,
+    source        VARCHAR(120) NOT NULL DEFAULT 'manual',  -- nombre del feed o 'manual'
+    description   TEXT,
+    tags          TEXT[] NOT NULL DEFAULT '{}',
+    enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+    added_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    last_match_at TIMESTAMPTZ,
+    match_count   INTEGER NOT NULL DEFAULT 0,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (ioc_type, value)
+);
+CREATE INDEX IF NOT EXISTS idx_iocs_type_value ON iocs(ioc_type, value);
+CREATE INDEX IF NOT EXISTS idx_iocs_enabled ON iocs(enabled);
+
+CREATE TABLE IF NOT EXISTS ioc_feeds (
+    name        VARCHAR(120) PRIMARY KEY,
+    last_run_at TIMESTAMPTZ,
+    last_count  INTEGER NOT NULL DEFAULT 0,
+    last_status VARCHAR(255)
+);
