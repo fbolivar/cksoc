@@ -54,6 +54,26 @@ velociraptorRouter.get('/clients/:clientId/flows', requireRole('admin', 'analist
   res.json(r); // { client_id, flows: [...] }
 });
 
+// Catálogo de artefactos de cliente (para elegir qué recolectar).
+velociraptorRouter.get('/artifacts', requireRole('admin', 'analista'), async (_req, res) => {
+  const r = await runHelper(['artifacts']);
+  if (r?.error) { res.status(502).json(r); return; }
+  res.json(r); // { artifacts: [{name, description}] }
+});
+
+// Resultados (filas) de una colección concreta.
+velociraptorRouter.get('/clients/:clientId/flows/:flowId/results', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
+  const clientId = String(req.params.clientId || '');
+  const flowId = String(req.params.flowId || '');
+  if (!/^C\.[0-9a-f]{6,32}$/i.test(clientId) || !/^F\.[0-9A-Za-z]{6,40}$/.test(flowId)) {
+    res.status(400).json({ error: 'client_id o flow_id inválido' });
+    return;
+  }
+  const r = await runHelper(['results', clientId, flowId]);
+  if (r?.error) { res.status(502).json(r); return; }
+  res.json(r); // { client_id, flow_id, sources: [{artifact, columns, count, rows}] }
+});
+
 // Lanzar colección forense en un host.
 velociraptorRouter.post('/collect', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
   const host = String(req.body?.host || '').trim();
@@ -61,7 +81,13 @@ velociraptorRouter.post('/collect', requireRole('admin', 'analista'), async (req
     res.status(400).json({ error: 'host inválido' });
     return;
   }
-  const r = await runHelper(['collect', host]);
+  // Artefacto opcional (p.ej. Windows.System.Pslist); por defecto Generic.Client.Info.
+  const artifact = String(req.body?.artifact || '').trim();
+  if (artifact && !/^[A-Za-z0-9._]{1,120}$/.test(artifact)) {
+    res.status(400).json({ error: 'artefacto inválido' });
+    return;
+  }
+  const r = await runHelper(artifact ? ['collect', host, artifact] : ['collect', host]);
   if (r?.error) {
     res.status(502).json(r);
     return;
@@ -69,7 +95,7 @@ velociraptorRouter.post('/collect', requireRole('admin', 'analista'), async (req
   void auditFromReq(req, {
     actorId: req.user!.id, actorEmail: req.user!.email,
     action: 'velociraptor_collect', target: host, result: 'ok',
-    detail: { flow_id: r.flow_id, client_id: r.client_id },
+    detail: { flow_id: r.flow_id, client_id: r.client_id, artifacts: r.artifacts },
   });
   res.json(r);
 });

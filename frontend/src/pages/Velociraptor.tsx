@@ -1,18 +1,23 @@
 /**
- * Velociraptor (DFIR): panel de clientes enrolados y su estado, con acción de
- * lanzar una colección forense por host. Los datos vienen del backend, que habla
- * con la API de Velociraptor vía el helper Python.
+ * Velociraptor (DFIR): panel de clientes enrolados y su estado. Permite:
+ *  - Ver colecciones recientes por cliente (fila expandible).
+ *  - Lanzar una colección eligiendo el artefacto (modal con catálogo).
+ *  - Ver el detalle de resultados de una colección (modal con tablas por fuente).
+ * Los datos vienen del backend, que habla con la API de Velociraptor (helper Python).
  */
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
-import { Crosshair, RefreshCw, Loader2, ExternalLink, ServerCog, MonitorSmartphone, Radio, ChevronRight, ChevronDown } from 'lucide-react';
-import { velociraptorApi, type VeloClient, type VeloFlow } from '@/lib/velociraptor';
+import {
+  Crosshair, RefreshCw, Loader2, ExternalLink, ServerCog, MonitorSmartphone, Radio,
+  ChevronRight, ChevronDown, X, Search, Play, CheckCircle2, Table2,
+} from 'lucide-react';
+import {
+  velociraptorApi, type VeloClient, type VeloFlow, type VeloArtifact, type VeloResultSource,
+} from '@/lib/velociraptor';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
-// Velociraptor considera "en línea" a un cliente visto hace poco. last_seen_at
-// viene en microsegundos desde epoch.
 const ONLINE_WINDOW_US = 5 * 60 * 1_000_000; // 5 min
 function isOnline(c: VeloClient): boolean {
   if (!c.last_seen_at) return false;
@@ -32,27 +37,35 @@ function flowColor(state: string): string {
   if (s === 'ERROR') return '#dc2626';
   return '#6b7280';
 }
+function cellText(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
 
 export default function Velociraptor() {
   const [clients, setClients] = useState<VeloClient[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
-  const [busy, setBusy] = useState<string | null>(null); // host en curso
-  const [result, setResult] = useState<Record<string, { url?: string; error?: string }>>({});
-  // Colecciones (flows) por cliente: se cargan al expandir la fila.
-  const [expanded, setExpanded] = useState<string | null>(null); // client_id expandido
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [flows, setFlows] = useState<Record<string, { loading: boolean; error?: string; items?: VeloFlow[] }>>({});
+  // Modales
+  const [collectFor, setCollectFor] = useState<VeloClient | null>(null);
+  const [resultsFor, setResultsFor] = useState<{ client: VeloClient; flow: VeloFlow } | null>(null);
+
+  const loadFlows = useCallback((clientId: string, force = false) => {
+    if (!force && (flows[clientId]?.items || flows[clientId]?.loading)) return;
+    setFlows((f) => ({ ...f, [clientId]: { loading: true } }));
+    velociraptorApi.flows(clientId)
+      .then((items) => setFlows((f) => ({ ...f, [clientId]: { loading: false, items } })))
+      .catch((e) => setFlows((f) => ({ ...f, [clientId]: { loading: false, error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudieron cargar las colecciones' } })));
+  }, [flows]);
 
   function toggleFlows(clientId: string) {
     if (expanded === clientId) { setExpanded(null); return; }
     setExpanded(clientId);
-    if (!flows[clientId]?.items && !flows[clientId]?.loading) {
-      setFlows((f) => ({ ...f, [clientId]: { loading: true } }));
-      velociraptorApi.flows(clientId)
-        .then((items) => setFlows((f) => ({ ...f, [clientId]: { loading: false, items } })))
-        .catch((e) => setFlows((f) => ({ ...f, [clientId]: { loading: false, error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudieron cargar las colecciones' } })));
-    }
+    loadFlows(clientId);
   }
 
   const seq = useRef(0);
@@ -74,19 +87,6 @@ export default function Velociraptor() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function investigar(host: string) {
-    setBusy(host);
-    setResult((r) => ({ ...r, [host]: {} }));
-    try {
-      const res = await velociraptorApi.collect(host);
-      setResult((r) => ({ ...r, [host]: { url: res.url } }));
-    } catch (e) {
-      setResult((r) => ({ ...r, [host]: { error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo lanzar la colección' } }));
-    } finally {
-      setBusy(null);
-    }
-  }
-
   const total = clients?.length ?? 0;
   const online = clients?.filter(isOnline).length ?? 0;
   const windows = clients?.filter(isWindows).length ?? 0;
@@ -102,31 +102,18 @@ export default function Velociraptor() {
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             <Crosshair className="h-6 w-6 text-neon" /> Velociraptor · DFIR
           </h1>
-          <p className="text-sm text-muted-foreground">Clientes forenses enrolados y su estado en vivo</p>
+          <p className="text-sm text-muted-foreground">Clientes forenses, colecciones y resultados</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
           <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
         </Button>
       </div>
 
-      {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-4">
-        <Card><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">Clientes</p>
-          <p className="text-2xl font-bold tabular-nums">{total}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">En línea</p>
-          <p className="text-2xl font-bold tabular-nums text-emerald-600">{online}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><MonitorSmartphone className="h-3.5 w-3.5" /> Windows</p>
-          <p className="text-2xl font-bold tabular-nums">{windows}</p>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><ServerCog className="h-3.5 w-3.5" /> Linux</p>
-          <p className="text-2xl font-bold tabular-nums">{linux}</p>
-        </CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Clientes</p><p className="text-2xl font-bold tabular-nums">{total}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">En línea</p><p className="text-2xl font-bold tabular-nums text-emerald-600">{online}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="flex items-center gap-1.5 text-xs text-muted-foreground"><MonitorSmartphone className="h-3.5 w-3.5" /> Windows</p><p className="text-2xl font-bold tabular-nums">{windows}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="flex items-center gap-1.5 text-xs text-muted-foreground"><ServerCog className="h-3.5 w-3.5" /> Linux</p><p className="text-2xl font-bold tabular-nums">{linux}</p></CardContent></Card>
       </div>
 
       {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
@@ -157,14 +144,12 @@ export default function Velociraptor() {
                 </thead>
                 <tbody>
                   {filtered.map((c) => {
-                    const on = isOnline(c);
-                    const r = result[c.host];
                     const fx = flows[c.client_id];
                     const isOpen = expanded === c.client_id;
+                    const on = isOnline(c);
                     return (
                       <Fragment key={c.client_id}>
-                        <tr className="cursor-pointer border-b border-border/30 last:border-0 hover:bg-secondary/40" onClick={() => toggleFlows(c.client_id)}
-                          title="Ver colecciones recientes">
+                        <tr className="cursor-pointer border-b border-border/30 last:border-0 hover:bg-secondary/40" onClick={() => toggleFlows(c.client_id)} title="Ver colecciones recientes">
                           <td className="px-2 py-2 text-muted-foreground">{isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</td>
                           <td className="whitespace-nowrap px-2 py-2">
                             <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: on ? '#059669' : '#9ca3af' }}>
@@ -176,19 +161,9 @@ export default function Velociraptor() {
                           <td className="px-2 py-2 font-mono text-[11px] text-muted-foreground">{c.client_id}</td>
                           <td className="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">{lastSeen(c)}</td>
                           <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex flex-col items-end gap-1">
-                              <Button size="sm" variant="outline" onClick={() => void investigar(c.host)} disabled={busy === c.host}
-                                title={`Lanza una colección forense en ${c.host}`}>
-                                {busy === c.host ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />} Investigar
-                              </Button>
-                              {r && (r.error ? (
-                                <span className="text-[11px] text-destructive">{r.error}</span>
-                              ) : r.url ? (
-                                <a href={r.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-neon hover:underline">
-                                  <ExternalLink className="h-3 w-3" /> ver evidencia
-                                </a>
-                              ) : null)}
-                            </div>
+                            <Button size="sm" variant="outline" onClick={() => setCollectFor(c)} title={`Lanzar una colección en ${c.host}`}>
+                              <Crosshair className="h-4 w-4" /> Recolectar
+                            </Button>
                           </td>
                         </tr>
                         {isOpen && (
@@ -210,23 +185,27 @@ export default function Velociraptor() {
                                       <th className="py-1 pr-3 font-medium">Fecha</th>
                                       <th className="py-1 pr-3 font-medium">Filas</th>
                                       <th className="py-1 pr-3 font-medium">Lanzado por</th>
-                                      <th className="py-1 pr-3 font-medium"></th>
+                                      <th className="py-1 pr-3 font-medium text-right">Resultados</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {fx.items.map((fl) => (
                                       <tr key={fl.flow_id} className="border-t border-border/30">
                                         <td className="py-1.5 pr-3">{fl.artifacts || '—'}</td>
-                                        <td className="py-1.5 pr-3">
-                                          <span style={{ color: flowColor(fl.state) }}>{fl.state}</span>
-                                        </td>
+                                        <td className="py-1.5 pr-3"><span style={{ color: flowColor(fl.state) }}>{fl.state}</span></td>
                                         <td className="whitespace-nowrap py-1.5 pr-3 text-muted-foreground">{fl.created ? new Date(fl.created).toLocaleString('es-CO') : '—'}</td>
                                         <td className="py-1.5 pr-3 tabular-nums text-muted-foreground">{fl.rows ?? 0}</td>
                                         <td className="py-1.5 pr-3 text-muted-foreground">{fl.creator || '—'}</td>
                                         <td className="py-1.5 pr-3 text-right">
-                                          <a href={fl.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-neon hover:underline">
-                                            <ExternalLink className="h-3 w-3" /> ver
-                                          </a>
+                                          <div className="flex items-center justify-end gap-2">
+                                            <button onClick={() => setResultsFor({ client: c, flow: fl })} disabled={!fl.rows}
+                                              className="inline-flex items-center gap-1 text-neon hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground/40" title="Ver resultados en HexWatch">
+                                              <Table2 className="h-3 w-3" /> ver detalle
+                                            </button>
+                                            <a href={fl.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground" title="Abrir en Velociraptor">
+                                              <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                          </div>
                                         </td>
                                       </tr>
                                     ))}
@@ -245,6 +224,161 @@ export default function Velociraptor() {
           )}
         </CardContent>
       </Card>
+
+      {collectFor && (
+        <CollectModal client={collectFor} onClose={() => setCollectFor(null)}
+          onLaunched={(clientId) => { loadFlows(clientId, true); }} />
+      )}
+      {resultsFor && (
+        <ResultsModal client={resultsFor.client} flow={resultsFor.flow} onClose={() => setResultsFor(null)} />
+      )}
+    </div>
+  );
+}
+
+/** Modal para lanzar una colección eligiendo el artefacto del catálogo. */
+function CollectModal({ client, onClose, onLaunched }: { client: VeloClient; onClose: () => void; onLaunched: (clientId: string) => void }) {
+  const [catalog, setCatalog] = useState<VeloArtifact[] | null>(null);
+  const [catErr, setCatErr] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [selected, setSelected] = useState('Generic.Client.Info');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ url?: string; error?: string } | null>(null);
+
+  useEffect(() => {
+    velociraptorApi.artifacts()
+      .then(setCatalog)
+      .catch((e) => setCatErr((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo cargar el catálogo'));
+  }, []);
+
+  const list = (catalog ?? []).filter((a) =>
+    !q || a.name.toLowerCase().includes(q.toLowerCase()) || a.description.toLowerCase().includes(q.toLowerCase())
+  ).slice(0, 200);
+
+  async function launch() {
+    setBusy(true); setResult(null);
+    try {
+      const res = await velociraptorApi.collect(client.host, selected);
+      setResult({ url: res.url });
+      onLaunched(client.client_id);
+    } catch (e) {
+      setResult({ error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo lanzar la colección' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+          <h3 className="font-semibold">Recolectar en <span className="font-mono text-sm">{client.host}</span></h3>
+          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+        </div>
+        <div className="space-y-3 overflow-hidden p-5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar artefacto (p. ej. Pslist, Users, Netstat)…" className="h-9 pl-8" />
+          </div>
+          <p className="text-[11px] text-muted-foreground">Seleccionado: <span className="font-mono text-foreground">{selected}</span></p>
+          <div className="max-h-[45vh] overflow-y-auto rounded-md border border-border/50">
+            {catErr ? (
+              <p className="p-4 text-sm text-amber-700">{catErr}</p>
+            ) : !catalog ? (
+              <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando catálogo…</p>
+            ) : list.length === 0 ? (
+              <p className="p-4 text-sm text-muted-foreground">Sin artefactos que coincidan.</p>
+            ) : (
+              list.map((a) => (
+                <button key={a.name} onClick={() => setSelected(a.name)}
+                  className={`block w-full border-b border-border/30 px-3 py-2 text-left last:border-0 hover:bg-secondary/50 ${selected === a.name ? 'bg-secondary' : ''}`}>
+                  <p className="font-mono text-xs">{a.name}</p>
+                  {a.description && <p className="truncate text-[11px] text-muted-foreground">{a.description}</p>}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 px-5 py-3">
+          <div className="text-[11px]">
+            {result && (result.error ? (
+              <span className="text-destructive">{result.error}</span>
+            ) : result.url ? (
+              <a href={result.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-600 hover:underline">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Colección lanzada · ver en Velociraptor
+              </a>
+            ) : null)}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={busy}>Cerrar</Button>
+            <Button onClick={() => void launch()} disabled={busy || !selected}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Lanzar colección
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Modal con el detalle de resultados de una colección (tablas por fuente). */
+function ResultsModal({ client, flow, onClose }: { client: VeloClient; flow: VeloFlow; onClose: () => void }) {
+  const [sources, setSources] = useState<VeloResultSource[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    velociraptorApi.flowResults(client.client_id, flow.flow_id)
+      .then(setSources)
+      .catch((e) => setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudieron cargar los resultados'));
+  }, [client.client_id, flow.flow_id]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="flex max-h-[88vh] w-full max-w-5xl flex-col rounded-lg border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
+          <div>
+            <h3 className="font-semibold">Resultados · {flow.artifacts || flow.flow_id}</h3>
+            <p className="text-xs text-muted-foreground">{client.host} · <span className="font-mono">{flow.flow_id}</span></p>
+          </div>
+          <div className="flex items-center gap-2">
+            <a href={flow.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-neon hover:underline"><ExternalLink className="h-3.5 w-3.5" /> abrir en Velociraptor</a>
+            <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+          </div>
+        </div>
+        <div className="space-y-5 overflow-auto p-5">
+          {error ? (
+            <p className="text-sm text-amber-700">{error}</p>
+          ) : !sources ? (
+            <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando resultados…</p>
+          ) : sources.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Esta colección no tiene filas de resultados.</p>
+          ) : (
+            sources.map((src) => (
+              <div key={src.artifact}>
+                <p className="mb-2 text-sm font-semibold">{src.artifact} <span className="text-xs font-normal text-muted-foreground">· {src.count} fila(s){src.count >= 200 ? '+ (mostrando 200)' : ''}</span></p>
+                <div className="overflow-x-auto rounded-md border border-border/50">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/50 bg-secondary/30 text-left text-[11px] text-muted-foreground">
+                        {src.columns.map((col) => <th key={col} className="whitespace-nowrap px-2 py-1.5 font-medium">{col}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {src.rows.map((row, i) => (
+                        <tr key={i} className="border-b border-border/20 last:border-0 hover:bg-secondary/20">
+                          {src.columns.map((col) => (
+                            <td key={col} className="max-w-xs truncate px-2 py-1.5 font-mono text-[11px]" title={cellText(row[col])}>{cellText(row[col])}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
