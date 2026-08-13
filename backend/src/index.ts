@@ -52,6 +52,7 @@ import { riskRouter } from './modules/risk/risk.routes';
 import { velociraptorRouter } from './modules/velociraptor/velociraptor.routes';
 import { detectionRouter } from './modules/detection/detection.routes';
 import { threatIntelRouter, startThreatIntelScheduler } from './modules/threatintel/threatintel.routes';
+import { correlationRouter } from './modules/correlation/correlation.routes';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -118,6 +119,7 @@ app.use('/api/risk', riskRouter);
 app.use('/api/velociraptor', velociraptorRouter);
 app.use('/api/detection', detectionRouter);
 app.use('/api/threatintel', threatIntelRouter);
+app.use('/api/correlation', correlationRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

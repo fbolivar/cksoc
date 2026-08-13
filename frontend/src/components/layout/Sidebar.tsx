@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Rss,
+  GitMerge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -60,6 +61,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
       { to: '/threat-intel', label: 'Threat Intelligence', icon: Rss, roles: ['admin', 'analista'] },
       { to: '/hunting', label: 'Threat Hunting', icon: Radar, roles: ['admin', 'analista'] },
+      { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert, roles: ['admin', 'analista'] },
       { to: '/velociraptor', label: 'Velociraptor (DFIR)', icon: Crosshair, roles: ['admin', 'analista'] },

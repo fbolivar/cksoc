@@ -39,6 +39,7 @@ const RiskBoard = lazy(() => import('@/pages/RiskBoard'));
 const Velociraptor = lazy(() => import('@/pages/Velociraptor'));
 const Detection = lazy(() => import('@/pages/Detection'));
 const ThreatIntel = lazy(() => import('@/pages/ThreatIntel'));
+const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -322,6 +323,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <ThreatIntel />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/correlacion"
+        element={
+          <Protected>
+            <AppLayout>
+              <CorrelationPage />
             </AppLayout>
           </Protected>
         }
