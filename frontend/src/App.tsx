@@ -41,6 +41,7 @@ const Detection = lazy(() => import('@/pages/Detection'));
 const ThreatIntel = lazy(() => import('@/pages/ThreatIntel'));
 const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 const Soar = lazy(() => import('@/pages/Soar'));
+const MitreCoverage = lazy(() => import('@/pages/MitreCoverage'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -344,6 +345,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Soar />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/cobertura-mitre"
+        element={
+          <Protected>
+            <AppLayout>
+              <MitreCoverage />
             </AppLayout>
           </Protected>
         }

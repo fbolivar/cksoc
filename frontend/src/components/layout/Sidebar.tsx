@@ -31,6 +31,7 @@ import {
   Rss,
   GitMerge,
   Workflow,
+  Grid3x3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -60,6 +61,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/alertas', label: 'Alertas', icon: ListFilter },
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
       { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
+      { to: '/cobertura-mitre', label: 'Cobertura MITRE', icon: Grid3x3, roles: ['admin', 'analista'] },
       { to: '/threat-intel', label: 'Threat Intelligence', icon: Rss, roles: ['admin', 'analista'] },
       { to: '/hunting', label: 'Threat Hunting', icon: Radar, roles: ['admin', 'analista'] },
       { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },

@@ -16,8 +16,25 @@ export interface MitreData {
   techniques: MitreTechnique[];
 }
 
+export interface TacticCoverage {
+  tactic: string;
+  total: number;
+  detected: number;
+  coverage: number;
+  alerts: number;
+}
+export interface CoverageData {
+  days: number;
+  tacticsTotal: number;
+  tacticsCovered: number;
+  tacticsBlind: number;
+  techniquesDetected: number;
+  tactics: TacticCoverage[];
+}
+
 export const mitreApi = {
   get: (hours: number) => api.get<MitreData>('/mitre', { params: { hours } }).then((r) => r.data),
+  coverage: (days: number) => api.get<CoverageData>('/mitre/coverage', { params: { days } }).then((r) => r.data),
 };
 
 /** Orden canonico de tacticas ATT&CK Enterprise (kill chain). */
