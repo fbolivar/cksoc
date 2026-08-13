@@ -30,6 +30,7 @@ import {
   SlidersHorizontal,
   Rss,
   GitMerge,
+  Workflow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -66,7 +67,8 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert, roles: ['admin', 'analista'] },
       { to: '/velociraptor', label: 'Velociraptor (DFIR)', icon: Crosshair, roles: ['admin', 'analista'] },
       { to: '/deteccion', label: 'Detecciones', icon: SlidersHorizontal, roles: ['admin', 'analista'] },
-      { to: '/playbooks', label: 'Playbooks (SOAR)', icon: Zap, roles: ['admin', 'analista'] },
+      { to: '/soar', label: 'Automatización (SOAR)', icon: Workflow, roles: ['admin', 'analista'] },
+      { to: '/playbooks', label: 'Playbooks', icon: Zap, roles: ['admin', 'analista'] },
     ],
   },
   {

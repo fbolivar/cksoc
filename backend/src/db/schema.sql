@@ -347,3 +347,37 @@ CREATE TABLE IF NOT EXISTS ioc_feeds (
     last_count  INTEGER NOT NULL DEFAULT 0,
     last_status VARCHAR(255)
 );
+
+-- =====================================================================
+-- SOAR: reglas de respuesta automatizada y su registro de ejecuciones.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS automation_rules (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name           VARCHAR(160) NOT NULL,
+    enabled        BOOLEAN NOT NULL DEFAULT TRUE,
+    trigger_type   VARCHAR(32) NOT NULL,               -- ioc_ip_match | rule_level | rule_id
+    trigger_config JSONB NOT NULL DEFAULT '{}'::jsonb, -- {minLevel, group, ruleId}
+    action         VARCHAR(32) NOT NULL,               -- block_ip | isolate_host | create_incident
+    mode           VARCHAR(16) NOT NULL DEFAULT 'approval', -- auto | approval
+    dry_run        BOOLEAN NOT NULL DEFAULT FALSE,
+    cooldown_min   INTEGER NOT NULL DEFAULT 60,
+    created_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+    last_triggered_at TIMESTAMPTZ,
+    trigger_count  INTEGER NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS automation_events (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    rule_id      UUID REFERENCES automation_rules(id) ON DELETE CASCADE,
+    rule_name    VARCHAR(160),
+    entity       VARCHAR(255) NOT NULL,     -- IP o host afectado
+    action       VARCHAR(32) NOT NULL,
+    status       VARCHAR(16) NOT NULL,      -- pending | executed | failed | skipped | rejected
+    detail       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    resolved_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_autoevents_rule_entity ON automation_events(rule_id, entity, created_at);
+CREATE INDEX IF NOT EXISTS idx_autoevents_status ON automation_events(status, created_at);

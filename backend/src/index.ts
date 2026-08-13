@@ -53,6 +53,7 @@ import { velociraptorRouter } from './modules/velociraptor/velociraptor.routes';
 import { detectionRouter } from './modules/detection/detection.routes';
 import { threatIntelRouter, startThreatIntelScheduler } from './modules/threatintel/threatintel.routes';
 import { correlationRouter } from './modules/correlation/correlation.routes';
+import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -120,6 +121,7 @@ app.use('/api/velociraptor', velociraptorRouter);
 app.use('/api/detection', detectionRouter);
 app.use('/api/threatintel', threatIntelRouter);
 app.use('/api/correlation', correlationRouter);
+app.use('/api/soar', soarRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {
@@ -203,6 +205,9 @@ startHealthMonitor();
 
 // Threat Intelligence: refresco diario de feeds de IOCs (03:15)
 startThreatIntelScheduler();
+
+// SOAR: motor de respuesta automatizada (evalúa reglas cada 3 min)
+startSoarScheduler();
 
 // Geolocalizacion (carga GeoLite2) + emisor de ataques en vivo
 void initGeoIp().then(() => startAttacksBroadcast(io));
