@@ -36,6 +36,7 @@ const SocMetrics = lazy(() => import('@/pages/SocMetrics'));
 const Hunt = lazy(() => import('@/pages/Hunt'));
 const Playbooks = lazy(() => import('@/pages/Playbooks'));
 const RiskBoard = lazy(() => import('@/pages/RiskBoard'));
+const Velociraptor = lazy(() => import('@/pages/Velociraptor'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -289,6 +290,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <RiskBoard />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/velociraptor"
+        element={
+          <Protected>
+            <AppLayout>
+              <Velociraptor />
             </AppLayout>
           </Protected>
         }
