@@ -28,12 +28,17 @@ moderno: **detectar → afinar → enriquecer → correlacionar → responder y 
 - **Correlación multi-fuente** — agrupa alertas por IP de origen para presentar
   **un caso** en vez de N alertas sueltas; detecta actividad vista por varias
   fuentes (FortiGate IPS + Wazuh) y permite crear un incidente unificado.
+- **Cobertura de Detección (MITRE ATT&CK)** — por táctica, cuántas técnicas
+  detectas frente al marco completo; revela los **puntos ciegos**.
 
 ### Respuesta y DFIR
 - **Incidentes/Casos** con bitácora, asignación y estados.
 - **Respuesta** — bloqueo semi-automático de IPs en **FortiGate** (lista blanca,
   reputación AbuseIPDB) desde alertas, incidentes, coincidencias de IOC o correlación.
-- **Playbooks (SOAR)**.
+- **SOAR / Automatización** — reglas que, ante condiciones (IP=IOC, nivel≥X, regla
+  específica), ejecutan una acción (bloquear IP / aislar host / crear incidente) de
+  forma automática o previa aprobación, con dry-run, cooldown y auditoría.
+- **Playbooks**.
 - **Velociraptor (DFIR)** — panel de clientes, lanzar artefactos, ver resultados y
   **contención de endpoint de 1 clic**: aislar / liberar host y triage rápido.
 
