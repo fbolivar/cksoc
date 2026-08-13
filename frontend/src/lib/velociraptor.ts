@@ -7,6 +7,17 @@ export interface VeloClient {
   system: string;
   release: string;
   last_seen_at?: number;
+  isolated?: boolean;
+}
+
+export type EndpointAction = 'isolate' | 'release' | 'triage';
+
+export interface VeloActionResult {
+  host: string;
+  client_id: string;
+  action: EndpointAction;
+  flow_id: string;
+  url: string;
 }
 
 export interface VeloCollectResult {
@@ -49,4 +60,6 @@ export const velociraptorApi = {
     api.get<{ sources: VeloResultSource[] }>(`/velociraptor/clients/${clientId}/flows/${flowId}/results`).then((r) => r.data.sources),
   collect: (host: string, artifact?: string) =>
     api.post<VeloCollectResult>('/velociraptor/collect', { host, artifact }).then((r) => r.data),
+  action: (host: string, action: EndpointAction) =>
+    api.post<VeloActionResult>('/velociraptor/action', { host, action }).then((r) => r.data),
 };

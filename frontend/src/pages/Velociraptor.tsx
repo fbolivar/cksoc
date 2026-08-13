@@ -9,11 +9,12 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import {
   Crosshair, RefreshCw, Loader2, ExternalLink, ServerCog, MonitorSmartphone, Radio,
-  ChevronRight, ChevronDown, X, Search, Play, CheckCircle2, Table2,
+  ChevronRight, ChevronDown, X, Search, Play, CheckCircle2, Table2, WifiOff, Wifi, Stethoscope,
 } from 'lucide-react';
 import {
-  velociraptorApi, type VeloClient, type VeloFlow, type VeloArtifact, type VeloResultSource,
+  velociraptorApi, type VeloClient, type VeloFlow, type VeloArtifact, type VeloResultSource, type EndpointAction,
 } from '@/lib/velociraptor';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,15 +45,32 @@ function cellText(v: unknown): string {
 }
 
 export default function Velociraptor() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [clients, setClients] = useState<VeloClient[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [flows, setFlows] = useState<Record<string, { loading: boolean; error?: string; items?: VeloFlow[] }>>({});
+  // Contención (aislar/liberar/triage) por host.
+  const [contain, setContain] = useState<Record<string, { busy?: EndpointAction; msg?: string; err?: string }>>({});
   // Modales
   const [collectFor, setCollectFor] = useState<VeloClient | null>(null);
   const [resultsFor, setResultsFor] = useState<{ client: VeloClient; flow: VeloFlow } | null>(null);
+
+  async function endpointAction(c: VeloClient, action: EndpointAction) {
+    if (action === 'isolate' && !confirm(`¿AISLAR ${c.host} de la red? Cortará todo su tráfico salvo Velociraptor (contención). Podrás liberarlo después.`)) return;
+    setContain((s) => ({ ...s, [c.host]: { busy: action } }));
+    try {
+      await velociraptorApi.action(c.host, action);
+      const msg = action === 'isolate' ? 'aislamiento enviado' : action === 'release' ? 'liberación enviada' : 'triage lanzado';
+      setContain((s) => ({ ...s, [c.host]: { msg } }));
+      if (action !== 'triage') setTimeout(() => void load(), 4000); // refresca el badge de aislado
+    } catch (e) {
+      setContain((s) => ({ ...s, [c.host]: { err: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo ejecutar la acción' } }));
+    }
+  }
 
   const loadFlows = useCallback((clientId: string, force = false) => {
     if (!force && (flows[clientId]?.items || flows[clientId]?.loading)) return;
@@ -156,14 +174,35 @@ export default function Velociraptor() {
                               <Radio className="h-3.5 w-3.5" /> {on ? 'En línea' : 'Desconectado'}
                             </span>
                           </td>
-                          <td className="px-2 py-2 font-medium">{c.host}</td>
+                          <td className="px-2 py-2 font-medium">
+                            {c.host}
+                            {c.isolated && <span className="ml-2 inline-flex items-center gap-1 rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600"><WifiOff className="h-3 w-3" /> aislado</span>}
+                          </td>
                           <td className="px-2 py-2 text-xs text-muted-foreground">{c.release || c.system}</td>
                           <td className="px-2 py-2 font-mono text-[11px] text-muted-foreground">{c.client_id}</td>
                           <td className="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">{lastSeen(c)}</td>
                           <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                            <Button size="sm" variant="outline" onClick={() => setCollectFor(c)} title={`Lanzar una colección en ${c.host}`}>
-                              <Crosshair className="h-4 w-4" /> Recolectar
-                            </Button>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <Button size="sm" variant="outline" onClick={() => setCollectFor(c)} title={`Lanzar una colección en ${c.host}`}>
+                                  <Crosshair className="h-4 w-4" /> Recolectar
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => void endpointAction(c, 'triage')} disabled={contain[c.host]?.busy === 'triage'} title="Triage rápido (procesos + red + info)">
+                                  {contain[c.host]?.busy === 'triage' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Stethoscope className="h-4 w-4" />} Triage
+                                </Button>
+                                {isAdmin && (c.isolated ? (
+                                  <Button size="sm" variant="outline" onClick={() => void endpointAction(c, 'release')} disabled={contain[c.host]?.busy === 'release'} title="Liberar el host de la cuarentena">
+                                    {contain[c.host]?.busy === 'release' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />} Liberar
+                                  </Button>
+                                ) : (
+                                  <Button size="sm" variant="destructive" onClick={() => void endpointAction(c, 'isolate')} disabled={contain[c.host]?.busy === 'isolate'} title="Aislar el host de la red (contención)">
+                                    {contain[c.host]?.busy === 'isolate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <WifiOff className="h-4 w-4" />} Aislar
+                                  </Button>
+                                ))}
+                              </div>
+                              {contain[c.host]?.msg && <span className="text-[11px] text-emerald-600">{contain[c.host]?.msg}</span>}
+                              {contain[c.host]?.err && <span className="text-[11px] text-destructive">{contain[c.host]?.err}</span>}
+                            </div>
                           </td>
                         </tr>
                         {isOpen && (

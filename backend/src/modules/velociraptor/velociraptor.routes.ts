@@ -74,6 +74,28 @@ velociraptorRouter.get('/clients/:clientId/flows/:flowId/results', requireRole('
   res.json(r); // { client_id, flow_id, sources: [{artifact, columns, count, rows}] }
 });
 
+// Contención de endpoint: aislar / liberar / triage rápido.
+// Aislar y liberar son disruptivos (cortan la red del host salvo Velociraptor):
+// solo admin. Triage (recolección) lo puede lanzar también un analista.
+velociraptorRouter.post('/action', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
+  const host = String(req.body?.host || '').trim();
+  const action = String(req.body?.action || '').trim();
+  if (!host || !/^[A-Za-z0-9._-]{1,120}$/.test(host)) { res.status(400).json({ error: 'host inválido' }); return; }
+  if (!['isolate', 'release', 'triage'].includes(action)) { res.status(400).json({ error: 'acción inválida' }); return; }
+  if ((action === 'isolate' || action === 'release') && req.user!.role !== 'admin') {
+    res.status(403).json({ error: 'Aislar/liberar un endpoint requiere rol admin' });
+    return;
+  }
+  const r = await runHelper(['action', host, action]);
+  if (r?.error) { res.status(502).json(r); return; }
+  void auditFromReq(req, {
+    actorId: req.user!.id, actorEmail: req.user!.email,
+    action: `velociraptor_${action}`, target: host, result: 'ok',
+    detail: { flow_id: r.flow_id, client_id: r.client_id },
+  });
+  res.json(r);
+});
+
 // Lanzar colección forense en un host.
 velociraptorRouter.post('/collect', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
   const host = String(req.body?.host || '').trim();
