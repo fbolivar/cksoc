@@ -42,6 +42,18 @@ velociraptorRouter.get('/clients', requireRole('admin', 'analista'), async (_req
   else res.status(502).json(r);
 });
 
+// Colecciones (flows) recientes de un cliente.
+velociraptorRouter.get('/clients/:clientId/flows', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
+  const clientId = String(req.params.clientId || '');
+  if (!/^C\.[0-9a-f]{6,32}$/i.test(clientId)) {
+    res.status(400).json({ error: 'client_id inválido' });
+    return;
+  }
+  const r = await runHelper(['flows', clientId]);
+  if (r?.error) { res.status(502).json(r); return; }
+  res.json(r); // { client_id, flows: [...] }
+});
+
 // Lanzar colección forense en un host.
 velociraptorRouter.post('/collect', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
   const host = String(req.body?.host || '').trim();

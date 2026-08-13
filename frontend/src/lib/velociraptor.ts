@@ -16,10 +16,22 @@ export interface VeloCollectResult {
   url: string;
 }
 
+export interface VeloFlow {
+  flow_id: string;
+  artifacts: string;
+  state: string; // RUNNING | FINISHED | ERROR
+  created: string; // ISO
+  rows: number;
+  creator: string;
+  url: string;
+}
+
 export const velociraptorApi = {
   status: () =>
     api.get<{ available: boolean; clients?: number; error?: string }>('/velociraptor/status').then((r) => r.data),
   clients: () => api.get<{ clients: VeloClient[] }>('/velociraptor/clients').then((r) => r.data.clients),
+  flows: (clientId: string) =>
+    api.get<{ flows: VeloFlow[] }>(`/velociraptor/clients/${clientId}/flows`).then((r) => r.data.flows),
   collect: (host: string) =>
     api.post<VeloCollectResult>('/velociraptor/collect', { host }).then((r) => r.data),
 };
