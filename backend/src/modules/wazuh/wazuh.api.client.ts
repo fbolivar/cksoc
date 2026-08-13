@@ -81,6 +81,53 @@ export async function wazuhApiGet<T = unknown>(
   }
 }
 
+/** GET de un archivo/recurso en crudo (para endpoints ?raw=true, p.ej. reglas). */
+export async function wazuhApiGetRaw(path: string): Promise<string> {
+  const c = baseClient();
+  const jwt = await getToken();
+  try {
+    const { data } = await c.get(path, {
+      headers: { Authorization: `Bearer ${jwt}` },
+      responseType: 'text',
+    });
+    return typeof data === 'string' ? data : JSON.stringify(data);
+  } catch (err) {
+    const e = err as { response?: { status: number } };
+    if (e.response?.status === 401) {
+      token = null;
+      const jwt2 = await getToken();
+      const { data } = await c.get(path, { headers: { Authorization: `Bearer ${jwt2}` }, responseType: 'text' });
+      return typeof data === 'string' ? data : JSON.stringify(data);
+    }
+    mapApiError(err);
+  }
+}
+
+/** Sube (overwrite) un archivo de reglas/decoders. La API valida la sintaxis. */
+export async function wazuhApiPutFile(path: string, content: string): Promise<{ error: number; message?: string; data?: unknown }> {
+  const c = baseClient();
+  const jwt = await getToken();
+  try {
+    const { data } = await c.put<{ error: number; message?: string; data?: unknown }>(path, content, {
+      headers: { Authorization: `Bearer ${jwt}`, 'Content-Type': 'application/octet-stream' },
+    });
+    return data;
+  } catch (err) {
+    mapApiError(err);
+  }
+}
+
+/** Reinicia el manager para que cargue los cambios de ruleset. */
+export async function wazuhApiRestart(): Promise<void> {
+  const c = baseClient();
+  const jwt = await getToken();
+  try {
+    await c.put('/manager/restart', undefined, { headers: { Authorization: `Bearer ${jwt}` } });
+  } catch (err) {
+    mapApiError(err);
+  }
+}
+
 function mapApiError(err: unknown): never {
   if (err instanceof HttpError) throw err;
   const e = err as { code?: string; response?: { status: number } };

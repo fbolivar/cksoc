@@ -37,6 +37,7 @@ const Hunt = lazy(() => import('@/pages/Hunt'));
 const Playbooks = lazy(() => import('@/pages/Playbooks'));
 const RiskBoard = lazy(() => import('@/pages/RiskBoard'));
 const Velociraptor = lazy(() => import('@/pages/Velociraptor'));
+const Detection = lazy(() => import('@/pages/Detection'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -300,6 +301,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Velociraptor />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/deteccion"
+        element={
+          <Protected>
+            <AppLayout>
+              <Detection />
             </AppLayout>
           </Protected>
         }
