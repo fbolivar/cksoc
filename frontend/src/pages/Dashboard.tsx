@@ -127,7 +127,7 @@ export default function Dashboard() {
       {/* Encabezado + controles */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Panel de seguridad</h1>
+          <h1 className="hw-mono text-2xl font-bold tracking-tight">Panel de seguridad</h1>
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             Postura de seguridad · Integración Wazuh
             <span

@@ -21,7 +21,7 @@ export default function Account() {
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+        <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight">
           <UserCircle className="h-6 w-6 text-neon" /> Mi cuenta
         </h1>
         <p className="text-sm text-muted-foreground">

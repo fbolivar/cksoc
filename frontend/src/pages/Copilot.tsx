@@ -84,7 +84,7 @@ export default function Copilot() {
     <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-3xl flex-col">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight">
             <Sparkles className="h-6 w-6 text-neon" /> Copiloto IA
           </h1>
           <p className="text-sm text-muted-foreground">Asistente de análisis con contexto en vivo del SOC</p>

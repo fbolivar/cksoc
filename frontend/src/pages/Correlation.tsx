@@ -83,7 +83,7 @@ export default function CorrelationPage() {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight">
             <GitMerge className="h-6 w-6 text-neon" /> Correlación
           </h1>
           <p className="text-sm text-muted-foreground">Casos agrupados por IP de origen — un caso, no N alertas sueltas</p>

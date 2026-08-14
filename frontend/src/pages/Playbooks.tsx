@@ -101,7 +101,7 @@ export default function Playbooks() {
     <div className="mx-auto max-w-5xl space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><Zap className="h-6 w-6 text-brand" /> Playbooks (SOAR)</h1>
+          <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight"><Zap className="h-6 w-6 text-brand" /> Playbooks (SOAR)</h1>
           <p className="text-sm text-muted-foreground">Respuesta automatizada — el SOC actúa solo ante ciertos patrones</p>
         </div>
         <Button onClick={() => setShowForm((s) => !s)}><Plus className="h-4 w-4" /> Nuevo playbook</Button>

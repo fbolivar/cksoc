@@ -77,7 +77,7 @@ export default function Soar() {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight">
             <Zap className="h-6 w-6 text-neon" /> SOAR · Respuesta automatizada
           </h1>
           <p className="text-sm text-muted-foreground">Reglas que actúan solas (o con tu aprobación) ante amenazas</p>

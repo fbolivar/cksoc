@@ -44,7 +44,7 @@ export default function SocMetrics() {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Métricas del SOC</h1>
+          <h1 className="hw-mono text-2xl font-bold tracking-tight">Métricas del SOC</h1>
           <p className="text-sm text-muted-foreground">Desempeño operativo sobre incidentes — MTTD, MTTA, MTTR y SLA</p>
         </div>
         <div className="flex gap-1">

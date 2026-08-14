@@ -32,7 +32,7 @@ export default function Management() {
   return (
     <div className="mx-auto max-w-6xl space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Gestión</h1>
+        <h1 className="hw-mono text-2xl font-bold tracking-tight">Gestión</h1>
         <p className="text-sm text-muted-foreground">Usuarios, agentes y configuración del sistema</p>
       </div>
 

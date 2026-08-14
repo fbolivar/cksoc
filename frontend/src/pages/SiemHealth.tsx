@@ -84,7 +84,7 @@ export default function SiemHealth() {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+          <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight">
             <HeartPulse className="h-6 w-6 text-neon" /> Salud del SIEM
           </h1>
           <p className="text-sm text-muted-foreground">

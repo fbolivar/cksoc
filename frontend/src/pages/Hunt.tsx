@@ -106,7 +106,7 @@ export default function Hunt() {
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+        <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight">
           <Crosshair className="h-6 w-6 text-brand" /> Threat Hunting
         </h1>
         <p className="text-sm text-muted-foreground">Caza de amenazas — busca en las alertas por campo, texto y tiempo</p>

@@ -70,7 +70,7 @@ export default function RiskBoard() {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><ShieldCheck className="h-6 w-6 text-brand" /> Riesgo · Ejecutivo</h1>
+          <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight"><ShieldCheck className="h-6 w-6 text-brand" /> Riesgo · Ejecutivo</h1>
           <p className="text-sm text-muted-foreground">Métricas técnicas traducidas a riesgo del negocio</p>
         </div>
         <button onClick={load} className="text-muted-foreground hover:text-foreground" title="Refrescar"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></button>

@@ -120,7 +120,7 @@ export default function Backups() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Respaldos</h1>
+        <h1 className="hw-mono text-2xl font-bold tracking-tight">Respaldos</h1>
         <p className="text-sm text-muted-foreground">
           Copias de seguridad de la base de datos en formato <span className="font-mono text-brand">.pnnc</span> · respaldo
           automático diario + creación manual
