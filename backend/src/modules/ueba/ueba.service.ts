@@ -115,9 +115,11 @@ const FAIL_GROUPS = ['authentication_failed', 'win_authentication_failed'];
 const USER_FIELDS = ['data.srcuser', 'data.dstuser', 'data.win.eventdata.targetUserName'];
 
 // Painless: ¿el @timestamp del doc cae fuera del horario laboral (hora Colombia)?
+// Nota: en el painless del Indexer (OpenSearch) getDayOfWeek() ya devuelve un
+// entero 1-7 (lun-dom); NO lleva .getValue() — eso lanzaría un error de runtime.
 const OFF_HOURS_SCRIPT =
   "int h = doc['@timestamp'].value.getHour(); int lh = ((h - 5) % 24 + 24) % 24;" +
-  " int dow = doc['@timestamp'].value.getDayOfWeek().getValue();" +
+  " int dow = doc['@timestamp'].value.getDayOfWeek();" +
   " boolean weekend = dow >= 6; if (weekend && !params.wknd) return true;" +
   " return lh < params.s || lh >= params.e;";
 
