@@ -32,9 +32,9 @@ function hostOf(url: string): string | null {
   } catch { return null; }
 }
 
-/** Parseo tolerante de una línea CSV con campos entre comillas. */
+/** Parseo tolerante de una línea CSV con campos entre comillas (sep. `","` o `", "`). */
 function csvCols(line: string): string[] {
-  return line.replace(/^"|"$/g, '').split('","').map((c) => c.trim());
+  return line.replace(/^"|"$/g, '').split(/",\s*"/).map((c) => c.trim());
 }
 
 export const FEEDS: FeedDef[] = [
