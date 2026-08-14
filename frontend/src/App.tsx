@@ -42,6 +42,7 @@ const ThreatIntel = lazy(() => import('@/pages/ThreatIntel'));
 const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 const Soar = lazy(() => import('@/pages/Soar'));
 const MitreCoverage = lazy(() => import('@/pages/MitreCoverage'));
+const Ueba = lazy(() => import('@/pages/Ueba'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -355,6 +356,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <MitreCoverage />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/comportamiento"
+        element={
+          <Protected>
+            <AppLayout>
+              <Ueba />
             </AppLayout>
           </Protected>
         }

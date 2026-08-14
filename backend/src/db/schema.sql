@@ -381,3 +381,45 @@ CREATE TABLE IF NOT EXISTS automation_events (
 );
 CREATE INDEX IF NOT EXISTS idx_autoevents_rule_entity ON automation_events(rule_id, entity, created_at);
 CREATE INDEX IF NOT EXISTS idx_autoevents_status ON automation_events(status, created_at);
+
+-- =====================================================================
+-- UEBA: analítica de comportamiento de usuarios/entidades. El motor
+-- construye una línea base por usuario (hosts, horario, países) y detecta
+-- desviaciones (host nuevo, fuera de horario, pico de fallos, viaje
+-- imposible, país nuevo). Agnóstico de la fuente: hoy Wazuh, mañana M365.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS ueba_anomalies (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    detector    VARCHAR(32)  NOT NULL,   -- new_host | off_hours | auth_failure_spike | impossible_travel | new_country
+    entity      VARCHAR(160) NOT NULL,   -- usuario/identidad
+    entity_type VARCHAR(16)  NOT NULL DEFAULT 'user',
+    severity    VARCHAR(16)  NOT NULL DEFAULT 'media',  -- baja | media | alta | critica
+    score       INTEGER      NOT NULL DEFAULT 0,
+    title       VARCHAR(240) NOT NULL,
+    summary     TEXT,
+    evidence    JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    source      VARCHAR(16)  NOT NULL DEFAULT 'wazuh',   -- wazuh | m365
+    status      VARCHAR(16)  NOT NULL DEFAULT 'open',    -- open | ack | dismissed
+    dedup_key   VARCHAR(320) NOT NULL UNIQUE,            -- detector|entity|discriminador de ventana
+    first_seen  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    last_seen   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    ack_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    ack_at      TIMESTAMPTZ,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ueba_status ON ueba_anomalies(status, last_seen DESC);
+CREATE INDEX IF NOT EXISTS idx_ueba_entity ON ueba_anomalies(entity, detector);
+
+-- Configuración del motor UEBA (una sola fila, id = TRUE).
+CREATE TABLE IF NOT EXISTS ueba_settings (
+    id             BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (id),
+    biz_start_hour SMALLINT NOT NULL DEFAULT 6,    -- inicio horario laboral (hora local Colombia)
+    biz_end_hour   SMALLINT NOT NULL DEFAULT 21,   -- fin horario laboral
+    include_weekend BOOLEAN NOT NULL DEFAULT FALSE, -- ¿el fin de semana cuenta como laboral?
+    lookback_days  SMALLINT NOT NULL DEFAULT 30,   -- ventana de línea base
+    recent_hours   SMALLINT NOT NULL DEFAULT 24,   -- ventana de detección
+    fail_threshold SMALLINT NOT NULL DEFAULT 8,    -- fallos de auth para marcar pico
+    impossible_kmh SMALLINT NOT NULL DEFAULT 900,  -- velocidad implícita para "viaje imposible"
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO ueba_settings (id) VALUES (TRUE) ON CONFLICT (id) DO NOTHING;

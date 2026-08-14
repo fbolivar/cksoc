@@ -54,6 +54,7 @@ import { detectionRouter } from './modules/detection/detection.routes';
 import { threatIntelRouter, startThreatIntelScheduler } from './modules/threatintel/threatintel.routes';
 import { correlationRouter } from './modules/correlation/correlation.routes';
 import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
+import { uebaRouter, startUebaScheduler } from './modules/ueba/ueba.routes';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -122,6 +123,7 @@ app.use('/api/detection', detectionRouter);
 app.use('/api/threatintel', threatIntelRouter);
 app.use('/api/correlation', correlationRouter);
 app.use('/api/soar', soarRouter);
+app.use('/api/ueba', uebaRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {
@@ -208,6 +210,9 @@ startThreatIntelScheduler();
 
 // SOAR: motor de respuesta automatizada (evalúa reglas cada 3 min)
 startSoarScheduler();
+
+// UEBA: motor de analítica de comportamiento (escanea cada 15 min)
+startUebaScheduler();
 
 // Geolocalizacion (carga GeoLite2) + emisor de ataques en vivo
 void initGeoIp().then(() => startAttacksBroadcast(io));
