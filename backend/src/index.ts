@@ -30,7 +30,7 @@ import { attacksRouter } from './modules/attacks/attacks.routes';
 import { responseRouter } from './modules/response/response.routes';
 import { healthRouter } from './modules/health/health.routes';
 import { startHealthMonitor } from './modules/health/health.monitor';
-import { vulnRouter } from './modules/vulnerabilities/vuln.routes';
+import { vulnRouter, startCveIntelScheduler } from './modules/vulnerabilities/vuln.routes';
 import { mitreRouter } from './modules/mitre/mitre.routes';
 import { scaRouter } from './modules/sca/sca.routes';
 import { fimRouter } from './modules/fim/fim.routes';
@@ -215,6 +215,9 @@ startSoarScheduler();
 
 // UEBA: motor de analítica de comportamiento (escanea cada 15 min)
 startUebaScheduler();
+
+// Inteligencia de CVEs (CISA KEV diario + EPSS cada 6 h) para priorizar vulns
+startCveIntelScheduler();
 
 // Geolocalizacion (carga GeoLite2) + emisor de ataques en vivo
 void initGeoIp().then(() => startAttacksBroadcast(io));

@@ -5,18 +5,35 @@
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { ShieldAlert, RefreshCw, Loader2, ExternalLink, Server, Package, Bug } from 'lucide-react';
-import { vulnApi, SEV_COLOR, SEV_LABEL, type VulnData, type VulnItem, type Severity } from '@/lib/vulnerabilities';
+import { ShieldAlert, RefreshCw, Loader2, ExternalLink, Server, Package, Bug, Flame, Target } from 'lucide-react';
+import { vulnApi, SEV_COLOR, SEV_LABEL, priorityBand, type VulnData, type VulnItem, type Severity, type IntelStatus } from '@/lib/vulnerabilities';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
+import { useAuth } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { KpiCard } from '@/components/shared/KpiCard';
 import { ExportButton } from '@/components/shared/ExportButton';
 
+/** Insignia de explotación activa (CISA KEV). */
+function KevBadge() {
+  return <span className="inline-flex items-center gap-1 rounded border border-rose-500/30 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700" title="En el catálogo CISA KEV: explotada activamente en el mundo"><Flame className="h-3 w-3" /> KEV</span>;
+}
+
+/** EPSS como porcentaje (probabilidad de explotación en 30 días). */
+function EpssTag({ epss }: { epss: number | null }) {
+  if (epss == null) return null;
+  const pct = Math.round(epss * 100);
+  const cls = pct >= 50 ? 'text-rose-700' : pct >= 10 ? 'text-orange-700' : 'text-muted-foreground';
+  return <span className={`text-[10px] font-medium ${cls}`} title="EPSS: probabilidad estimada de explotación en 30 días">EPSS {pct}%</span>;
+}
+
 const VULN_COLS: CsvCol<VulnItem>[] = [
   { label: 'CVE', get: (v) => v.cve },
   { label: 'Severidad', get: (v) => SEV_LABEL[v.severity] },
   { label: 'Score', get: (v) => v.score ?? '' },
+  { label: 'Prioridad', get: (v) => v.priority },
+  { label: 'KEV', get: (v) => (v.inKev ? 'Sí' : 'No') },
+  { label: 'EPSS', get: (v) => (v.epss != null ? `${Math.round(v.epss * 100)}%` : '') },
   { label: 'Paquete', get: (v) => v.packageName },
   { label: 'Versión', get: (v) => v.packageVersion },
   { label: 'Agente', get: (v) => v.agent },
@@ -39,8 +56,12 @@ function SevChip({ s }: { s: Severity }) {
 }
 
 export default function Vulnerabilities() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [data, setData] = useState<VulnData | null>(null);
+  const [intel, setIntel] = useState<IntelStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshingIntel, setRefreshingIntel] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -48,6 +69,7 @@ export default function Vulnerabilities() {
     setError(null);
     try {
       setData(await vulnApi.get());
+      vulnApi.intel().then(setIntel).catch(() => undefined);
     } catch (e) {
       setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudieron cargar las vulnerabilidades');
     } finally {
@@ -55,6 +77,13 @@ export default function Vulnerabilities() {
     }
   }
   useEffect(() => { load(); }, []);
+
+  async function refreshIntel() {
+    setRefreshingIntel(true);
+    try { setIntel(await vulnApi.refreshIntel()); await load(); }
+    catch (e) { setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo refrescar la inteligencia de CVEs'); }
+    finally { setRefreshingIntel(false); }
+  }
 
   const r = data?.resumen;
   const maxAgente = Math.max(1, ...(data?.porAgente ?? []).map((a) => a.total));
@@ -67,10 +96,21 @@ export default function Vulnerabilities() {
             <ShieldAlert className="h-6 w-6 text-neon" /> Vulnerabilidades
           </h1>
           <p className="text-sm text-muted-foreground">
-            CVEs detectados por el Vulnerability Detector de Wazuh en los activos monitoreados
+            CVEs detectados por Wazuh, <b>priorizados por riesgo real</b> con CISA KEV (explotación activa) y EPSS
           </p>
+          {intel && (
+            <p className="mt-1 text-[11px] text-muted-foreground/70">
+              Intel: {intel.kevCount.toLocaleString('es-CO')} CVEs en KEV · {intel.epssCount.toLocaleString('es-CO')} con EPSS
+              {intel.feeds.find((f) => f.name === 'cisa_kev')?.last_run_at ? ` · KEV act. ${new Date(intel.feeds.find((f) => f.name === 'cisa_kev')!.last_run_at!).toLocaleDateString('es-CO')}` : ''}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={refreshIntel} disabled={refreshingIntel} title="Refrescar CISA KEV + EPSS">
+              {refreshingIntel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Target className="h-4 w-4" />} Intel
+            </Button>
+          )}
           <ExportButton onExport={() => downloadCsv(`vulnerabilidades-${fileStamp()}.csv`, data?.items ?? [], VULN_COLS)} disabled={!data || data.items.length === 0} label="CSV" />
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
@@ -97,10 +137,66 @@ export default function Vulnerabilities() {
             <KpiCard label="Total" value={r.total} icon={Bug} />
             <KpiCard label="Críticas" value={r.critical} color={SEV_COLOR.Critical} icon={ShieldAlert} />
             <KpiCard label="Altas" value={r.high} color={SEV_COLOR.High} icon={ShieldAlert} />
-            <KpiCard label="Medias" value={r.medium} color={SEV_COLOR.Medium} icon={ShieldAlert} />
+            <KpiCard label="Explotadas (KEV)" value={r.kev} color="#dc2626" icon={Flame} />
             <KpiCard label="CVEs únicas" value={r.cves} icon={Bug} />
             <KpiCard label="Activos afectados" value={r.agentes} icon={Server} />
           </div>
+
+          {/* Priorización por riesgo real (KEV + EPSS + CVSS) */}
+          {data.priorizadas.length > 0 && (
+            <Card className={data.priorizadas.some((p) => p.inKev) ? 'border-rose-500/30' : ''}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                  <Target className="h-4 w-4 text-rose-500" /> Priorizadas por riesgo (empieza por aquí)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
+                        <th className="pb-2 pr-3 font-medium">Prioridad</th>
+                        <th className="pb-2 pr-3 font-medium">CVE</th>
+                        <th className="pb-2 pr-3 font-medium">Señales</th>
+                        <th className="pb-2 pr-3 font-medium">CVSS</th>
+                        <th className="pb-2 pr-3 font-medium">Activos</th>
+                        <th className="pb-2 font-medium">Descripción</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.priorizadas.map((p) => {
+                        const band = priorityBand(p.priority, p.inKev);
+                        return (
+                          <tr key={p.cve} className="border-b border-border/30 align-top last:border-0">
+                            <td className="py-2 pr-3">
+                              <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${band.cls}`}>{band.label}</span>
+                              <span className="ml-1 text-[10px] text-muted-foreground/60 tabular-nums">{p.priority}</span>
+                            </td>
+                            <td className="py-2 pr-3">
+                              <a href={`https://cti.wazuh.com/vulnerabilities/cves/${p.cve}`} target="_blank" rel="noreferrer" className="font-mono text-xs text-neon hover:underline">{p.cve}</a>
+                            </td>
+                            <td className="py-2 pr-3">
+                              <div className="flex items-center gap-1.5">
+                                <SevChip s={p.severity} />
+                                {p.inKev && <KevBadge />}
+                                <EpssTag epss={p.epss} />
+                              </div>
+                            </td>
+                            <td className="py-2 pr-3 tabular-nums text-muted-foreground">{p.score ?? '—'}</td>
+                            <td className="py-2 pr-3 tabular-nums text-muted-foreground">{p.agentes || p.instancias}</td>
+                            <td className="py-2 max-w-sm truncate text-xs text-muted-foreground" title={p.description}>{p.description}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground/70">
+                  Prioridad = CVSS + explotación activa (CISA KEV) + probabilidad EPSS. <b>KEV</b> = explotada hoy en el mundo → atender primero, aunque su CVSS no sea el más alto.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Distribucion por severidad */}
           <Card>
@@ -137,6 +233,8 @@ export default function Vulnerabilities() {
                         <a href={`https://cti.wazuh.com/vulnerabilities/cves/${c.cve}`} target="_blank" rel="noreferrer"
                           className="font-mono text-sm text-neon hover:underline">{c.cve}</a>
                         {c.score != null && <span className="text-[10px] text-muted-foreground">CVSS {c.score}</span>}
+                        {c.inKev && <KevBadge />}
+                        <EpssTag epss={c.epss} />
                       </div>
                       <p className="truncate text-[11px] text-muted-foreground">{c.description}</p>
                     </div>
@@ -180,6 +278,7 @@ export default function Vulnerabilities() {
                       <th className="pb-2 pr-3 font-medium">CVE</th>
                       <th className="pb-2 pr-3 font-medium">Sev.</th>
                       <th className="pb-2 pr-3 font-medium">CVSS</th>
+                      <th className="pb-2 pr-3 font-medium">Riesgo</th>
                       <th className="pb-2 pr-3 font-medium">Paquete</th>
                       <th className="pb-2 pr-3 font-medium">Activo</th>
                       <th className="pb-2 font-medium">Descripción</th>
@@ -196,6 +295,13 @@ export default function Vulnerabilities() {
                         </td>
                         <td className="py-2 pr-3"><SevChip s={v.severity} /></td>
                         <td className="py-2 pr-3 tabular-nums text-muted-foreground">{v.score ?? '—'}</td>
+                        <td className="py-2 pr-3">
+                          <div className="flex items-center gap-1.5">
+                            {v.inKev && <KevBadge />}
+                            <EpssTag epss={v.epss} />
+                            {!v.inKev && v.epss == null && <span className="text-[10px] text-muted-foreground/40">—</span>}
+                          </div>
+                        </td>
                         <td className="py-2 pr-3">
                           <span className="flex items-center gap-1 text-xs"><Package className="h-3 w-3 text-muted-foreground" />{v.packageName}</span>
                           <span className="text-[10px] text-muted-foreground/60">{v.packageVersion}</span>

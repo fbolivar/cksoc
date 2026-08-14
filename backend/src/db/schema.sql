@@ -423,3 +423,29 @@ CREATE TABLE IF NOT EXISTS ueba_settings (
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 INSERT INTO ueba_settings (id) VALUES (TRUE) ON CONFLICT (id) DO NOTHING;
+
+-- =====================================================================
+-- Inteligencia de CVEs: enriquece las vulnerabilidades detectadas por
+-- Wazuh con señales de EXPLOTACIÓN REAL para priorizar por riesgo:
+--   - CISA KEV: ¿la CVE está siendo explotada activamente en el mundo?
+--   - EPSS (FIRST.org): probabilidad (0-1) de explotación en 30 días.
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS cve_intel (
+    cve        VARCHAR(32) PRIMARY KEY,
+    in_kev     BOOLEAN NOT NULL DEFAULT FALSE,   -- en el catálogo CISA KEV
+    kev_name   TEXT,
+    kev_added  DATE,
+    kev_due    DATE,
+    epss       REAL,        -- probabilidad de explotación 0-1
+    epss_pct   REAL,        -- percentil 0-1
+    epss_at    TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_cve_intel_kev ON cve_intel(in_kev) WHERE in_kev = TRUE;
+
+CREATE TABLE IF NOT EXISTS cve_intel_feeds (
+    name        VARCHAR(40) PRIMARY KEY,   -- 'cisa_kev' | 'epss'
+    last_run_at TIMESTAMPTZ,
+    last_count  INTEGER NOT NULL DEFAULT 0,
+    last_status VARCHAR(255)
+);
