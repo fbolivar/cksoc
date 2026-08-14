@@ -230,10 +230,10 @@ export default function Alerts() {
     <div className="mx-auto max-w-7xl space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <ListFilter className="h-6 w-6 text-neon" /> Explorador de Alertas
+          <h1 className="hw-mono flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <ListFilter className="h-6 w-6 text-primary" /> EXPLORADOR DE ALERTAS
           </h1>
-          <p className="text-sm text-muted-foreground">Busca e inspecciona eventos individuales de Wazuh</p>
+          <p className="hw-mono text-[11px] tracking-wide text-muted-foreground">BUSCA E INSPECCIONA EVENTOS INDIVIDUALES DE WAZUH</p>
         </div>
         <div className="flex items-center gap-2">
           <RangeTabs value={range} onChange={(v) => { setPage(0); setRange(v); }} options={RANGE_24_7_30} />
@@ -245,8 +245,8 @@ export default function Alerts() {
       </div>
 
       {/* Filtros */}
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-2 p-3">
+      <div className="hud">
+        <div className="flex flex-wrap items-end gap-2">
           <select value={band} onChange={(e) => { setPage(0); setBand(e.target.value); }}
             className="h-9 rounded-md border border-input bg-background/60 px-2 text-sm">
             <option value="">Toda severidad</option>
@@ -264,16 +264,16 @@ export default function Alerts() {
             title="Muestra solo borrados de archivos en repositorios protegidos (regla 100210)">
             <ShieldAlert className="h-4 w-4" /> Borrados en repos
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
 
       {/* Resultados */}
       <Card>
         <CardContent className="p-0">
-          <div className="flex items-center justify-between border-b border-border/60 px-4 py-2 text-xs text-muted-foreground">
-            <span>{total.toLocaleString('es-CO')}{data?.capped ? '+' : ''} resultados</span>
+          <div className="hw-mono flex items-center justify-between border-b border-border/60 px-4 py-2 text-xs text-muted-foreground">
+            <span className="text-foreground/80">{total.toLocaleString('es-CO')}{data?.capped ? '+' : ''} <span className="text-muted-foreground">resultados</span></span>
             <span className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 0 || loading} onClick={() => setPage((p) => Math.max(0, p - 1))}><ChevronLeft className="h-4 w-4" /></Button>
               página {page + 1}{maxPage >= 0 ? ` / ${maxPage + 1}` : ''}
@@ -288,13 +288,13 @@ export default function Alerts() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-2 font-medium">Hora</th>
-                    <th className="px-2 py-2 font-medium">Severidad</th>
-                    <th className="px-2 py-2 font-medium">Regla</th>
-                    <th className="px-2 py-2 font-medium">Agente</th>
-                    <th className="px-2 py-2 font-medium">IP origen</th>
-                    <th className="px-2 py-2 font-medium">Descripción</th>
+                  <tr className="hw-mono border-b border-border/60 text-left text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                    <th className="px-4 py-2 font-semibold">Hora</th>
+                    <th className="px-2 py-2 font-semibold">Severidad</th>
+                    <th className="px-2 py-2 font-semibold">Regla</th>
+                    <th className="px-2 py-2 font-semibold">Agente</th>
+                    <th className="px-2 py-2 font-semibold">IP origen</th>
+                    <th className="px-2 py-2 font-semibold">Descripción</th>
                   </tr>
                 </thead>
                 <tbody>
