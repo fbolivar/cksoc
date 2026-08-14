@@ -49,53 +49,64 @@ interface Item {
 
 const sections: { title: string | null; items: Item[] }[] = [
   {
-    title: null,
+    title: 'Vista general',
     items: [
+      { to: '/', label: 'Command Center', icon: LayoutDashboard },
       { to: '/resumen', label: 'Resumen Ejecutivo', icon: Gauge },
-      { to: '/', label: 'Panel', icon: LayoutDashboard },
+      { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
       { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
       { to: '/riesgo', label: 'Riesgo · Ejecutivo', icon: ShieldCheck, roles: ['admin'] },
-      { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
+      { to: '/panel', label: 'Panel clásico', icon: Grid3x3 },
     ],
   },
   {
-    title: 'Amenazas',
+    title: 'Detectar',
     items: [
       { to: '/alertas', label: 'Alertas', icon: ListFilter },
-      { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
+      { to: '/deteccion', label: 'Detecciones', icon: SlidersHorizontal, roles: ['admin', 'analista'] },
       { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
       { to: '/cobertura-mitre', label: 'Cobertura MITRE', icon: Grid3x3, roles: ['admin', 'analista'] },
-      { to: '/threat-intel', label: 'Threat Intelligence', icon: Rss, roles: ['admin', 'analista'] },
-      { to: '/hunting', label: 'Threat Hunting', icon: Radar, roles: ['admin', 'analista'] },
-      { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },
       { to: '/comportamiento', label: 'Comportamiento (UEBA)', icon: UserSearch, roles: ['admin', 'analista'] },
-      { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
-      { to: '/respuesta', label: 'Respuesta', icon: ShieldAlert, roles: ['admin', 'analista'] },
+      { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },
+      { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
+    ],
+  },
+  {
+    title: 'Investigar',
+    items: [
+      { to: '/hunting', label: 'Threat Hunting', icon: Radar, roles: ['admin', 'analista'] },
+      { to: '/threat-intel', label: 'Threat Intelligence', icon: Rss, roles: ['admin', 'analista'] },
       { to: '/velociraptor', label: 'Velociraptor (DFIR)', icon: Crosshair, roles: ['admin', 'analista'] },
-      { to: '/deteccion', label: 'Detecciones', icon: SlidersHorizontal, roles: ['admin', 'analista'] },
+    ],
+  },
+  {
+    title: 'Responder',
+    items: [
+      { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
+      { to: '/respuesta', label: 'Respuesta · FortiGate', icon: ShieldAlert, roles: ['admin', 'analista'] },
       { to: '/soar', label: 'Automatización (SOAR)', icon: Workflow, roles: ['admin', 'analista'] },
       { to: '/playbooks', label: 'Playbooks', icon: Zap, roles: ['admin', 'analista'] },
     ],
   },
   {
-    title: 'Postura / Endpoints',
+    title: 'Postura',
     items: [
       { to: '/activos', label: 'Activos', icon: Server },
       { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug },
       { to: '/sca', label: 'Config. Assessment', icon: ClipboardCheck },
       { to: '/fim', label: 'Integridad (FIM)', icon: FileSearch },
       { to: '/hygiene', label: 'IT Hygiene', icon: Activity },
+      { to: '/cumplimiento', label: 'Cumplimiento', icon: Scale },
     ],
   },
   {
-    title: 'Cumplimiento',
-    items: [{ to: '/cumplimiento', label: 'Cumplimiento', icon: Scale }],
+    title: 'Reportes',
+    items: [{ to: '/reportes', label: 'Reportes', icon: FileBarChart }],
   },
   {
     title: 'Operación',
     items: [
       { to: '/notificaciones', label: 'Notificaciones', icon: BellRing },
-      { to: '/reportes', label: 'Reportes', icon: FileBarChart },
       { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse },
       { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, roles: ['admin'] },
       { to: '/auditoria', label: 'Auditoría', icon: ScrollText, roles: ['admin'] },
@@ -118,8 +129,9 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       {visibles.map((section, si) => (
         <div key={si} className="space-y-1">
           {section.title && (
-            <p className="px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/60">
+            <p className="hw-mono flex items-center gap-2 px-3 pb-1.5 pt-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-primary/80">
               {section.title}
+              <span className="h-px flex-1 bg-border" />
             </p>
           )}
           {section.items.map(({ to, label, icon: Icon }) => (

@@ -13,6 +13,7 @@ import Login from '@/pages/Login'; // eager: primera carga (publica)
 // Carga diferida por ruta: cada pagina es su propio chunk, se descarga solo al
 // visitarla. Reduce el bundle inicial (antes ~1 MB en un solo archivo).
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
+const CommandCenter = lazy(() => import('@/pages/CommandCenter'));
 const Overview = lazy(() => import('@/pages/Overview'));
 const AttackMap = lazy(() => import('@/pages/AttackMap'));
 const Alerts = lazy(() => import('@/pages/Alerts'));
@@ -63,6 +64,16 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route
         path="/"
+        element={
+          <Protected>
+            <AppLayout>
+              <CommandCenter />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/panel"
         element={
           <Protected>
             <AppLayout>
