@@ -12,6 +12,12 @@ import {
   Loader2,
   CalendarClock,
   FileText,
+  LineChart,
+  AlertTriangle,
+  ClipboardCheck,
+  Timer,
+  ShieldCheck,
+  ScrollText,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { reportsApi, type Report } from '@/lib/reports';
@@ -84,15 +90,39 @@ export default function Reports() {
     }
   }
 
+  const pick = (title: string, r: TimeRange, exec?: boolean) => {
+    if (exec && isAdmin) { setTab('ejecutivo'); return; }
+    setTab('tecnico'); setTitle(title); setRange(r);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const catalog: { icon: typeof FileText; col: string; title: string; desc: string; fmt: string; cadence: string; onClick: () => void }[] = [
+    { icon: LineChart, col: 'primary', title: 'Resumen ejecutivo', desc: 'KPIs y tendencia de riesgo para dirección, sin tecnicismos.', fmt: 'PDF', cadence: 'Semanal', onClick: () => pick('Resumen ejecutivo HexWatch', '7d', true) },
+    { icon: AlertTriangle, col: 'destructive', title: 'Vulnerabilidades priorizadas', desc: 'CVEs por riesgo real: CISA KEV + EPSS + CVSS.', fmt: 'PDF·CSV', cadence: 'Bajo demanda', onClick: () => pick('Vulnerabilidades priorizadas (KEV/EPSS)', '7d') },
+    { icon: ClipboardCheck, col: 'cyan', title: 'Cumplimiento', desc: 'Estado frente a ISO 27001 / PCI. Brechas y evidencia.', fmt: 'PDF', cadence: 'Mensual', onClick: () => pick('Reporte de cumplimiento', '30d') },
+    { icon: Timer, col: 'warn-orange', title: 'SLA & desempeño', desc: 'MTTA, MTTR y carga por analista del equipo.', fmt: 'PDF', cadence: 'Quincenal', onClick: () => pick('SLA y desempeño del SOC', '30d') },
+    { icon: ShieldCheck, col: 'primary', title: 'Cobertura MITRE ATT&CK', desc: 'Técnicas detectadas vs. el marco. Puntos ciegos.', fmt: 'PDF', cadence: 'Mensual', onClick: () => pick('Cobertura MITRE ATT&CK', '30d') },
+    { icon: ScrollText, col: 'success', title: 'Actividad & auditoría', desc: 'Bloqueos, aislamientos y accesos con trazabilidad.', fmt: 'PDF·CSV', cadence: 'Bajo demanda', onClick: () => pick('Actividad y auditoría del SOC', '7d') },
+  ];
+
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <FileBarChart className="h-6 w-6 text-neon" /> Reportes
+        <h1 className="hw-mono flex items-center gap-2 text-2xl font-bold tracking-tight">
+          <FileBarChart className="h-6 w-6 text-primary" /> REPORTES
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Genera y descarga reportes PDF de la postura de seguridad
-        </p>
+        <p className="hw-mono text-[11px] tracking-wide text-muted-foreground">GENERA // PROGRAMA // DESCARGA</p>
+      </div>
+
+      {/* Catálogo de reportes */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {catalog.map((c) => (
+          <button key={c.title} onClick={c.onClick} className="hud text-left transition-transform hover:-translate-y-0.5">
+            <span className="hw-clip mb-3 flex h-9 w-9 items-center justify-center" style={{ background: `hsl(var(--${c.col}) / .14)`, color: `hsl(var(--${c.col}))` }}><c.icon className="h-[18px] w-[18px]" /></span>
+            <h3 className="text-[14px] font-bold">{c.title}</h3>
+            <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{c.desc}</p>
+            <div className="hw-mono mt-3 flex items-center gap-2 text-[10px] text-foreground/70"><span className="bg-foreground/8 px-1.5 py-0.5">{c.fmt}</span>{c.cadence}</div>
+          </button>
+        ))}
       </div>
 
       {msg && (
