@@ -2,7 +2,7 @@
  * Barra superior HexWatch: fondo claro, título del módulo, cambio de tema
  * y menú de usuario con cierre de sesión.
  */
-import { LogOut, ShieldCheck, Menu } from 'lucide-react';
+import { LogOut, Menu, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -24,15 +24,16 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         <button onClick={onMenuClick} className="md:hidden text-muted-foreground hover:text-foreground" aria-label="Abrir menú">
           <Menu className="h-6 w-6" />
         </button>
-        <div className="hidden sm:flex items-center gap-2.5 min-w-0">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-primary">
-            <ShieldCheck className="h-5 w-5" />
-          </span>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold text-foreground">Centro de Operaciones de Seguridad</p>
-            <p className="text-[11px] text-muted-foreground">Monitoreo Wazuh · Tiempo real</p>
-          </div>
-        </div>
+        <span className="hw-mono hidden text-sm font-bold tracking-wide sm:block">HEX<span className="text-primary" style={{ textShadow: '0 0 12px hsl(var(--primary)/.5)' }}>WATCH</span></span>
+        <button
+          onClick={() => window.dispatchEvent(new Event('hw-open-palette'))}
+          className="hw-clip hw-mono flex min-w-[180px] items-center gap-2 border border-border bg-secondary/50 px-3 py-2 text-[12.5px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground sm:min-w-[240px]"
+          title="Buscar (Ctrl+K)"
+        >
+          <Search className="h-3.5 w-3.5" />
+          buscar // ejecutar
+          <span className="ml-auto bg-foreground/10 px-1.5 py-0.5 text-[10px]">CTRL K</span>
+        </button>
       </div>
 
       <div className="flex items-center gap-2.5">

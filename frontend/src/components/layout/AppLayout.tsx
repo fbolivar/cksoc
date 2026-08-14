@@ -3,6 +3,8 @@ import { Suspense, useState, type ReactNode } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { Sidebar, SidebarNav } from './Sidebar';
 import { Topbar } from './Topbar';
+import { CommandPalette } from './CommandPalette';
+import { CopilotDock } from './CopilotDock';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -50,6 +52,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </main>
         </div>
       </div>
+      <CommandPalette />
+      <CopilotDock />
     </div>
   );
 }
