@@ -5,7 +5,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AxiosError } from 'axios';
 import { Sparkles, Send, Loader2, Info, Trash2 } from 'lucide-react';
-import { copilotApi, type ChatMessage } from '@/lib/copilot';
+import { copilotApi, TOOL_LABEL, type ChatMessage } from '@/lib/copilot';
+
+type Msg = ChatMessage & { toolsUsed?: string[] };
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -51,7 +53,7 @@ function Markdownish({ text }: { text: string }) {
 
 export default function Copilot() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,8 +71,8 @@ export default function Copilot() {
     setInput('');
     setBusy(true);
     try {
-      const { reply } = await copilotApi.chat(msg, history);
-      setMessages((m) => [...m, { role: 'assistant', content: reply }]);
+      const { reply, toolsUsed } = await copilotApi.chat(msg, history);
+      setMessages((m) => [...m, { role: 'assistant', content: reply, toolsUsed }]);
     } catch (e) {
       const em = (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo obtener respuesta del copiloto';
       setError(em);
@@ -123,6 +125,11 @@ export default function Copilot() {
                   ? 'max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2 text-sm text-primary-foreground'
                   : 'max-w-[90%] rounded-2xl rounded-bl-sm border border-input bg-secondary/30 px-4 py-2.5'}>
                   {m.role === 'user' ? m.content : <Markdownish text={m.content} />}
+                  {m.role === 'assistant' && m.toolsUsed && m.toolsUsed.length > 0 && (
+                    <p className="mt-1.5 border-t border-input/50 pt-1.5 text-[10px] text-muted-foreground/70">
+                      🔧 consultó: {[...new Set(m.toolsUsed)].map((t) => TOOL_LABEL[t] ?? t).join(', ')}
+                    </p>
+                  )}
                 </div>
               </div>
             ))

@@ -9,7 +9,7 @@ import { requireRole } from '../../middleware/roles';
 import { auditFromReq } from '../audit/audit.service';
 import { HttpError } from '../auth/auth.service';
 import { logger } from '../../config/logger';
-import { isConfigured, chat, explain, summarizeIncident, type ChatMessage } from './copilot.service';
+import { isConfigured, chat, explain, triageAlert, summarizeIncident, type ChatMessage } from './copilot.service';
 
 export const copilotRouter = Router();
 copilotRouter.use(authenticate);
@@ -46,6 +46,13 @@ copilotRouter.post('/chat', requireRole('admin', 'analista'), copilotLimiter, as
 copilotRouter.post('/explain', requireRole('admin', 'analista'), copilotLimiter, async (req: Request, res: Response) => {
   try {
     const out = await explain(String(req.body?.text ?? ''));
+    res.json(out);
+  } catch (err) { handle(err, res); }
+});
+
+copilotRouter.post('/triage', requireRole('admin', 'analista'), copilotLimiter, async (req: Request, res: Response) => {
+  try {
+    const out = await triageAlert(String(req.body?.text ?? ''));
     res.json(out);
   } catch (err) { handle(err, res); }
 });

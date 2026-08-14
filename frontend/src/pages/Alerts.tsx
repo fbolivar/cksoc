@@ -5,11 +5,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink, ShieldAlert, Ban, CheckCircle2 } from 'lucide-react';
+import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink, ShieldAlert, Ban, CheckCircle2, Sparkles } from 'lucide-react';
 import { alertsApi, BAND_COLOR, BAND_LABEL, type AlertHit, type AlertFilters } from '@/lib/alerts';
 import { incidentsApi, type Severity } from '@/lib/incidents';
 import { responseApi } from '@/lib/response';
 import { velociraptorApi } from '@/lib/velociraptor';
+import { copilotApi } from '@/lib/copilot';
 import { useAuth } from '@/lib/auth';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent } from '@/components/ui/card';
@@ -78,6 +79,32 @@ export default function Alerts() {
   const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockResult, setBlockResult] = useState<{ ok?: boolean; error?: string } | null>(null);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiBusy, setAiBusy] = useState<null | 'explain' | 'triage'>(null);
+  const [aiText, setAiText] = useState<string | null>(null);
+
+  useEffect(() => { copilotApi.status().then((s) => setAiEnabled(s.enabled)).catch(() => setAiEnabled(false)); }, []);
+
+  // Pide al copiloto que explique o trie la alerta abierta en el panel de detalle.
+  async function askAi(kind: 'explain' | 'triage', hit: AlertHit, source: Record<string, unknown> | null) {
+    setAiBusy(kind);
+    setAiText(null);
+    const fullLog = source && typeof source.full_log === 'string' ? source.full_log : '';
+    const texto = [
+      `Regla Wazuh ${hit.ruleId} (nivel ${hit.level}): ${hit.description}.`,
+      `Agente: ${hit.agent}.`,
+      hit.srcip ? `IP origen: ${hit.srcip}.` : '',
+      hit.mitre.length ? `MITRE: ${hit.mitre.join(', ')}.` : '',
+      hit.groups.length ? `Grupos: ${hit.groups.join(', ')}.` : '',
+      fullLog ? `Log: ${fullLog.slice(0, 1500)}` : '',
+    ].filter(Boolean).join(' ');
+    try {
+      const { reply } = kind === 'explain' ? await copilotApi.explain(texto) : await copilotApi.triage(texto);
+      setAiText(reply);
+    } catch (e) {
+      setAiText(`⚠️ ${(e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo consultar el copiloto'}`);
+    } finally { setAiBusy(null); }
+  }
 
   // Bloquea en el FortiGate la IP origen del evento (crea la regla y registra la
   // accion enlazada a la alerta). Solo admin/analista; la lista blanca la aplica
@@ -149,6 +176,8 @@ export default function Alerts() {
     const my = ++detailSeq.current;
     setVeloResult(null);
     setBlockResult(null);
+    setAiText(null);
+    setAiBusy(null);
     setDetail({ hit, source: null });
     try {
       const source = await alertsApi.detail(hit.index, hit.id);
@@ -322,6 +351,26 @@ export default function Alerts() {
                 )}
                 {detail.hit.groups.length > 0 && (
                   <p className="mt-1 text-[10px] text-muted-foreground/70">grupos: {detail.hit.groups.join(', ')}</p>
+                )}
+                {aiEnabled && (
+                  <div className="mt-3 rounded-md border border-neon/20 bg-neon/[0.03] p-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground"><Sparkles className="h-3.5 w-3.5 text-neon" /> Asistente IA</span>
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => void askAi('explain', detail.hit, detail.source)} disabled={aiBusy !== null}>
+                        {aiBusy === 'explain' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Explicar
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-7" onClick={() => void askAi('triage', detail.hit, detail.source)} disabled={aiBusy !== null}>
+                        {aiBusy === 'triage' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Triaje
+                      </Button>
+                    </div>
+                    {aiText && (
+                      <div className="mt-2 space-y-1 whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">
+                        {aiText.split('\n').map((ln, i) => (
+                          <p key={i}>{ln.split(/(\*\*[^*]+\*\*)/).map((seg, j) => seg.startsWith('**') && seg.endsWith('**') ? <strong key={j}>{seg.slice(2, -2)}</strong> : seg)}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {canManage && (
                   <div className="mt-3 flex flex-col gap-2">

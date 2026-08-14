@@ -11,6 +11,9 @@ import axios from 'axios';
 import { env } from '../../config/env';
 import { query } from '../../config/db';
 import { getIndexerClient } from '../wazuh/wazuh.client';
+import { geolocate, isPublicIP } from '../geo/geoip.service';
+import { getVulnerabilities } from '../vulnerabilities/vuln.service';
+import { listAnomalies } from '../ueba/ueba.service';
 import { HttpError } from '../auth/auth.service';
 import { logger } from '../../config/logger';
 
@@ -24,37 +27,38 @@ const SYSTEM_BASE = `Eres el copiloto de seguridad de HexWatch, una plataforma S
 
 Reglas:
 - Responde SIEMPRE en español, claro y conciso, con tono de analista SOC senior.
-- Apóyate en el CONTEXTO DEL SOC que se te entrega. Si el contexto no alcanza para responder, dilo y sugiere qué revisar o qué dato falta; NO inventes IPs, hosts, reglas ni cifras.
+- Tienes HERRAMIENTAS para consultar datos en vivo del SOC (alertas, vulnerabilidades priorizadas, anomalías UEBA, incidentes, reputación de IP). Úsalas cuando necesites datos concretos en vez de suponer; puedes encadenar varias.
+- NO inventes IPs, hosts, reglas ni cifras. Si una herramienta no devuelve datos, dilo.
 - Cuando recomiendes acciones, sé concreto y prioriza (contención, investigación, siguiente paso), acorde a las capacidades de HexWatch (bloqueo en FortiGate, aislamiento con Velociraptor, supresión de falsos positivos, crear incidente).
 - No ejecutas acciones tú mismo: propones. El analista decide y actúa en la plataforma.
 - Formatea con listas y **negritas** cuando ayude a la legibilidad.`;
 
 // --- Cliente Anthropic (REST directo, sin SDK) ---
-async function callClaude(system: string, messages: ChatMessage[], maxTokens?: number): Promise<string> {
+interface ContentBlock { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown>; }
+interface ClaudeResponse { content: ContentBlock[]; stop_reason: string | null; }
+type AnyMessage = { role: 'user' | 'assistant'; content: string | unknown[] };
+
+async function callClaudeRaw(system: string, messages: AnyMessage[], tools?: unknown[], maxTokens?: number): Promise<ClaudeResponse> {
   if (!env.ANTHROPIC_API_KEY) {
     throw new HttpError(503, 'El copiloto no está configurado (falta ANTHROPIC_API_KEY).');
   }
   try {
-    const { data } = await axios.post(
-      `${env.ANTHROPIC_BASE_URL.replace(/\/$/, '')}/v1/messages`,
-      {
-        model: env.ANTHROPIC_MODEL,
-        max_tokens: maxTokens ?? env.COPILOT_MAX_TOKENS,
-        system,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    const body: Record<string, unknown> = {
+      model: env.ANTHROPIC_MODEL,
+      max_tokens: maxTokens ?? env.COPILOT_MAX_TOKENS,
+      system,
+      messages,
+    };
+    if (tools && tools.length) body.tools = tools;
+    const { data } = await axios.post(`${env.ANTHROPIC_BASE_URL.replace(/\/$/, '')}/v1/messages`, body, {
+      headers: {
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
       },
-      {
-        headers: {
-          'x-api-key': env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-        timeout: 60000,
-      }
-    );
-    const blocks: Array<{ type: string; text?: string }> = data?.content ?? [];
-    const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-    return text || '(respuesta vacía del modelo)';
+      timeout: 60000,
+    });
+    return { content: data?.content ?? [], stop_reason: data?.stop_reason ?? null };
   } catch (err) {
     if (axios.isAxiosError(err)) {
       const status = err.response?.status;
@@ -67,6 +71,110 @@ async function callClaude(system: string, messages: ChatMessage[], maxTokens?: n
     }
     throw err;
   }
+}
+
+function textOf(content: ContentBlock[]): string {
+  return content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+}
+
+/** Llamada simple sin herramientas (explicar, triaje). */
+async function callClaude(system: string, messages: ChatMessage[], maxTokens?: number): Promise<string> {
+  const res = await callClaudeRaw(system, messages, undefined, maxTokens);
+  return textOf(res.content) || '(respuesta vacía del modelo)';
+}
+
+// --- Herramientas (tool-use): consultan datos en vivo del SOC ---
+const TOOLS = [
+  { name: 'buscar_alertas', description: 'Busca alertas recientes en el SIEM. Filtra por horas hacia atrás, nivel mínimo de regla y/o texto.', input_schema: { type: 'object', properties: { horas: { type: 'integer', description: 'ventana hacia atrás (default 24)' }, min_nivel: { type: 'integer', description: 'nivel mínimo de regla Wazuh (default 7)' }, texto: { type: 'string', description: 'texto a buscar en descripción/log (opcional)' }, limite: { type: 'integer', description: 'máx. resultados (default 10)' } } } },
+  { name: 'top_vulnerabilidades', description: 'Vulnerabilidades priorizadas por riesgo real (CVSS + CISA KEV + EPSS).', input_schema: { type: 'object', properties: {} } },
+  { name: 'anomalias_ueba', description: 'Anomalías de comportamiento de usuarios abiertas (viaje imposible, host nuevo, fuera de horario, pico de fallos).', input_schema: { type: 'object', properties: {} } },
+  { name: 'incidentes_abiertos', description: 'Incidentes/casos abiertos o en curso.', input_schema: { type: 'object', properties: {} } },
+  { name: 'reputacion_ip', description: 'Reputación de una IP: si está en la lista de IOCs, geolocalización y cuántas alertas generó en 24h.', input_schema: { type: 'object', properties: { ip: { type: 'string' } }, required: ['ip'] } },
+];
+
+async function toolBuscarAlertas(input: Record<string, unknown>): Promise<string> {
+  const horas = Math.min(Math.max(Number(input.horas ?? 24), 1), 168);
+  const minNivel = Math.min(Math.max(Number(input.min_nivel ?? 7), 1), 16);
+  const limite = Math.min(Math.max(Number(input.limite ?? 10), 1), 25);
+  const texto = typeof input.texto === 'string' ? input.texto.trim() : '';
+  const filter: unknown[] = [{ range: { '@timestamp': { gte: `now-${horas}h` } } }, { range: { 'rule.level': { gte: minNivel } } }];
+  if (texto) filter.push({ multi_match: { query: texto, fields: ['rule.description', 'full_log', 'data.srcip', 'agent.name'] } });
+  const client = getIndexerClient();
+  const { data } = await client.post<{ hits: { total: { value: number }; hits: { _source: Record<string, unknown> }[] } }>(
+    `/${env.WAZUH_ALERTS_INDEX}/_search`,
+    { size: limite, sort: [{ 'rule.level': { order: 'desc' } }, { '@timestamp': { order: 'desc' } }], _source: ['@timestamp', 'rule.id', 'rule.level', 'rule.description', 'agent.name', 'data.srcip'], query: { bool: { filter } } }
+  );
+  const hits = data.hits.hits.map((h) => {
+    const s = h._source as { '@timestamp'?: string; rule?: { id?: string; level?: number; description?: string }; agent?: { name?: string }; data?: { srcip?: string } };
+    return { ts: s['@timestamp'], nivel: s.rule?.level, regla: s.rule?.id, desc: s.rule?.description, agente: s.agent?.name, srcip: s.data?.srcip };
+  });
+  return JSON.stringify({ total: data.hits.total.value, mostrando: hits.length, alertas: hits });
+}
+
+async function toolTopVulns(): Promise<string> {
+  const v = await getVulnerabilities();
+  return JSON.stringify({ enKev: v.resumen.kev, criticas: v.resumen.critical, priorizadas: v.priorizadas.slice(0, 10).map((p) => ({ cve: p.cve, prioridad: p.priority, cvss: p.score, kev: p.inKev, epss: p.epss, activos: p.agentes || p.instancias, desc: p.description?.slice(0, 120) })) });
+}
+
+async function toolUeba(): Promise<string> {
+  const rows = await listAnomalies({ status: 'open', days: 30 });
+  return JSON.stringify({ total: rows.length, anomalias: rows.slice(0, 15).map((a) => ({ tipo: a.detector, usuario: a.entity, severidad: a.severity, titulo: a.title })) });
+}
+
+async function toolIncidentes(): Promise<string> {
+  const rows = await query<{ id: string; title: string; severity: string; status: string; created_at: string }>(
+    "SELECT id, title, severity, status, created_at FROM incidents WHERE status IN ('abierto','en_curso') ORDER BY created_at DESC LIMIT 20"
+  ).catch(() => []);
+  return JSON.stringify({ total: rows.length, incidentes: rows.map((r) => ({ id: r.id, titulo: r.title, severidad: r.severity, estado: r.status, creado: r.created_at })) });
+}
+
+async function toolReputacionIp(input: Record<string, unknown>): Promise<string> {
+  const ip = String(input.ip ?? '').trim();
+  if (!ip) return JSON.stringify({ error: 'IP no indicada' });
+  const ioc = await query<{ source: string; description: string | null }>("SELECT source, description FROM iocs WHERE ioc_type='ip' AND value=$1 AND enabled=TRUE LIMIT 1", [ip]).catch(() => []);
+  const geo = isPublicIP(ip) ? geolocate(ip) : null;
+  let alertas24h = 0;
+  try {
+    const client = getIndexerClient();
+    const { data } = await client.post<{ count: number }>(`/${env.WAZUH_ALERTS_INDEX}/_count`, { query: { bool: { filter: [{ term: { 'data.srcip': ip } }, { range: { '@timestamp': { gte: 'now-24h' } } }] } } });
+    alertas24h = data.count ?? 0;
+  } catch { /* noop */ }
+  return JSON.stringify({ ip, publica: isPublicIP(ip), en_ioc: ioc.length > 0, ioc_fuente: ioc[0]?.source ?? null, pais: geo?.country ?? null, ciudad: geo?.city ?? null, alertas_24h: alertas24h });
+}
+
+const TOOL_HANDLERS: Record<string, (input: Record<string, unknown>) => Promise<string>> = {
+  buscar_alertas: toolBuscarAlertas,
+  top_vulnerabilidades: () => toolTopVulns(),
+  anomalias_ueba: () => toolUeba(),
+  incidentes_abiertos: () => toolIncidentes(),
+  reputacion_ip: toolReputacionIp,
+};
+
+/** Bucle agéntico: deja que el modelo use herramientas hasta dar la respuesta. */
+async function runAgentic(system: string, initial: AnyMessage[], maxRounds = 5): Promise<{ reply: string; toolsUsed: string[] }> {
+  const messages: AnyMessage[] = [...initial];
+  const toolsUsed: string[] = [];
+  for (let round = 0; round < maxRounds; round++) {
+    const res = await callClaudeRaw(system, messages, TOOLS);
+    if (res.stop_reason !== 'tool_use') {
+      return { reply: textOf(res.content) || '(sin respuesta)', toolsUsed };
+    }
+    messages.push({ role: 'assistant', content: res.content });
+    const results: unknown[] = [];
+    for (const block of res.content) {
+      if (block.type !== 'tool_use' || !block.name) continue;
+      toolsUsed.push(block.name);
+      const handler = TOOL_HANDLERS[block.name];
+      let out: string;
+      try { out = handler ? await handler(block.input ?? {}) : JSON.stringify({ error: 'herramienta desconocida' }); }
+      catch (e) { out = JSON.stringify({ error: e instanceof Error ? e.message : 'fallo en la herramienta' }); }
+      results.push({ type: 'tool_result', tool_use_id: block.id, content: out.slice(0, 6000) });
+    }
+    messages.push({ role: 'user', content: results });
+  }
+  // Se agotaron las rondas: pide una respuesta final sin herramientas.
+  const res = await callClaudeRaw(system, messages);
+  return { reply: textOf(res.content) || '(sin respuesta tras varias consultas)', toolsUsed };
 }
 
 // --- Snapshot en vivo del SOC (contexto) ---
@@ -136,16 +244,23 @@ export async function buildSnapshot(): Promise<string> {
 const MAX_HISTORY = 10;
 const MAX_INPUT = 4000;
 
-export async function chat(history: ChatMessage[], message: string): Promise<{ reply: string }> {
+export async function chat(history: ChatMessage[], message: string): Promise<{ reply: string; toolsUsed: string[] }> {
   const msg = String(message ?? '').trim().slice(0, MAX_INPUT);
   if (!msg) throw new HttpError(400, 'Mensaje vacío.');
   const snapshot = await buildSnapshot();
   const system = `${SYSTEM_BASE}\n\n---\n${snapshot}`;
-  const hist = (Array.isArray(history) ? history : [])
+  const hist: AnyMessage[] = (Array.isArray(history) ? history : [])
     .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .slice(-MAX_HISTORY)
     .map((m) => ({ role: m.role, content: String(m.content).slice(0, MAX_INPUT) }));
-  const reply = await callClaude(system, [...hist, { role: 'user', content: msg }]);
+  return runAgentic(system, [...hist, { role: 'user', content: msg }]);
+}
+
+export async function triageAlert(text: string): Promise<{ reply: string }> {
+  const t = String(text ?? '').trim().slice(0, MAX_INPUT);
+  if (!t) throw new HttpError(400, 'Falta la alerta a triar.');
+  const system = `${SYSTEM_BASE}\n\nTarea: haz el TRIAJE de esta alerta como un analista de nivel 1. Responde SOLO con esta estructura breve:\n**Veredicto**: (Verdadero positivo probable / Falso positivo probable / Requiere investigación)\n**Por qué**: 1-2 frases.\n**Severidad real**: (crítica/alta/media/baja) y si difiere del nivel de la regla, dilo.\n**Acción recomendada**: el siguiente paso concreto en HexWatch.`;
+  const reply = await callClaude(system, [{ role: 'user', content: t }], 500);
   return { reply };
 }
 
