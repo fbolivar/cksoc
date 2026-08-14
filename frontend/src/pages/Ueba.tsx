@@ -142,10 +142,10 @@ export default function Ueba() {
     <div className="mx-auto max-w-5xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <UserSearch className="h-6 w-6 text-neon" /> Comportamiento de usuarios · UEBA
+          <h1 className="hw-mono flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <UserSearch className="h-6 w-6 text-primary" /> COMPORTAMIENTO · UEBA
           </h1>
-          <p className="text-sm text-muted-foreground">Anomalías de inicio de sesión frente a la línea base de cada usuario</p>
+          <p className="hw-mono text-[11px] tracking-wide text-muted-foreground">ANOMALÍAS DE LOGIN FRENTE A LA LÍNEA BASE DE CADA USUARIO</p>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
@@ -190,13 +190,13 @@ export default function Ueba() {
 
       {/* KPIs por detector */}
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Abiertas</p><p className="text-2xl font-bold tabular-nums">{data.open}</p></CardContent></Card>
+        <Card className="border-l-2 border-l-primary/50"><CardContent className="p-3"><p className="hw-mono text-[10px] uppercase tracking-wider text-muted-foreground">Abiertas</p><p className="text-2xl font-bold tabular-nums">{data.open}</p></CardContent></Card>
         {counts.map(({ d, n }) => {
           const Icon = DETECTOR_ICON[d];
           return (
             <Card key={d} className="cursor-pointer hover:border-neon/40" onClick={() => setDetector(detector === d ? '' : d)}>
               <CardContent className="p-3">
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Icon className="h-3.5 w-3.5" /> {DETECTOR_ES[d]}</p>
+                <p className="hw-mono flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground"><Icon className="h-3.5 w-3.5" /> {DETECTOR_ES[d]}</p>
                 <p className={`text-2xl font-bold tabular-nums ${detector === d ? 'text-neon' : ''}`}>{n}</p>
               </CardContent>
             </Card>
