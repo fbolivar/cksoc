@@ -83,8 +83,15 @@ export async function getAssetRadar(): Promise<AssetRadar> {
     const v = vmap.get(a.name) ?? { critical: 0, high: 0 };
     const al = amap.get(a.name) ?? { count: 0, crit: 0, high: 0, max: 0 };
     const disconnected = a.status !== 'active';
-    let risk = v.critical * 6 + v.high * 1.6 + al.crit * 5 + al.high * 2 + al.max * 1.2 + (disconnected ? 18 : 0);
-    risk = Math.max(disconnected ? 14 : 2, Math.min(100, Math.round(risk)));
+    // Score compuesto y ACOTADO por factor (para que discrimine y no se sature):
+    //  exposición (vulns) + actividad de alertas alto/crítico en escala LOG (el
+    //  volumen crudo es ruidoso) + severidad máxima + castigo por punto ciego.
+    const vulnScore = Math.min(40, v.critical * 2.4 + v.high * 0.35);
+    const alertScore = Math.min(34, Math.log2(1 + al.crit) * 6.5 + Math.log2(1 + al.high) * 2.2);
+    const sevScore = Math.min(10, (al.max / 16) * 10);
+    const blind = disconnected ? 15 : 0;
+    let risk = Math.round(vulnScore + alertScore + sevScore + blind);
+    risk = Math.max(disconnected ? 12 : 2, Math.min(100, risk));
     return {
       name: a.name, category: categorize(a.name, a.os), risk, band: bandOf(risk, disconnected),
       criticalVulns: v.critical, highVulns: v.high, alerts24h: al.count, critAlerts: al.crit, maxLevel: al.max,
