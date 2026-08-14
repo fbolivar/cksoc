@@ -101,7 +101,7 @@ export default function ThreatIntel() {
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">IOCs totales</p><p className="text-2xl font-bold tabular-nums">{summary?.total ?? '—'}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">IPs maliciosas</p><p className="text-2xl font-bold tabular-nums">{summary?.byType?.ip ?? 0}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Dominios · URLs · Hashes</p><p className="text-2xl font-bold tabular-nums">{((summary?.byType?.domain ?? 0) + (summary?.byType?.url ?? 0) + (summary?.byType?.md5 ?? 0) + (summary?.byType?.sha1 ?? 0) + (summary?.byType?.sha256 ?? 0)).toLocaleString('es-CO')}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Coincidencias (24h)</p><p className="text-2xl font-bold tabular-nums text-rose-600">{matches?.length ?? '—'}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Feeds</p><p className="text-2xl font-bold tabular-nums">{summary?.feeds?.length ?? 0}</p></CardContent></Card>
       </div>
@@ -111,18 +111,19 @@ export default function ThreatIntel() {
         <CardContent className="p-0">
           <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
             <ShieldAlert className="h-4 w-4 text-rose-600" />
-            <span className="text-sm font-semibold">Coincidencias: IPs maliciosas vistas en tus alertas (24 h)</span>
+            <span className="text-sm font-semibold">Coincidencias: IOCs (IP, dominio, URL, hash) vistos en tus alertas (24 h)</span>
           </div>
           {!matches ? (
             <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando…</p>
           ) : matches.length === 0 ? (
-            <p className="py-8 text-center text-sm text-emerald-600">✓ Ninguna IP de tus alertas coincide con un IOC conocido. Todo limpio.</p>
+            <p className="py-8 text-center text-sm text-emerald-600">✓ Ningún indicador de tus alertas coincide con un IOC conocido. Todo limpio.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-2 font-medium">IP</th>
+                    <th className="px-4 py-2 font-medium">Tipo</th>
+                    <th className="px-2 py-2 font-medium">Indicador</th>
                     <th className="px-2 py-2 font-medium">Fuente IOC</th>
                     <th className="px-2 py-2 font-medium text-right">Alertas</th>
                     <th className="px-2 py-2 font-medium">Última vez</th>
@@ -134,8 +135,9 @@ export default function ThreatIntel() {
                   {matches.map((m) => {
                     const st = blocked[m.value];
                     return (
-                      <tr key={m.value} className="border-b border-border/30 last:border-0 bg-rose-500/[0.03] hover:bg-rose-500/[0.07]">
-                        <td className="whitespace-nowrap px-4 py-2 font-mono text-xs font-semibold">{m.value}</td>
+                      <tr key={`${m.type}-${m.value}`} className="border-b border-border/30 last:border-0 bg-rose-500/[0.03] hover:bg-rose-500/[0.07]">
+                        <td className="px-4 py-2"><span className="rounded border border-rose-500/30 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-rose-700">{m.type}</span></td>
+                        <td className="max-w-[16rem] truncate px-2 py-2 font-mono text-xs font-semibold" title={m.value}>{m.value}</td>
                         <td className="px-2 py-2 text-xs text-muted-foreground">{m.source}</td>
                         <td className="px-2 py-2 text-right font-semibold tabular-nums">{m.alertCount.toLocaleString('es-CO')}</td>
                         <td className="whitespace-nowrap px-2 py-2 text-xs text-muted-foreground">{m.lastSeen ? new Date(m.lastSeen).toLocaleString('es-CO') : '—'}</td>
@@ -143,8 +145,8 @@ export default function ThreatIntel() {
                         <td className="px-2 py-2 text-right">
                           <div className="flex flex-col items-end gap-1">
                             <div className="flex items-center gap-1">
-                              <Link to={`/alertas?srcip=${encodeURIComponent(m.value)}`} className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-neon hover:underline"><ExternalLink className="h-3 w-3" /> ver</Link>
-                              {canManage && (
+                              <Link to={m.type === 'ip' ? `/alertas?srcip=${encodeURIComponent(m.value)}` : `/alertas?q=${encodeURIComponent(m.value)}`} className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-neon hover:underline"><ExternalLink className="h-3 w-3" /> ver</Link>
+                              {canManage && m.type === 'ip' && (
                                 <Button size="sm" variant="destructive" onClick={() => void block(m.value, m.sampleRule)} disabled={st?.busy || st?.ok}>
                                   {st?.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear
                                 </Button>

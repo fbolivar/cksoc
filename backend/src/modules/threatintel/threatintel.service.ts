@@ -26,7 +26,7 @@ export interface Ioc {
 
 export interface IocMatch {
   value: string;
-  type: 'ip';
+  type: IocType;
   source: string;
   alertCount: number;
   lastSeen: string;
@@ -96,16 +96,26 @@ export async function refreshFeeds(): Promise<{ name: string; count: number; sta
     let count = 0;
     let status = 'ok';
     try {
-      const values = await fetchFeed(def);
-      if (values.length) {
-        await query(
-          `INSERT INTO iocs (ioc_type, value, source)
-           SELECT $1, LOWER(v), $2 FROM unnest($3::text[]) AS v
-           ON CONFLICT (ioc_type, value) DO UPDATE SET source = EXCLUDED.source, enabled = TRUE`,
-          [def.type, def.name, values]
-        );
+      const iocs = await fetchFeed(def);
+      // Agrupa por tipo (un feed puede traer varios) e inserta por lotes.
+      const byType = new Map<string, string[]>();
+      for (const it of iocs) {
+        const arr = byType.get(it.type) ?? [];
+        arr.push(it.value);
+        byType.set(it.type, arr);
       }
-      count = values.length;
+      for (const [type, vals] of byType) {
+        for (let i = 0; i < vals.length; i += 2000) {
+          const chunk = vals.slice(i, i + 2000);
+          await query(
+            `INSERT INTO iocs (ioc_type, value, source)
+             SELECT $1, v, $2 FROM unnest($3::text[]) AS v
+             ON CONFLICT (ioc_type, value) DO UPDATE SET source = EXCLUDED.source, enabled = TRUE`,
+            [type, def.name, chunk]
+          );
+        }
+      }
+      count = iocs.length;
     } catch (err) {
       status = err instanceof Error ? err.message.slice(0, 200) : 'error';
     }
@@ -121,55 +131,94 @@ export async function refreshFeeds(): Promise<{ name: string; count: number; sta
 }
 
 /** Cruza los IOCs de IP habilitados contra las IPs vistas en alertas (24h). */
-export async function getMatches(): Promise<IocMatch[]> {
-  const ipIocs = await query<{ value: string; source: string }>(
-    "SELECT value, source FROM iocs WHERE ioc_type = 'ip' AND enabled = TRUE"
-  );
-  if (ipIocs.length === 0) return [];
-  const srcMap = new Map(ipIocs.map((i) => [i.value, i.source]));
+interface AggBucket { key: string; doc_count: number; last: { value_as_string?: string }; rule: { hits: { hits: { _source: { rule?: { description?: string }; agent?: { name?: string } } }[] } } }
 
-  const client = getIndexerClient();
-  const { data } = await client.post<{
-    aggregations?: { ips: { buckets: { key: string; doc_count: number; last: { value_as_string?: string }; rule: { hits: { hits: { _source: { rule?: { description?: string }; agent?: { name?: string } } }[] } } }[] } };
-  }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
-    size: 0,
-    query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }, { exists: { field: 'data.srcip' } }] } },
-    aggs: {
-      ips: {
-        terms: { field: 'data.srcip', size: 3000 },
-        aggs: {
-          last: { max: { field: '@timestamp' } },
-          rule: { top_hits: { size: 1, _source: ['rule.description', 'agent.name'] } },
-        },
-      },
-    },
-  });
+/** Agrega los valores más vistos de un campo de alerta en 24h (o [] si el campo no existe). */
+async function aggField(field: string, size = 1500): Promise<AggBucket[]> {
+  try {
+    const client = getIndexerClient();
+    const { data } = await client.post<{ aggregations?: { v: { buckets: AggBucket[] } } }>(
+      `/${env.WAZUH_ALERTS_INDEX}/_search`,
+      {
+        size: 0,
+        query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }, { exists: { field } }] } },
+        aggs: { v: { terms: { field, size }, aggs: { last: { max: { field: '@timestamp' } }, rule: { top_hits: { size: 1, _source: ['rule.description', 'agent.name'] } } } } },
+      }
+    );
+    return data.aggregations?.v?.buckets ?? [];
+  } catch { return []; }
+}
+
+/**
+ * Cruza los IOCs habilitados contra los valores vistos en alertas (24h):
+ *   - IP     → data.srcip
+ *   - dominio→ data.dns.question.name, data.win.eventdata.queryName, data.dstname
+ *   - URL    → data.url
+ *   - hash   → syscheck.{sha256,sha1,md5}_after (FIM), data.win.eventdata.hashes
+ * La cobertura depende de la telemetría disponible (DNS/proxy/FIM/Sysmon).
+ */
+export async function getMatches(): Promise<IocMatch[]> {
+  const iocRows = await query<{ ioc_type: string; value: string; source: string }>(
+    "SELECT ioc_type, value, source FROM iocs WHERE enabled = TRUE"
+  );
+  if (iocRows.length === 0) return [];
+
+  // Mapas de búsqueda por familia de tipo.
+  const ipMap = new Map<string, string>();
+  const domainMap = new Map<string, string>();
+  const urlMap = new Map<string, string>();
+  const hashMap = new Map<string, { type: string; source: string }>();
+  for (const i of iocRows) {
+    if (i.ioc_type === 'ip') ipMap.set(i.value, i.source);
+    else if (i.ioc_type === 'domain') domainMap.set(i.value.toLowerCase(), i.source);
+    else if (i.ioc_type === 'url') urlMap.set(i.value, i.source);
+    else if (i.ioc_type === 'md5' || i.ioc_type === 'sha1' || i.ioc_type === 'sha256') hashMap.set(i.value.toLowerCase(), { type: i.ioc_type, source: i.source });
+  }
 
   const matches: IocMatch[] = [];
-  for (const b of data.aggregations?.ips?.buckets ?? []) {
-    const source = srcMap.get(b.key);
-    if (!source) continue;
+  const push = (b: AggBucket, type: IocType, source: string) => {
     const hit = b.rule.hits.hits[0]?._source;
-    matches.push({
-      value: b.key,
-      type: 'ip',
-      source,
-      alertCount: b.doc_count,
-      lastSeen: b.last.value_as_string ?? '',
-      sampleRule: hit?.rule?.description ?? '',
-      agent: hit?.agent?.name ?? '',
-    });
-  }
-  matches.sort((a, b) => b.alertCount - a.alertCount);
+    matches.push({ value: b.key, type, source, alertCount: b.doc_count, lastSeen: b.last.value_as_string ?? '', sampleRule: hit?.rule?.description ?? '', agent: hit?.agent?.name ?? '' });
+  };
 
-  // Actualiza estadísticas de coincidencia de los IOCs que dieron match.
-  if (matches.length) {
-    const hitValues = matches.map((m) => m.value);
+  // IPs (campo principal, muchos valores).
+  if (ipMap.size) for (const b of await aggField('data.srcip', 3000)) { const s = ipMap.get(b.key); if (s) push(b, 'ip', s); }
+
+  // Dominios.
+  if (domainMap.size) {
+    for (const field of ['data.dns.question.name', 'data.win.eventdata.queryName', 'data.dstname']) {
+      for (const b of await aggField(field)) { const s = domainMap.get(String(b.key).toLowerCase()); if (s) push(b, 'domain', s); }
+    }
+  }
+  // URLs.
+  if (urlMap.size) for (const b of await aggField('data.url')) { const s = urlMap.get(b.key); if (s) push(b, 'url', s); }
+
+  // Hashes (FIM + Sysmon).
+  if (hashMap.size) {
+    for (const field of ['syscheck.sha256_after', 'syscheck.sha1_after', 'syscheck.md5_after', 'data.win.eventdata.hashes']) {
+      for (const b of await aggField(field)) {
+        const info = hashMap.get(String(b.key).toLowerCase());
+        if (info) push(b, info.type as IocType, info.source);
+      }
+    }
+  }
+
+  // Dedup por (tipo+valor) conservando el mayor conteo, y ordena.
+  const dedup = new Map<string, IocMatch>();
+  for (const m of matches) {
+    const k = `${m.type}|${m.value}`;
+    const cur = dedup.get(k);
+    if (!cur || m.alertCount > cur.alertCount) dedup.set(k, m);
+  }
+  const out = [...dedup.values()].sort((a, b) => b.alertCount - a.alertCount);
+
+  // Actualiza estadísticas de coincidencia.
+  if (out.length) {
+    const values = [...new Set(out.map((m) => m.value))];
     await query(
-      `UPDATE iocs SET last_match_at = now(), match_count = match_count + 1
-       WHERE ioc_type = 'ip' AND value = ANY($1::text[])`,
-      [hitValues]
+      `UPDATE iocs SET last_match_at = now(), match_count = match_count + 1 WHERE value = ANY($1::text[]) AND enabled = TRUE`,
+      [values]
     ).catch(() => undefined);
   }
-  return matches;
+  return out;
 }

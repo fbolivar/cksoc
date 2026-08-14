@@ -25,7 +25,7 @@ export interface FeedStatus {
 
 export interface IocMatch {
   value: string;
-  type: 'ip';
+  type: IocType;
   source: string;
   alertCount: number;
   lastSeen: string;
