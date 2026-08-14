@@ -14,10 +14,28 @@ import { requireRole } from '../../middleware/roles';
 import {
   listIncidents, getIncident, createIncident, updateIncident, addComment, assignableUsers,
 } from './incidents.service';
+import { metrics, getPolicy, updatePolicy } from './sla.service';
 
 export const incidentsRouter = Router();
 incidentsRouter.use(authenticate);
 const manage = requireRole('admin', 'analista');
+
+incidentsRouter.get('/metrics', async (req: Request, res: Response) => {
+  try {
+    const days = req.query.days ? Number(req.query.days) : 90;
+    res.json(await metrics(days));
+  } catch {
+    res.status(500).json({ error: 'No se pudieron calcular las métricas' });
+  }
+});
+
+incidentsRouter.get('/sla', async (_req: Request, res: Response) => {
+  try { res.json({ policy: await getPolicy() }); } catch { res.status(500).json({ error: 'No se pudo leer la política SLA' }); }
+});
+
+incidentsRouter.put('/sla', requireRole('admin'), async (req: Request, res: Response) => {
+  try { res.json({ policy: await updatePolicy(req.body?.policy ?? []) }); } catch { res.status(500).json({ error: 'No se pudo actualizar la política SLA' }); }
+});
 
 const sevEnum = z.enum(['baja', 'media', 'alta', 'critica']);
 const statusEnum = z.enum(['abierto', 'en_curso', 'resuelto', 'cerrado']);

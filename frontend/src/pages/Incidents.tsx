@@ -4,8 +4,8 @@
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink, Ban, CheckCircle2 } from 'lucide-react';
-import { incidentsApi, SEV, ST, type IncidentListItem, type IncidentDetail, type Severity, type Status } from '@/lib/incidents';
+import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink, Ban, CheckCircle2, Timer, Gauge, AlertTriangle } from 'lucide-react';
+import { incidentsApi, SEV, ST, SLA_STATE, fmtDuration, type IncidentListItem, type IncidentDetail, type Severity, type Status, type CaseMetrics, type SlaState } from '@/lib/incidents';
 import { responseApi } from '@/lib/response';
 import { velociraptorApi } from '@/lib/velociraptor';
 import { useAuth } from '@/lib/auth';
@@ -34,10 +34,18 @@ function Chip({ color, label }: { color: string; label: string }) {
   return <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ background: `${color}22`, color }}>{label}</span>;
 }
 
+function SlaChip({ state }: { state: SlaState }) {
+  // 'met' (cumplido) es lo normal en cerrados: no lo mostramos para no saturar.
+  if (state === 'met') return null;
+  const s = SLA_STATE[state];
+  return <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.label}</span>;
+}
+
 export default function Incidents() {
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'analista';
   const [list, setList] = useState<IncidentListItem[] | null>(null);
+  const [metrics, setMetrics] = useState<CaseMetrics | null>(null);
   const [statusF, setStatusF] = useState('');
   const [sel, setSel] = useState<string | null>(null);
   const [detail, setDetail] = useState<IncidentDetail | null>(null);
@@ -86,6 +94,7 @@ export default function Incidents() {
     try { setList(await incidentsApi.list(statusF ? { status: statusF } : {})); }
     catch (e) { setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo cargar incidentes'); }
     finally { setLoading(false); }
+    incidentsApi.metrics().then(setMetrics).catch(() => undefined);
   }
   useEffect(() => { loadList(); /* eslint-disable-next-line */ }, [statusF]);
   useEffect(() => { if (canManage) incidentsApi.users().then(setUsers).catch(() => undefined); }, [canManage]);
@@ -135,6 +144,34 @@ export default function Incidents() {
 
       {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
 
+      {/* Métricas & SLA */}
+      {!sel && metrics && (
+        <>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <Card><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Timer className="h-3.5 w-3.5" /> MTTA (reconocer)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttaMinutes)}</p></CardContent></Card>
+            <Card><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Timer className="h-3.5 w-3.5" /> MTTR (resolver)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttrMinutes)}</p></CardContent></Card>
+            <Card><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /> MTTD (detectar)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttdMinutes)}</p></CardContent></Card>
+            <Card><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Gauge className="h-3.5 w-3.5" /> Cumplim. SLA</p><p className="text-xl font-bold tabular-nums">{metrics.sla.compliancePct != null ? `${metrics.sla.compliancePct}%` : '—'}</p></CardContent></Card>
+            <Card className={metrics.sla.openBreached > 0 ? 'border-rose-500/40' : ''}><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5" /> Incumplidos abiertos</p><p className={`text-xl font-bold tabular-nums ${metrics.sla.openBreached > 0 ? 'text-rose-600' : ''}`}>{metrics.sla.openBreached}</p></CardContent></Card>
+            <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Abiertos / cerrados (30d)</p><p className="text-xl font-bold tabular-nums">{metrics.counts.abierto + metrics.counts.en_curso} <span className="text-sm font-normal text-muted-foreground">/ {metrics.throughput.closed30d}</span></p></CardContent></Card>
+          </div>
+          {(metrics.workload.length > 0 || metrics.aging.some((a) => a.count > 0)) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card><CardContent className="p-3">
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Carga por analista (casos abiertos)</p>
+                {metrics.workload.length === 0 ? <p className="text-xs text-muted-foreground/60">Sin casos abiertos asignados.</p> : (
+                  <div className="space-y-1">{metrics.workload.map((w) => (<div key={w.assignee} className="flex items-center justify-between text-xs"><span className="flex items-center gap-1"><User className="h-3 w-3 text-muted-foreground" />{w.name}</span><span className="font-semibold tabular-nums">{w.open}</span></div>))}</div>
+                )}
+              </CardContent></Card>
+              <Card><CardContent className="p-3">
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Antigüedad de casos abiertos</p>
+                <div className="flex items-end gap-2">{metrics.aging.map((a) => (<div key={a.bucket} className="flex-1 text-center"><div className="text-lg font-bold tabular-nums">{a.count}</div><div className="text-[10px] text-muted-foreground">{a.bucket}</div></div>))}</div>
+              </CardContent></Card>
+            </div>
+          )}
+        </>
+      )}
+
       {/* Lista */}
       {!sel && (
         <>
@@ -158,6 +195,7 @@ export default function Incidents() {
                     <CardContent className="flex flex-wrap items-center gap-3 p-3">
                       <Chip color={SEV[i.severity].color} label={SEV[i.severity].label} />
                       <Chip color={ST[i.status].color} label={ST[i.status].label} />
+                      <SlaChip state={i.sla.state} />
                       <span className="flex-1 truncate text-sm font-medium">{i.title}</span>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         {i.assigneeName ? <><User className="h-3 w-3" />{i.assigneeName}</> : 'sin asignar'}
@@ -183,6 +221,10 @@ export default function Incidents() {
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <Chip color={SEV[detail.severity].color} label={SEV[detail.severity].label} />
                   <Chip color={ST[detail.status].color} label={ST[detail.status].label} />
+                  <SlaChip state={detail.sla.state} />
+                  {(detail.status === 'abierto' || detail.status === 'en_curso') && (
+                    <span className="text-[10px] text-muted-foreground/70">límite de resolución: {new Date(detail.sla.resolveDueAt).toLocaleString('es-CO')}</span>
+                  )}
                 </div>
                 <h2 className="text-lg font-semibold">{detail.title}</h2>
                 {detail.description && <p className="mt-1 text-sm text-muted-foreground">{detail.description}</p>}

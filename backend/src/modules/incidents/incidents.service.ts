@@ -3,6 +3,7 @@
  * resuelto/cerrado), asignacion, notas y timeline de eventos del sistema.
  */
 import { query } from '../../config/db';
+import { getPolicy, slaFor, type IncidentSla, type SlaPolicy } from './sla.service';
 
 export type Severity = 'baja' | 'media' | 'alta' | 'critica';
 export type Status = 'abierto' | 'en_curso' | 'resuelto' | 'cerrado';
@@ -22,6 +23,7 @@ export interface IncidentListItem {
   notes: number;
   createdAt: string;
   updatedAt: string;
+  sla: IncidentSla;
 }
 
 export interface IncidentNote {
@@ -46,6 +48,7 @@ interface ListRow {
   id: string; title: string; severity: Severity; status: Status;
   assignee_id: string | null; assignee_name: string | null; creator_name: string | null;
   notes: string; created_at: string; updated_at: string;
+  acknowledged_at: string | null; closed_at: string | null;
 }
 
 export async function listIncidents(f: { status?: string; severity?: string; assignee?: string; q?: string }): Promise<IncidentListItem[]> {
@@ -53,7 +56,7 @@ export async function listIncidents(f: { status?: string; severity?: string; ass
     `SELECT i.id, i.title, i.severity, i.status, i.assignee_id,
             ua.full_name AS assignee_name, uc.full_name AS creator_name,
             (SELECT count(*) FROM incident_notes n WHERE n.incident_id = i.id AND n.kind = 'comment') AS notes,
-            i.created_at, i.updated_at
+            i.created_at, i.updated_at, i.acknowledged_at, i.closed_at
        FROM incidents i
        LEFT JOIN users ua ON ua.id = i.assignee_id
        LEFT JOIN users uc ON uc.id = i.created_by
@@ -65,10 +68,13 @@ export async function listIncidents(f: { status?: string; severity?: string; ass
       LIMIT 200`,
     [f.status ?? null, f.severity ?? null, f.assignee ?? null, f.q ?? null]
   );
+  const policy = new Map<string, SlaPolicy>((await getPolicy()).map((p) => [p.severity, p]));
+  const now = Date.now();
   return rows.map((r) => ({
     id: r.id, title: r.title, severity: r.severity, status: r.status,
     assigneeId: r.assignee_id, assigneeName: r.assignee_name, creatorName: r.creator_name,
     notes: Number(r.notes), createdAt: r.created_at, updatedAt: r.updated_at,
+    sla: slaFor(r, policy, now),
   }));
 }
 
@@ -76,7 +82,7 @@ export async function getIncident(id: string): Promise<IncidentDetail | null> {
   const rows = await query<ListRow & { description: string | null; source: IncidentSource; created_by: string | null; closed_at: string | null }>(
     `SELECT i.id, i.title, i.description, i.severity, i.status, i.assignee_id,
             ua.full_name AS assignee_name, uc.full_name AS creator_name,
-            i.created_by, i.source, i.closed_at, i.created_at, i.updated_at,
+            i.created_by, i.source, i.closed_at, i.acknowledged_at, i.created_at, i.updated_at,
             0 AS notes
        FROM incidents i
        LEFT JOIN users ua ON ua.id = i.assignee_id
@@ -90,11 +96,13 @@ export async function getIncident(id: string): Promise<IncidentDetail | null> {
     `SELECT id, author_name, kind, note, created_at FROM incident_notes WHERE incident_id = $1 ORDER BY created_at ASC`,
     [id]
   );
+  const policy = new Map<string, SlaPolicy>((await getPolicy()).map((p) => [p.severity, p]));
   return {
     id: r.id, title: r.title, description: r.description, severity: r.severity, status: r.status,
     assigneeId: r.assignee_id, assigneeName: r.assignee_name, creatorName: r.creator_name,
     createdBy: r.created_by, source: r.source ?? {}, closedAt: r.closed_at,
     notes: 0, createdAt: r.created_at, updatedAt: r.updated_at,
+    sla: slaFor(r, policy),
     timeline: timeline.map((t) => ({ id: t.id, authorName: t.author_name, kind: t.kind, note: t.note, createdAt: t.created_at })),
   };
 }
@@ -153,6 +161,8 @@ export async function updateIncident(
     sysNotes.push(`Estado: ${cur.status} → ${patch.status}.`);
     if (CLOSED.includes(patch.status)) sets.push('closed_at = now()');
     else if (CLOSED.includes(cur.status)) sets.push('closed_at = NULL');
+    // El caso deja de estar "abierto" → primer reconocimiento (MTTA).
+    if (cur.status === 'abierto' && patch.status !== 'abierto') sets.push('acknowledged_at = COALESCE(acknowledged_at, now())');
   }
   if (patch.severity && patch.severity !== cur.severity) {
     sets.push(`severity = $${p++}`); params.push(patch.severity);
@@ -161,6 +171,7 @@ export async function updateIncident(
   if (patch.assigneeId !== undefined && patch.assigneeId !== cur.assignee_id) {
     sets.push(`assignee_id = $${p++}`); params.push(patch.assigneeId);
     if (patch.assigneeId) {
+      sets.push('acknowledged_at = COALESCE(acknowledged_at, now())'); // asignar = reconocer
       const name = (await query<{ full_name: string }>('SELECT full_name FROM users WHERE id = $1', [patch.assigneeId]))[0];
       sysNotes.push(`Asignado a ${name?.full_name ?? 'usuario'}.`);
     } else {

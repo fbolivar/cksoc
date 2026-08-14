@@ -449,3 +449,21 @@ CREATE TABLE IF NOT EXISTS cve_intel_feeds (
     last_count  INTEGER NOT NULL DEFAULT 0,
     last_status VARCHAR(255)
 );
+
+-- =====================================================================
+-- Madurez de casos: SLA por severidad + marca de reconocimiento para
+-- medir MTTA (time to acknowledge) y MTTR (time to resolve).
+-- =====================================================================
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS sla_policy (
+    severity        VARCHAR(10) PRIMARY KEY,   -- critica | alta | media | baja
+    ack_minutes     INTEGER NOT NULL,          -- objetivo de reconocimiento
+    resolve_minutes INTEGER NOT NULL           -- objetivo de resolución
+);
+INSERT INTO sla_policy (severity, ack_minutes, resolve_minutes) VALUES
+    ('critica', 15,  240),
+    ('alta',    30,  480),
+    ('media',   120, 1440),
+    ('baja',    480, 4320)
+ON CONFLICT (severity) DO NOTHING;
