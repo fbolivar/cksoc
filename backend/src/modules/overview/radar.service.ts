@@ -86,10 +86,10 @@ export async function getAssetRadar(): Promise<AssetRadar> {
     // Score compuesto y ACOTADO por factor (para que discrimine y no se sature):
     //  exposición (vulns) + actividad de alertas alto/crítico en escala LOG (el
     //  volumen crudo es ruidoso) + severidad máxima + castigo por punto ciego.
-    const vulnScore = Math.min(40, v.critical * 2.4 + v.high * 0.35);
-    const alertScore = Math.min(34, Math.log2(1 + al.crit) * 6.5 + Math.log2(1 + al.high) * 2.2);
-    const sevScore = Math.min(10, (al.max / 16) * 10);
-    const blind = disconnected ? 15 : 0;
+    const vulnScore = Math.min(50, v.critical * 1.3 + v.high * 0.3);
+    const alertScore = Math.min(30, Math.log2(1 + al.crit) * 6 + Math.log2(1 + al.high) * 2);
+    const sevScore = Math.min(8, (al.max / 16) * 8);
+    const blind = disconnected ? 12 : 0;
     let risk = Math.round(vulnScore + alertScore + sevScore + blind);
     risk = Math.max(disconnected ? 12 : 2, Math.min(100, risk));
     return {
