@@ -124,10 +124,10 @@ export default function Incidents() {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <Briefcase className="h-6 w-6 text-neon" /> Incidentes
+          <h1 className="hw-mono flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Briefcase className="h-6 w-6 text-primary" /> INCIDENTES
           </h1>
-          <p className="text-sm text-muted-foreground">Gestión y seguimiento de casos del SOC</p>
+          <p className="hw-mono text-[11px] tracking-wide text-muted-foreground">GESTIÓN Y SEGUIMIENTO DE CASOS DEL SOC</p>
         </div>
         <div className="flex items-center gap-2">
           {sel ? (
@@ -148,22 +148,22 @@ export default function Incidents() {
       {!sel && metrics && (
         <>
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <Card><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Timer className="h-3.5 w-3.5" /> MTTA (reconocer)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttaMinutes)}</p></CardContent></Card>
-            <Card><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Timer className="h-3.5 w-3.5" /> MTTR (resolver)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttrMinutes)}</p></CardContent></Card>
-            <Card><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Clock className="h-3.5 w-3.5" /> MTTD (detectar)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttdMinutes)}</p></CardContent></Card>
-            <Card><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><Gauge className="h-3.5 w-3.5" /> Cumplim. SLA</p><p className="text-xl font-bold tabular-nums">{metrics.sla.compliancePct != null ? `${metrics.sla.compliancePct}%` : '—'}</p></CardContent></Card>
-            <Card className={metrics.sla.openBreached > 0 ? 'border-rose-500/40' : ''}><CardContent className="p-3"><p className="flex items-center gap-1 text-xs text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5" /> Incumplidos abiertos</p><p className={`text-xl font-bold tabular-nums ${metrics.sla.openBreached > 0 ? 'text-rose-600' : ''}`}>{metrics.sla.openBreached}</p></CardContent></Card>
-            <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Abiertos / cerrados (30d)</p><p className="text-xl font-bold tabular-nums">{metrics.counts.abierto + metrics.counts.en_curso} <span className="text-sm font-normal text-muted-foreground">/ {metrics.throughput.closed30d}</span></p></CardContent></Card>
+            <Card className="border-l-2 border-l-primary/50"><CardContent className="p-3"><p className="hw-mono flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"><Timer className="h-3.5 w-3.5" /> MTTA (reconocer)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttaMinutes)}</p></CardContent></Card>
+            <Card className="border-l-2 border-l-primary/50"><CardContent className="p-3"><p className="hw-mono flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"><Timer className="h-3.5 w-3.5" /> MTTR (resolver)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttrMinutes)}</p></CardContent></Card>
+            <Card className="border-l-2 border-l-primary/50"><CardContent className="p-3"><p className="hw-mono flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"><Clock className="h-3.5 w-3.5" /> MTTD (detectar)</p><p className="text-xl font-bold tabular-nums">{fmtDuration(metrics.mttdMinutes)}</p></CardContent></Card>
+            <Card className="border-l-2 border-l-primary/50"><CardContent className="p-3"><p className="hw-mono flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"><Gauge className="h-3.5 w-3.5" /> Cumplim. SLA</p><p className="text-xl font-bold tabular-nums">{metrics.sla.compliancePct != null ? `${metrics.sla.compliancePct}%` : '—'}</p></CardContent></Card>
+            <Card className={metrics.sla.openBreached > 0 ? 'border-rose-500/40' : ''}><CardContent className="p-3"><p className="hw-mono flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5" /> Incumplidos abiertos</p><p className={`text-xl font-bold tabular-nums ${metrics.sla.openBreached > 0 ? 'text-rose-600' : ''}`}>{metrics.sla.openBreached}</p></CardContent></Card>
+            <Card className="border-l-2 border-l-primary/50"><CardContent className="p-3"><p className="text-xs text-muted-foreground">Abiertos / cerrados (30d)</p><p className="text-xl font-bold tabular-nums">{metrics.counts.abierto + metrics.counts.en_curso} <span className="text-sm font-normal text-muted-foreground">/ {metrics.throughput.closed30d}</span></p></CardContent></Card>
           </div>
           {(metrics.workload.length > 0 || metrics.aging.some((a) => a.count > 0)) && (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Card><CardContent className="p-3">
+              <Card className="border-l-2 border-l-primary/50"><CardContent className="p-3">
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">Carga por analista (casos abiertos)</p>
                 {metrics.workload.length === 0 ? <p className="text-xs text-muted-foreground/60">Sin casos abiertos asignados.</p> : (
                   <div className="space-y-1">{metrics.workload.map((w) => (<div key={w.assignee} className="flex items-center justify-between text-xs"><span className="flex items-center gap-1"><User className="h-3 w-3 text-muted-foreground" />{w.name}</span><span className="font-semibold tabular-nums">{w.open}</span></div>))}</div>
                 )}
               </CardContent></Card>
-              <Card><CardContent className="p-3">
+              <Card className="border-l-2 border-l-primary/50"><CardContent className="p-3">
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">Antigüedad de casos abiertos</p>
                 <div className="flex items-end gap-2">{metrics.aging.map((a) => (<div key={a.bucket} className="flex-1 text-center"><div className="text-lg font-bold tabular-nums">{a.count}</div><div className="text-[10px] text-muted-foreground">{a.bucket}</div></div>))}</div>
               </CardContent></Card>
