@@ -30,6 +30,13 @@ const FEED = [
   ['cyan', '31530', 'Múltiples conexiones bloqueadas (FortiGate)', 'FW-GVM'],
 ] as const;
 const SEDES: [string, number, number][] = [['Bogotá', .30, .55], ['Medellín', .26, .44], ['La Ceja', .28, .50], ['Entrerríos', .24, .40], ['Fómeque', .33, .58]];
+const SEDE_INFO: { name: string; region: string; rol?: string }[] = [
+  { name: 'Bogotá', region: 'Cundinamarca', rol: 'Principal' },
+  { name: 'Medellín', region: 'Antioquia' },
+  { name: 'La Ceja', region: 'Antioquia' },
+  { name: 'Entrerríos', region: 'Antioquia' },
+  { name: 'Fómeque', region: 'Cundinamarca' },
+];
 
 export default function CommandCenter() {
   const [d, setD] = useState<KpiData>(FALLBACK);
@@ -277,8 +284,25 @@ export default function CommandCenter() {
         <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
           <div className="hud hw-reveal" style={{ animationDelay: '.2s' }}>
             <div className="hw-chdr"><h3>Ubicaciones · sedes</h3><span className="sub">5 activas</span></div>
-            <div className="relative min-h-[230px]"><canvas ref={mapRef} className="block h-[230px] w-full" />
-              {SEDES.map((s) => <div className="hw-sede" key={s[0]} style={{ left: `${s[1] * 100}%`, top: `${s[2] * 100}%` }}><b /><span>{s[0]}</span></div>)}
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+              {SEDE_INFO.map((s) => (
+                <div key={s.name} className="hw-clip flex items-center gap-2.5 border border-border bg-secondary/20 p-2.5">
+                  <span className="hw-clip flex h-8 w-8 shrink-0 items-center justify-center bg-primary/12 text-primary"><Ico d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z M12 10a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z" /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-[13px] font-semibold">{s.name}</span>
+                      {s.rol && <span className="hw-mono rounded-[3px] bg-primary/12 px-1 text-[8.5px] uppercase tracking-wide text-primary">{s.rol}</span>}
+                    </div>
+                    <div className="hw-mono truncate text-[9.5px] uppercase tracking-wide text-muted-foreground">{s.region}</div>
+                  </div>
+                  <span className="hw-mono flex shrink-0 items-center gap-1 text-[9.5px] uppercase" style={{ color: 'hsl(var(--success))' }}>
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'currentColor', boxShadow: '0 0 6px currentColor' }} />activa
+                  </span>
+                </div>
+              ))}
+              <div className="hw-clip flex items-center justify-center gap-2 border border-dashed border-border/70 p-2.5 text-muted-foreground">
+                <Ico d="M12 5v14M5 12h14" /><span className="hw-mono text-[10px] uppercase tracking-wide">Agregar sede</span>
+              </div>
             </div>
           </div>
           <div className="flex flex-col gap-4">
