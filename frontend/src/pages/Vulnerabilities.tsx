@@ -92,8 +92,8 @@ export default function Vulnerabilities() {
     <div className="mx-auto max-w-7xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-            <ShieldAlert className="h-6 w-6 text-neon" /> Vulnerabilidades
+          <h1 className="hw-mono flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <ShieldAlert className="h-6 w-6 text-primary" /> VULNERABILIDADES
           </h1>
           <p className="text-sm text-muted-foreground">
             CVEs detectados por Wazuh, <b>priorizados por riesgo real</b> con CISA KEV (explotación activa) y EPSS
@@ -146,7 +146,7 @@ export default function Vulnerabilities() {
           {data.priorizadas.length > 0 && (
             <Card className={data.priorizadas.some((p) => p.inKev) ? 'border-rose-500/30' : ''}>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                <CardTitle className="hw-mono flex items-center gap-2 text-[13px] uppercase tracking-wide text-muted-foreground">
                   <Target className="h-4 w-4 text-rose-500" /> Priorizadas por riesgo (empieza por aquí)
                 </CardTitle>
               </CardHeader>
@@ -223,7 +223,7 @@ export default function Vulnerabilities() {
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Top CVE */}
             <Card>
-              <CardHeader><CardTitle className="text-muted-foreground">Top CVE (por activos afectados)</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="hw-mono text-[13px] uppercase tracking-wide text-muted-foreground">Top CVE (por activos afectados)</CardTitle></CardHeader>
               <CardContent className="space-y-2.5">
                 {data.topCve.map((c) => (
                   <div key={c.cve} className="flex items-start gap-2.5">
@@ -246,7 +246,7 @@ export default function Vulnerabilities() {
 
             {/* Por agente */}
             <Card>
-              <CardHeader><CardTitle className="text-muted-foreground">Vulnerabilidades por activo</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="hw-mono text-[13px] uppercase tracking-wide text-muted-foreground">Vulnerabilidades por activo</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {data.porAgente.map((a) => (
                   <div key={a.agent}>
@@ -269,7 +269,7 @@ export default function Vulnerabilities() {
 
           {/* Listado detallado */}
           <Card>
-            <CardHeader><CardTitle className="text-muted-foreground">Detalle de vulnerabilidades ({data.items.length})</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="hw-mono text-[13px] uppercase tracking-wide text-muted-foreground">Detalle de vulnerabilidades ({data.items.length})</CardTitle></CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
