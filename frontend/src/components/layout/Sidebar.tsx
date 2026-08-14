@@ -33,6 +33,7 @@ import {
   Workflow,
   Grid3x3,
   UserSearch,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -54,6 +55,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/', label: 'Panel', icon: LayoutDashboard },
       { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
       { to: '/riesgo', label: 'Riesgo · Ejecutivo', icon: ShieldCheck, roles: ['admin'] },
+      { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
     ],
   },
   {

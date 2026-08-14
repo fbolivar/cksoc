@@ -55,6 +55,7 @@ import { threatIntelRouter, startThreatIntelScheduler } from './modules/threatin
 import { correlationRouter } from './modules/correlation/correlation.routes';
 import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
 import { uebaRouter, startUebaScheduler } from './modules/ueba/ueba.routes';
+import { copilotRouter } from './modules/copilot/copilot.routes';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -124,6 +125,7 @@ app.use('/api/threatintel', threatIntelRouter);
 app.use('/api/correlation', correlationRouter);
 app.use('/api/soar', soarRouter);
 app.use('/api/ueba', uebaRouter);
+app.use('/api/copilot', copilotRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

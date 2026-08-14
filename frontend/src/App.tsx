@@ -43,6 +43,7 @@ const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 const Soar = lazy(() => import('@/pages/Soar'));
 const MitreCoverage = lazy(() => import('@/pages/MitreCoverage'));
 const Ueba = lazy(() => import('@/pages/Ueba'));
+const Copilot = lazy(() => import('@/pages/Copilot'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -366,6 +367,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Ueba />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/copiloto"
+        element={
+          <Protected>
+            <AppLayout>
+              <Copilot />
             </AppLayout>
           </Protected>
         }

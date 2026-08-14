@@ -117,6 +117,14 @@ const schema = z.object({
   HEALTH_ALERTFLOW_WINDOW_MIN: z.coerce.number().default(30),
   HEALTH_POLL_SECONDS: z.coerce.number().default(120),
   HEALTH_CRITICAL_PROCS: z.string().default('wazuh-analysisd,wazuh-remoted,wazuh-db,wazuh-modulesd'),
+
+  // --- Copiloto IA (Anthropic Claude) - opcional hasta tener API key ---
+  // OJO: al usar el copiloto se envía contexto del SOC a la API de Anthropic
+  // (nube). Sin API key, el módulo responde "no configurado" sin llamar afuera.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-5'),
+  ANTHROPIC_BASE_URL: z.string().default('https://api.anthropic.com'),
+  COPILOT_MAX_TOKENS: z.coerce.number().default(1200),
 });
 
 const parsed = schema.safeParse(process.env);
