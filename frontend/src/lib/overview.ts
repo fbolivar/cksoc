@@ -11,8 +11,27 @@ export interface OverviewData {
   agentes: { activos: number; total: number };
 }
 
+export type AssetCategory = 'ep' | 'srv' | 'net';
+export type RiskBand = 'critico' | 'alto' | 'medio' | 'monitoreado' | 'sano';
+export interface RadarAsset {
+  name: string;
+  category: AssetCategory;
+  risk: number;
+  band: RiskBand;
+  criticalVulns: number;
+  highVulns: number;
+  alerts24h: number;
+  critAlerts: number;
+  maxLevel: number;
+  status: string;
+  os: string;
+  ip: string;
+}
+export interface AssetRadar { total: number; assets: RadarAsset[]; generatedAt: string }
+
 export const overviewApi = {
   get: () => api.get<OverviewData>('/overview').then((r) => r.data),
+  radar: () => api.get<AssetRadar>('/overview/radar').then((r) => r.data),
 };
 
 export const SEMAFORO_META = {

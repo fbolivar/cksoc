@@ -5,6 +5,7 @@
 import { Router, type Request, type Response } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { getOverview } from './overview.service';
+import { getAssetRadar } from './radar.service';
 
 export const overviewRouter = Router();
 overviewRouter.use(authenticate);
@@ -14,5 +15,13 @@ overviewRouter.get('/', async (_req: Request, res: Response) => {
     res.json(await getOverview());
   } catch {
     res.status(500).json({ error: 'No se pudo construir el resumen ejecutivo' });
+  }
+});
+
+overviewRouter.get('/radar', async (_req: Request, res: Response) => {
+  try {
+    res.json(await getAssetRadar());
+  } catch {
+    res.status(500).json({ error: 'No se pudo construir el radar de activos' });
   }
 });

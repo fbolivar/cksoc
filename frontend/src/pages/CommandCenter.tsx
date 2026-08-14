@@ -5,8 +5,8 @@
  * UEBA) con degradación elegante si algún endpoint no responde.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { overviewApi } from '@/lib/overview';
+import { Link, useNavigate } from 'react-router-dom';
+import { overviewApi, type RadarAsset, type RiskBand } from '@/lib/overview';
 import { incidentsApi } from '@/lib/incidents';
 import { uebaApi } from '@/lib/ueba';
 
@@ -38,9 +38,16 @@ export default function CommandCenter() {
   const [range, setRange] = useState<'24h' | '7d' | '30d' | '90d'>('7d');
   const [filter, setFilter] = useState<'all' | 'ep' | 'srv' | 'net'>('all');
 
+  const [radarData, setRadarData] = useState<{ total: number; assets: RadarAsset[] }>({ total: 0, assets: [] });
+  const navigate = useNavigate();
+
   const riskRef = useRef(FALLBACK.risk);
   const filterRef = useRef(filter); filterRef.current = filter;
   const rangeRef = useRef(range); rangeRef.current = range;
+  const navRef = useRef(navigate); navRef.current = navigate;
+  const assetsRef = useRef<RadarAsset[]>([]);
+  const totalRef = useRef(0);
+  const doPlaceRef = useRef<() => void>(() => {});
 
   // --- datos reales ---
   useEffect(() => {
@@ -56,8 +63,16 @@ export default function CommandCenter() {
       riskRef.current = nd.risk;
       setD(nd);
     })();
+    overviewApi.radar().then((r) => { if (alive) setRadarData(r); }).catch(() => undefined);
     return () => { alive = false; };
   }, []);
+
+  // Cuando llegan los activos, recolocar los puntos del radar y redibujar.
+  useEffect(() => {
+    assetsRef.current = radarData.assets;
+    totalRef.current = radarData.total;
+    doPlaceRef.current();
+  }, [radarData]);
 
   // reloj + feed en vivo
   useEffect(() => {
@@ -77,6 +92,7 @@ export default function CommandCenter() {
   const offRef = useRef<HTMLCanvasElement>(null);
   const trendRef = useRef<HTMLCanvasElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
+  const radarTipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
@@ -84,8 +100,24 @@ export default function CommandCenter() {
     const dpr = (cvs: HTMLCanvasElement) => { const r = cvs.getBoundingClientRect(); const p = window.devicePixelRatio || 1; cvs.width = Math.max(1, r.width * p); cvs.height = Math.max(1, r.height * p); const c = cvs.getContext('2d')!; c.setTransform(p, 0, 0, p, 0, 0); return { c, w: r.width, h: r.height }; };
     const seed = (s: number) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
 
-    // clusters radar
-    const clusters = (() => { const r = seed(77); const defs: [string, number, Col][] = [['ep', 48, 'destructive'], ['ep', 30, 'warn-orange'], ['ep', 60, 'primary'], ['ep', 80, 'cyan'], ['ep', 120, 'success'], ['srv', 20, 'destructive'], ['srv', 28, 'warn-orange'], ['srv', 40, 'primary'], ['srv', 55, 'cyan'], ['net', 34, 'primary'], ['net', 44, 'cyan'], ['net', 90, 'success'], ['net', 18, 'warn-orange']]; const risk: Record<string, number> = { destructive: .22, 'warn-orange': .42, primary: .6, cyan: .78, success: .93 }; return defs.map((k) => { const dots: number[][] = []; for (let i = 0; i < Math.min(k[1], 24); i++) dots.push([r(), r(), r()]); return { type: k[0], col: k[2], risk: risk[k[2]], ang: r() * Math.PI * 2, spread: .09 + r() * .05, dots }; }); })();
+    // --- radar de activos REALES: un punto por agente, colocado por su riesgo ---
+    interface Placed { ang: number; rf: number; size: number; band: RiskBand; asset: RadarAsset }
+    let placed: Placed[] = [];
+    const hash = (s: string, salt: number) => { let h = salt >>> 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return (h % 10000) / 10000; };
+    const CAT_BASE: Record<string, number> = { ep: Math.PI * 0.5, srv: Math.PI * (7 / 6), net: Math.PI * (11 / 6) };
+    const bandCol: Record<RiskBand, Col> = { critico: 'destructive', alto: 'warn-orange', medio: 'primary', monitoreado: 'cyan', sano: 'success' };
+    const placeDots = () => {
+      placed = assetsRef.current.map((a) => {
+        const h1 = hash(a.name, 7), h2 = hash(a.name, 99);
+        const ang = (CAT_BASE[a.category] ?? 0) + (h1 - 0.5) * 1.7;
+        let rf = 0.12 + (1 - a.risk / 100) * 0.8 + (h2 - 0.5) * 0.05;
+        rf = Math.max(0.11, Math.min(0.96, rf));
+        const size = a.risk >= 70 ? 5 : a.risk >= 45 ? 4 : a.risk >= 25 ? 3.2 : a.risk >= 10 ? 2.6 : 2.2;
+        return { ang, rf, size, band: a.band, asset: a };
+      });
+      radar();
+    };
+    doPlaceRef.current = placeDots;
 
     // trend data
     let trendData: number[][] = [];
@@ -101,13 +133,17 @@ export default function CommandCenter() {
       const cg = (c as CanvasRenderingContext2D & { createConicGradient?: (a: number, x: number, y: number) => CanvasGradient }).createConicGradient;
       if (cg) { const g = cg.call(c, t, cx, cy); g.addColorStop(0, C('primary', .2)); g.addColorStop(.1, C('primary', 0)); g.addColorStop(1, C('primary', 0)); c.beginPath(); c.arc(cx, cy, R, 0, 7); c.fillStyle = g; c.fill(); }
       c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(t) * R, cy + Math.sin(t) * R); c.strokeStyle = C('primary', .5); c.lineWidth = 1.5; c.stroke();
-      clusters.forEach((cl) => { if (filterRef.current !== 'all' && cl.type !== filterRef.current) return; const base = R * (1 - cl.risk * .9);
-        cl.dots.forEach((dt, j) => { const a = cl.ang + (dt[0] - .5) * cl.spread * 2.4, rr = base + (dt[1] - .5) * R * .09, x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr; const pulse = cl.risk < .5 ? (1 + Math.sin(t * 3 + j) * .3) : 1, sz = (cl.risk < .35 ? 4.2 : cl.risk < .6 ? 3.2 : 2.4) * pulse;
-          c.beginPath(); c.arc(x, y, sz * 2.4, 0, 7); c.fillStyle = C(cl.col, .12); c.fill(); c.beginPath(); c.arc(x, y, sz, 0, 7); c.fillStyle = C(cl.col); c.shadowBlur = cl.risk < .5 ? 10 : 0; c.shadowColor = C(cl.col); c.fill(); c.shadowBlur = 0;
-          if (cl.risk < .3) { const b = sz + 4; c.strokeStyle = C(cl.col, .8); c.lineWidth = 1; ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as number[][]).forEach((q) => { c.beginPath(); c.moveTo(x + q[0] * b, y + q[1] * b - q[1] * 3); c.lineTo(x + q[0] * b, y + q[1] * b); c.lineTo(x + q[0] * b - q[0] * 3, y + q[1] * b); c.stroke(); }); }
-        }); });
+      placed.forEach((p) => {
+        if (filterRef.current !== 'all' && p.asset.category !== filterRef.current) return;
+        const col = bandCol[p.band]; const high = p.band === 'critico' || p.band === 'alto';
+        const pulse = high ? (1 + Math.sin(t * 3 + p.ang * 5) * 0.3) : 1; const sz = p.size * pulse;
+        const x = cx + Math.cos(p.ang) * R * p.rf, y = cy + Math.sin(p.ang) * R * p.rf;
+        c.beginPath(); c.arc(x, y, sz * 2.2, 0, 7); c.fillStyle = C(col, .12); c.fill();
+        c.beginPath(); c.arc(x, y, sz, 0, 7); c.fillStyle = C(col); c.shadowBlur = high ? 10 : 0; c.shadowColor = C(col); c.fill(); c.shadowBlur = 0;
+        if (p.band === 'critico') { const b = sz + 4; c.strokeStyle = C(col, .85); c.lineWidth = 1; ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as number[][]).forEach((q) => { c.beginPath(); c.moveTo(x + q[0] * b, y + q[1] * b - q[1] * 3); c.lineTo(x + q[0] * b, y + q[1] * b); c.lineTo(x + q[0] * b - q[0] * 3, y + q[1] * b); c.stroke(); }); }
+      });
       c.beginPath(); for (let a = 0; a <= 6; a++) { const an = Math.PI / 6 + a * Math.PI / 3, rr = R * .13, x = cx + Math.cos(an) * rr, y = cy + Math.sin(an) * rr; if (a) c.lineTo(x, y); else c.moveTo(x, y); } c.closePath(); c.fillStyle = C('card', .9); c.fill(); c.strokeStyle = C('primary', .6); c.lineWidth = 1.5; c.stroke();
-      c.fillStyle = C('foreground'); c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 ${R * .08}px ${cssVar('--hw-mono')}`; c.fillText('2315', cx, cy - R * .02); c.font = `600 ${R * .032}px ${cssVar('--hw-mono')}`; c.fillStyle = C('muted-foreground'); c.fillText('ACTIVOS', cx, cy + R * .05);
+      c.fillStyle = C('foreground'); c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 ${R * .085}px ${cssVar('--hw-mono')}`; c.fillText(String(totalRef.current || placed.length), cx, cy - R * .02); c.font = `600 ${R * .032}px ${cssVar('--hw-mono')}`; c.fillStyle = C('muted-foreground'); c.fillText('ACTIVOS', cx, cy + R * .05);
     };
 
     const drawGauge = () => { const cvs = gaugeRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 8; c.clearRect(0, 0, w, h); const start = Math.PI * .75, end = Math.PI * 2.25, val = gauge / 100; c.beginPath(); c.arc(cx, cy, R, start, end); c.strokeStyle = C('foreground', .08); c.lineWidth = 9; c.lineCap = 'round'; c.stroke(); const col: Col = gauge > 66 ? 'destructive' : gauge > 40 ? 'warn-orange' : 'success'; c.beginPath(); c.arc(cx, cy, R, start, start + (end - start) * val); c.strokeStyle = C(col); c.lineWidth = 9; c.lineCap = 'round'; c.shadowBlur = 14; c.shadowColor = C(col); c.stroke(); c.shadowBlur = 0; for (let k = 0; k <= 10; k++) { const an = start + (end - start) * k / 10; c.beginPath(); c.moveTo(cx + Math.cos(an) * (R - 13), cy + Math.sin(an) * (R - 13)); c.lineTo(cx + Math.cos(an) * (R - 18), cy + Math.sin(an) * (R - 18)); c.strokeStyle = C('foreground', .18); c.lineWidth = 1.5; c.stroke(); } c.fillStyle = C('foreground'); c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 ${R * .42}px ${cssVar('--hw-mono')}`; c.fillText(String(Math.round(gauge)), cx, cy); };
@@ -135,12 +171,34 @@ export default function CommandCenter() {
     const onLeave = () => { if (tip) tip.style.opacity = '0'; };
     cvs?.addEventListener('mousemove', onMove); cvs?.addEventListener('mouseleave', onLeave);
 
-    const onResize = () => renderStatic();
+    // radar: hover + clic sobre activos reales
+    const rcvs = radarRef.current, rtip = radarTipRef.current;
+    const CATLBL: Record<string, string> = { ep: 'Endpoint', srv: 'Servidor', net: 'Red' };
+    const hitAt = (e: MouseEvent): Placed | null => {
+      if (!rcvs) return null; const rect = rcvs.getBoundingClientRect(); const cx = rect.width / 2, cy = rect.height / 2, R = Math.min(rect.width, rect.height) / 2 - 10;
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top; let best: Placed | null = null, bd = 11;
+      for (const p of placed) { if (filterRef.current !== 'all' && p.asset.category !== filterRef.current) continue; const x = cx + Math.cos(p.ang) * R * p.rf, y = cy + Math.sin(p.ang) * R * p.rf; const dd = Math.hypot(mx - x, my - y); if (dd < bd) { bd = dd; best = p; } }
+      return best;
+    };
+    const rMove = (e: MouseEvent) => {
+      if (!rcvs || !rtip) return; const p = hitAt(e);
+      if (!p) { rtip.style.opacity = '0'; rcvs.style.cursor = 'default'; return; }
+      const a = p.asset, rect = rcvs.getBoundingClientRect();
+      rtip.innerHTML = `<div style="font-weight:700">${a.name}</div><div class="r">${CATLBL[a.category]} · ${a.status === 'active' ? 'activo' : 'desconectado'}</div><div class="r"><i style="background:${C(bandCol[p.band])}"></i>riesgo ${a.risk} · ${a.band}</div><div class="r">${a.criticalVulns} vulns críticas · ${a.alerts24h} alertas 24h</div>`;
+      rtip.style.opacity = '1'; rcvs.style.cursor = 'pointer';
+      rtip.style.left = Math.min(rect.width - 175, Math.max(0, e.clientX - rect.left + 12)) + 'px';
+      rtip.style.top = Math.max(0, e.clientY - rect.top + 12) + 'px';
+    };
+    const rLeave = () => { if (rtip) rtip.style.opacity = '0'; if (rcvs) rcvs.style.cursor = 'default'; };
+    const rClick = (e: MouseEvent) => { const p = hitAt(e); if (p) navRef.current(`/alertas?agent=${encodeURIComponent(p.asset.name)}`); };
+    rcvs?.addEventListener('mousemove', rMove); rcvs?.addEventListener('mouseleave', rLeave); rcvs?.addEventListener('click', rClick);
+
+    const onResize = () => { renderStatic(); radar(); };
     let rt: number; const rl = () => { clearTimeout(rt); rt = window.setTimeout(onResize, 150); };
     window.addEventListener('resize', rl);
     const obs = new MutationObserver(() => { renderStatic(); }); obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
-    return () => { cancelAnimationFrame(raf); cvs?.removeEventListener('mousemove', onMove); cvs?.removeEventListener('mouseleave', onLeave); window.removeEventListener('resize', rl); obs.disconnect(); };
+    return () => { cancelAnimationFrame(raf); cvs?.removeEventListener('mousemove', onMove); cvs?.removeEventListener('mouseleave', onLeave); rcvs?.removeEventListener('mousemove', rMove); rcvs?.removeEventListener('mouseleave', rLeave); rcvs?.removeEventListener('click', rClick); window.removeEventListener('resize', rl); obs.disconnect(); };
   }, []);
 
   const fmt = (n: number) => n.toLocaleString('es-CO');
@@ -183,7 +241,10 @@ export default function CommandCenter() {
             <div className="hw-chdr"><h3>Threat Radar</h3><span className="sub">activos en un vistazo</span><div className="flex-1" />
               <div className="flex flex-wrap gap-1">{(['all', 'ep', 'srv', 'net'] as const).map((f) => <button key={f} className={`hw-chip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)}>{{ all: 'Todos', ep: 'Endpoints', srv: 'Servidores', net: 'Red' }[f]}</button>)}</div>
             </div>
-            <div className="grid min-h-[360px] place-items-center"><canvas ref={radarRef} className="block aspect-square w-full max-w-[460px]" style={{ filter: 'drop-shadow(0 0 20px hsl(var(--primary)/.12))' }} /></div>
+            <div className="relative grid min-h-[360px] place-items-center">
+              <canvas ref={radarRef} className="block aspect-square w-full max-w-[460px]" style={{ filter: 'drop-shadow(0 0 20px hsl(var(--primary)/.12))' }} />
+              <div id="hw-ttip" ref={radarTipRef} className="hw-clip" style={{ maxWidth: 175 }} />
+            </div>
             <div className="hw-legend mt-2">
               {([['destructive', 'Crítico'], ['warn-orange', 'Alto'], ['primary', 'Medio'], ['cyan', 'Monitoreado'], ['success', 'Sano']] as [string, string][]).map((l) => <span key={l[1]}><i style={{ background: `hsl(var(--${l[0]}))` }} />{l[1]}</span>)}
             </div>
