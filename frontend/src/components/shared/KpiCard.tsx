@@ -12,8 +12,7 @@ export function KpiCard({
 }) {
   const display = typeof value === 'number' ? value.toLocaleString('es-CO') : value;
   return (
-    <Card className="relative overflow-hidden transition-colors hover:border-primary/30">
-      <span className="absolute left-0 top-0 h-[2px] w-8 bg-primary/70" aria-hidden />
+    <Card>
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <span className="hw-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">{label}</span>

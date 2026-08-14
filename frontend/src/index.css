@@ -92,12 +92,27 @@
 }
 
 @layer components {
-  /* Tarjeta base: blanca, borde tenue, sombra suave (reemplaza glassmorphism) */
+  /* Tarjeta base HUD: borde tenue, sombra suave y un "tick" coral superior. */
   .glass {
     @apply bg-card border border-border;
+    position: relative;
     box-shadow:
       0 1px 2px rgb(17 17 17 / 0.04),
       0 14px 32px -20px rgb(17 17 17 / 0.18);
+    transition: border-color 0.18s ease;
+  }
+  .glass::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 16px;
+    width: 26px;
+    height: 2px;
+    background: hsl(var(--primary) / 0.65);
+    pointer-events: none;
+  }
+  .glass:hover {
+    border-color: hsl(var(--primary) / 0.28);
   }
   /* Métrica destacada (antes neón); ahora coral limpio */
   .neon-text {
