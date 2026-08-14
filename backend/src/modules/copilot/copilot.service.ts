@@ -27,11 +27,13 @@ const SYSTEM_BASE = `Eres el copiloto de seguridad de HexWatch, una plataforma S
 
 Reglas:
 - Responde SIEMPRE en español, claro y conciso, con tono de analista SOC senior.
-- Tienes HERRAMIENTAS para consultar datos en vivo del SOC (alertas, vulnerabilidades priorizadas, anomalías UEBA, incidentes, reputación de IP). Úsalas cuando necesites datos concretos en vez de suponer; puedes encadenar varias.
-- NO inventes IPs, hosts, reglas ni cifras. Si una herramienta no devuelve datos, dilo.
+- NO inventes IPs, hosts, reglas ni cifras: usa solo los datos que se te entregan.
 - Cuando recomiendes acciones, sé concreto y prioriza (contención, investigación, siguiente paso), acorde a las capacidades de HexWatch (bloqueo en FortiGate, aislamiento con Velociraptor, supresión de falsos positivos, crear incidente).
 - No ejecutas acciones tú mismo: propones. El analista decide y actúa en la plataforma.
 - Formatea con listas y **negritas** cuando ayude a la legibilidad.`;
+
+// Nota que solo se añade en el chat (que sí expone herramientas).
+const TOOLS_NOTE = `Tienes HERRAMIENTAS para consultar datos en vivo del SOC (buscar_alertas, top_vulnerabilidades, anomalias_ueba, incidentes_abiertos, reputacion_ip). Úsalas cuando necesites datos concretos en vez de suponer; puedes encadenar varias. Si una herramienta no devuelve datos, dilo.`;
 
 // --- Cliente Anthropic (REST directo, sin SDK) ---
 interface ContentBlock { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown>; }
@@ -248,7 +250,7 @@ export async function chat(history: ChatMessage[], message: string): Promise<{ r
   const msg = String(message ?? '').trim().slice(0, MAX_INPUT);
   if (!msg) throw new HttpError(400, 'Mensaje vacío.');
   const snapshot = await buildSnapshot();
-  const system = `${SYSTEM_BASE}\n\n---\n${snapshot}`;
+  const system = `${SYSTEM_BASE}\n\n${TOOLS_NOTE}\n\n---\n${snapshot}`;
   const hist: AnyMessage[] = (Array.isArray(history) ? history : [])
     .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .slice(-MAX_HISTORY)
