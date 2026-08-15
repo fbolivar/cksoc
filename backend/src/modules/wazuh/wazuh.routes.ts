@@ -55,6 +55,7 @@ wazuhRouter.get('/alerts/search', async (req: Request, res: Response) => {
         ruleId: str('ruleId'),
         q: str('q'),
         mitre: str('mitre'),
+        user: str('user'),
         page,
         size,
       })

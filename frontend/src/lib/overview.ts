@@ -37,6 +37,8 @@ export interface SedeMetrics {
   agentesActivos: number;
   logins7d: number;
   usuarios: number;
+  users: string[];
+  agentNames: string[];
   ultimaActividad: string | null;
   estado: 'activa' | 'inactiva';
 }

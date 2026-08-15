@@ -31,6 +31,7 @@ export interface AlertFilters {
   ruleId?: string;
   q?: string;
   mitre?: string;
+  user?: string;
   page: number;
   size: number;
 }

@@ -220,6 +220,7 @@ export interface AlertSearchParams {
   ruleId?: string;
   q?: string;
   mitre?: string;
+  user?: string; // usuario(s) — coma-separado; filtra por cuentas de login
   page: number;
   size: number;
 }
@@ -251,6 +252,21 @@ export async function searchAlerts(
     filter.push({
       bool: { should: [{ term: { 'data.srcip': p.srcip } }, { term: { 'data.remip': p.srcip } }], minimum_should_match: 1 },
     });
+  }
+  if (p.user) {
+    const users = p.user.split(',').map((u) => u.trim()).filter(Boolean).slice(0, 20);
+    if (users.length) {
+      filter.push({
+        bool: {
+          should: [
+            { terms: { 'data.win.eventdata.targetUserName': users } },
+            { terms: { 'data.srcuser': users } },
+            { terms: { 'data.dstuser': users } },
+          ],
+          minimum_should_match: 1,
+        },
+      });
+    }
   }
   const must = p.q ? [{ match: { 'rule.description': { query: p.q, operator: 'and' } } }] : [];
 

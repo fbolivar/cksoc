@@ -17,6 +17,8 @@ export interface SedeMetrics {
   agentesActivos: number;
   logins7d: number;
   usuarios: number;
+  users: string[];        // cuentas de login de la sede (para filtrar el SOC)
+  agentNames: string[];   // agentes mapeados a la sede
   ultimaActividad: string | null;
   estado: 'activa' | 'inactiva';
 }
@@ -78,6 +80,6 @@ export async function getSedes(): Promise<SedeMetrics[]> {
     let ultimaActividad: string | null = null;
     for (const [, v] of matched) if (v.last && (!ultimaActividad || v.last > ultimaActividad)) ultimaActividad = v.last;
     const estado: 'activa' | 'inactiva' = agentesActivos > 0 || logins7d > 0 ? 'activa' : 'inactiva';
-    return { name: s.name, region: s.region, rol: s.rol, agentes: ags.length, agentesActivos, logins7d, usuarios, ultimaActividad, estado };
+    return { name: s.name, region: s.region, rol: s.rol, agentes: ags.length, agentesActivos, logins7d, usuarios, users: matched.map(([u]) => u).slice(0, 15), agentNames: ags.map((a) => a.name), ultimaActividad, estado };
   });
 }

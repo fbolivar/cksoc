@@ -218,7 +218,7 @@ export default function CommandCenter() {
     if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
     return `hace ${Math.round(s / 86400)} d`;
   };
-  const sedeList: SedeMetrics[] = sedes ?? SEDE_INFO.map((s) => ({ ...s, agentes: 0, agentesActivos: 0, logins7d: 0, usuarios: 0, ultimaActividad: null, estado: 'activa' as const }));
+  const sedeList: SedeMetrics[] = sedes ?? SEDE_INFO.map((s) => ({ ...s, agentes: 0, agentesActivos: 0, logins7d: 0, usuarios: 0, users: [], agentNames: [], ultimaActividad: null, estado: 'activa' as const }));
   const sedesActivas = sedeList.filter((s) => s.estado === 'activa').length;
 
   return (
@@ -299,8 +299,16 @@ export default function CommandCenter() {
               {sedeList.map((s) => {
                 const activa = s.estado === 'activa';
                 const metric = s.agentes > 0 ? `${s.agentesActivos}/${s.agentes} agentes` : s.logins7d > 0 ? `${fmt(s.logins7d)} logins 7d` : '';
+                const go = () => {
+                  const qp = s.users.length ? `user=${encodeURIComponent(s.users.join(','))}` : s.agentNames.length ? `agent=${encodeURIComponent(s.agentNames[0])}` : '';
+                  if (qp) navigate(`/alertas?${qp}`);
+                };
+                const clickable = s.users.length > 0 || s.agentNames.length > 0;
                 return (
-                  <div key={s.name} className="hw-clip flex flex-col gap-1.5 border border-border bg-secondary/20 p-2.5">
+                  <div key={s.name} onClick={clickable ? go : undefined} role={clickable ? 'button' : undefined} tabIndex={clickable ? 0 : undefined}
+                    onKeyDown={clickable ? (e) => { if (e.key === 'Enter') go(); } : undefined}
+                    title={clickable ? `Ver alertas de ${s.name}` : undefined}
+                    className={`hw-clip flex flex-col gap-1.5 border border-border bg-secondary/20 p-2.5 transition-colors ${clickable ? 'cursor-pointer hover:border-primary/50' : ''}`}>
                     <div className="flex items-center gap-2.5">
                       <span className="hw-clip flex h-8 w-8 shrink-0 items-center justify-center bg-primary/12 text-primary"><Ico d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z M12 10a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z" /></span>
                       <div className="min-w-0 flex-1">

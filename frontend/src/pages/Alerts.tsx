@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink, ShieldAlert, Ban, CheckCircle2, Sparkles } from 'lucide-react';
+import { ListFilter, RefreshCw, Loader2, X, ChevronLeft, ChevronRight, Search, Briefcase, Crosshair, ExternalLink, ShieldAlert, Ban, CheckCircle2, Sparkles, MapPin } from 'lucide-react';
 import { alertsApi, BAND_COLOR, BAND_LABEL, type AlertHit, type AlertFilters } from '@/lib/alerts';
 import { incidentsApi, type Severity } from '@/lib/incidents';
 import { responseApi } from '@/lib/response';
@@ -69,6 +69,7 @@ export default function Alerts() {
   const [srcip, setSrcip] = useState(searchParams.get('srcip') ?? '');
   const [ruleId, setRuleId] = useState(searchParams.get('ruleId') ?? '');
   const [q, setQ] = useState(searchParams.get('q') ?? '');
+  const [userF, setUserF] = useState(searchParams.get('user') ?? '');
   const [page, setPage] = useState(0);
 
   const [data, setData] = useState<{ total: number; capped: boolean; items: AlertHit[] } | null>(null);
@@ -155,20 +156,20 @@ export default function Alerts() {
 
   // Recarga al cambiar rango o pagina; los filtros de texto se aplican con "Buscar".
   useEffect(() => {
-    load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, page, size: SIZE });
+    load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, user: userF || undefined, page, size: SIZE });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, page, band]);
 
   function applyFilters() {
     if (page !== 0) setPage(0);
-    else load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, page: 0, size: SIZE });
+    else load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, user: userF || undefined, page: 0, size: SIZE });
   }
 
   // Filtro rapido: alterna solo los borrados en repositorios protegidos (regla 100210).
   function toggleRepoDeletes() {
     const nr = ruleId === REPO_DELETE_RULE ? '' : REPO_DELETE_RULE;
     setRuleId(nr); setPage(0);
-    load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: nr || undefined, q: q || undefined, page: 0, size: SIZE });
+    load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: nr || undefined, q: q || undefined, user: userF || undefined, page: 0, size: SIZE });
   }
 
   const detailSeq = useRef(0);
@@ -238,11 +239,26 @@ export default function Alerts() {
         <div className="flex items-center gap-2">
           <RangeTabs value={range} onChange={(v) => { setPage(0); setRange(v); }} options={RANGE_24_7_30} />
           <ExportButton onExport={exportCsv} busy={exporting} disabled={loading || total === 0} />
-          <Button variant="outline" size="sm" onClick={() => load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, page, size: SIZE })} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, user: userF || undefined, page, size: SIZE })} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
           </Button>
         </div>
       </div>
+
+      {/* Filtro por sede (usuarios) activo */}
+      {userF && (
+        <div className="hud flex flex-wrap items-center gap-2 !py-2.5">
+          <MapPin className="h-4 w-4 text-primary" />
+          <span className="text-sm">Filtrando por <b className="text-primary">{userF.split(',').length} usuario(s) de sede</b>:</span>
+          <span className="hw-mono truncate text-xs text-muted-foreground" style={{ maxWidth: 360 }}>{userF.split(',').join(' · ')}</span>
+          <button
+            onClick={() => { setUserF(''); setPage(0); load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, user: undefined, page: 0, size: SIZE }); }}
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:border-primary/50 hover:text-primary"
+          >
+            <X className="h-3.5 w-3.5" /> Quitar
+          </button>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="hud">
