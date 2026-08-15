@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { overviewApi, type RadarAsset, type RiskBand } from '@/lib/overview';
+import { overviewApi, type RadarAsset, type RiskBand, type SedeMetrics } from '@/lib/overview';
 import { incidentsApi } from '@/lib/incidents';
 import { uebaApi } from '@/lib/ueba';
 
@@ -46,6 +46,7 @@ export default function CommandCenter() {
   const [filter, setFilter] = useState<'all' | 'ep' | 'srv' | 'net'>('all');
 
   const [radarData, setRadarData] = useState<{ total: number; assets: RadarAsset[] }>({ total: 0, assets: [] });
+  const [sedes, setSedes] = useState<SedeMetrics[] | null>(null);
   const navigate = useNavigate();
 
   const riskRef = useRef(FALLBACK.risk);
@@ -71,6 +72,7 @@ export default function CommandCenter() {
       setD(nd);
     })();
     overviewApi.radar().then((r) => { if (alive) setRadarData(r); }).catch(() => undefined);
+    overviewApi.sedes().then((r) => { if (alive) setSedes(r); }).catch(() => undefined);
     return () => { alive = false; };
   }, []);
 
@@ -209,6 +211,15 @@ export default function CommandCenter() {
   }, []);
 
   const fmt = (n: number) => n.toLocaleString('es-CO');
+  const relTime = (iso: string | null): string => {
+    if (!iso) return '';
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+    if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
+    return `hace ${Math.round(s / 86400)} d`;
+  };
+  const sedeList: SedeMetrics[] = sedes ?? SEDE_INFO.map((s) => ({ ...s, agentes: 0, agentesActivos: 0, logins7d: 0, usuarios: 0, ultimaActividad: null, estado: 'activa' as const }));
+  const sedesActivas = sedeList.filter((s) => s.estado === 'activa').length;
 
   return (
     <div className="relative mx-auto max-w-[1480px]">
@@ -283,22 +294,32 @@ export default function CommandCenter() {
         {/* map + quick/offline */}
         <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
           <div className="hud hw-reveal" style={{ animationDelay: '.2s' }}>
-            <div className="hw-chdr"><h3>Ubicaciones · sedes</h3><span className="sub">5 activas</span></div>
+            <div className="hw-chdr"><h3>Ubicaciones · sedes</h3><span className="sub">{sedesActivas} activas</span></div>
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {SEDE_INFO.map((s) => (
-                <div key={s.name} className="hw-clip flex items-center gap-2.5 border border-border bg-secondary/20 p-2.5">
-                  <span className="hw-clip flex h-8 w-8 shrink-0 items-center justify-center bg-primary/12 text-primary"><Ico d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z M12 10a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z" /></span>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-semibold">{s.name}</div>
-                    <div className="hw-mono truncate text-[9.5px] uppercase tracking-wide text-muted-foreground">
-                      {s.region}{s.rol && <span className="text-primary"> · {s.rol}</span>}
+              {sedeList.map((s) => {
+                const activa = s.estado === 'activa';
+                const metric = [s.agentes > 0 ? `${s.agentes} activos` : '', s.logins7d > 0 ? `${fmt(s.logins7d)} logins 7d` : ''].filter(Boolean).join(' · ');
+                return (
+                  <div key={s.name} className="hw-clip flex flex-col gap-1.5 border border-border bg-secondary/20 p-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="hw-clip flex h-8 w-8 shrink-0 items-center justify-center bg-primary/12 text-primary"><Ico d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z M12 10a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z" /></span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-semibold">{s.name}</div>
+                        <div className="hw-mono truncate text-[9.5px] uppercase tracking-wide text-muted-foreground">{s.region}{s.rol && <span className="text-primary"> · {s.rol}</span>}</div>
+                      </div>
+                      <span className="hw-mono flex shrink-0 items-center gap-1 text-[9.5px] uppercase" style={{ color: activa ? 'hsl(var(--success))' : 'hsl(var(--muted-foreground))' }}>
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'currentColor', boxShadow: activa ? '0 0 6px currentColor' : 'none' }} />{activa ? 'activa' : 'inactiva'}
+                      </span>
                     </div>
+                    {(metric || s.ultimaActividad) && (
+                      <div className="hw-mono flex items-center justify-between border-t border-border/50 pt-1.5 text-[9.5px] text-muted-foreground">
+                        <span className="truncate text-foreground/70">{metric || '—'}</span>
+                        {s.ultimaActividad && <span className="shrink-0 pl-2">{relTime(s.ultimaActividad)}</span>}
+                      </div>
+                    )}
                   </div>
-                  <span className="hw-mono flex shrink-0 items-center gap-1 text-[9.5px] uppercase" style={{ color: 'hsl(var(--success))' }}>
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'currentColor', boxShadow: '0 0 6px currentColor' }} />activa
-                  </span>
-                </div>
-              ))}
+                );
+              })}
               <div className="hw-clip flex items-center justify-center gap-2 border border-dashed border-border/70 p-2.5 text-muted-foreground">
                 <Ico d="M12 5v14M5 12h14" /><span className="hw-mono text-[10px] uppercase tracking-wide">Agregar sede</span>
               </div>

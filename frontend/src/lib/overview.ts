@@ -29,9 +29,22 @@ export interface RadarAsset {
 }
 export interface AssetRadar { total: number; assets: RadarAsset[]; generatedAt: string }
 
+export interface SedeMetrics {
+  name: string;
+  region: string;
+  rol?: string;
+  agentes: number;
+  agentesActivos: number;
+  logins7d: number;
+  usuarios: number;
+  ultimaActividad: string | null;
+  estado: 'activa' | 'inactiva';
+}
+
 export const overviewApi = {
   get: () => api.get<OverviewData>('/overview').then((r) => r.data),
   radar: () => api.get<AssetRadar>('/overview/radar').then((r) => r.data),
+  sedes: () => api.get<{ sedes: SedeMetrics[] }>('/overview/sedes').then((r) => r.data.sedes),
 };
 
 export const SEMAFORO_META = {
