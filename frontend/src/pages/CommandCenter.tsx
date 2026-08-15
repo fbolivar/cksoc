@@ -298,7 +298,7 @@ export default function CommandCenter() {
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {sedeList.map((s) => {
                 const activa = s.estado === 'activa';
-                const metric = [s.agentes > 0 ? `${s.agentes} activos` : '', s.logins7d > 0 ? `${fmt(s.logins7d)} logins 7d` : ''].filter(Boolean).join(' · ');
+                const metric = s.agentes > 0 ? `${s.agentesActivos}/${s.agentes} agentes` : s.logins7d > 0 ? `${fmt(s.logins7d)} logins 7d` : '';
                 return (
                   <div key={s.name} className="hw-clip flex flex-col gap-1.5 border border-border bg-secondary/20 p-2.5">
                     <div className="flex items-center gap-2.5">
