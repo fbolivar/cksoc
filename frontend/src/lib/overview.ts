@@ -43,10 +43,22 @@ export interface SedeMetrics {
   estado: 'activa' | 'inactiva';
 }
 
+export interface Pulse {
+  sistema: 'OPERATIVO' | 'EN GESTIÓN' | 'ATENCIÓN';
+  ingestaMin: number;
+  discoPct: number | null;
+  kevEnv: number;
+  alertas24h: number;
+  deltaPct: number;
+}
+export interface AlertTrend { range: string; critica: number[]; alta: number[]; media: number[] }
+
 export const overviewApi = {
   get: () => api.get<OverviewData>('/overview').then((r) => r.data),
   radar: () => api.get<AssetRadar>('/overview/radar').then((r) => r.data),
   sedes: () => api.get<{ sedes: SedeMetrics[] }>('/overview/sedes').then((r) => r.data.sedes),
+  trend: (range: string) => api.get<AlertTrend>('/overview/trend', { params: { range } }).then((r) => r.data),
+  pulse: () => api.get<Pulse>('/overview/pulse').then((r) => r.data),
 };
 
 export const SEMAFORO_META = {

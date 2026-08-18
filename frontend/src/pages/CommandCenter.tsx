@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { overviewApi, type RadarAsset, type RiskBand, type SedeMetrics } from '@/lib/overview';
+import { overviewApi, type Pulse, type RadarAsset, type RiskBand, type SedeMetrics } from '@/lib/overview';
 import { incidentsApi } from '@/lib/incidents';
 import { uebaApi } from '@/lib/ueba';
 import { alertsApi, type AlertHit } from '@/lib/alerts';
@@ -42,15 +42,17 @@ export default function CommandCenter() {
 
   const [radarData, setRadarData] = useState<{ total: number; assets: RadarAsset[] }>({ total: 0, assets: [] });
   const [sedes, setSedes] = useState<SedeMetrics[] | null>(null);
+  const [pulse, setPulse] = useState<Pulse | null>(null);
   const navigate = useNavigate();
 
   const riskRef = useRef(FALLBACK.risk);
   const filterRef = useRef(filter); filterRef.current = filter;
-  const rangeRef = useRef(range); rangeRef.current = range;
   const navRef = useRef(navigate); navRef.current = navigate;
   const assetsRef = useRef<RadarAsset[]>([]);
   const totalRef = useRef(0);
   const doPlaceRef = useRef<() => void>(() => {});
+  const trendDataRef = useRef<{ critica: number[]; alta: number[] }>({ critica: [], alta: [] });
+  const redrawTrendRef = useRef<() => void>(() => {});
 
   // --- datos reales ---
   useEffect(() => {
@@ -68,8 +70,24 @@ export default function CommandCenter() {
     })();
     overviewApi.radar().then((r) => { if (alive) setRadarData(r); }).catch(() => undefined);
     overviewApi.sedes().then((r) => { if (alive) setSedes(r); }).catch(() => undefined);
-    return () => { alive = false; };
+    const loadPulse = () => overviewApi.pulse().then((p) => { if (alive) setPulse(p); }).catch(() => undefined);
+    void loadPulse();
+    const pulseIv = setInterval(loadPulse, 60000);
+    return () => { alive = false; clearInterval(pulseIv); };
   }, []);
+
+  // Tendencia real: recarga al cambiar el rango y refresca cada 60s.
+  useEffect(() => {
+    let alive = true;
+    const load = () => overviewApi.trend(range).then((t) => {
+      if (!alive) return;
+      trendDataRef.current = { critica: t.critica, alta: t.alta };
+      redrawTrendRef.current();
+    }).catch(() => undefined);
+    void load();
+    const iv = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [range]);
 
   // Cuando llegan los activos, recolocar los puntos del radar y redibujar.
   useEffect(() => {
@@ -110,7 +128,6 @@ export default function CommandCenter() {
   const radarRef = useRef<HTMLCanvasElement>(null);
   const gaugeRef = useRef<HTMLCanvasElement>(null);
   const mapRef = useRef<HTMLCanvasElement>(null);
-  const offRef = useRef<HTMLCanvasElement>(null);
   const trendRef = useRef<HTMLCanvasElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const radarTipRef = useRef<HTMLDivElement>(null);
@@ -119,7 +136,6 @@ export default function CommandCenter() {
     const reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
     let raf = 0, t = 0, gauge = 0;
     const dpr = (cvs: HTMLCanvasElement) => { const r = cvs.getBoundingClientRect(); const p = window.devicePixelRatio || 1; cvs.width = Math.max(1, r.width * p); cvs.height = Math.max(1, r.height * p); const c = cvs.getContext('2d')!; c.setTransform(p, 0, 0, p, 0, 0); return { c, w: r.width, h: r.height }; };
-    const seed = (s: number) => () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
 
     // --- radar de activos REALES: un punto por agente, colocado por su riesgo ---
     interface Placed { ang: number; rf: number; size: number; band: RiskBand; asset: RadarAsset }
@@ -141,9 +157,6 @@ export default function CommandCenter() {
     doPlaceRef.current = placeDots;
 
     // trend data
-    let trendData: number[][] = [];
-    const genTrend = (rg: string) => { const pts = ({ '24h': 24, '7d': 28, '30d': 30, '90d': 45 } as Record<string, number>)[rg]; const rr = seed(({ '24h': 11, '7d': 22, '30d': 33, '90d': 44 } as Record<string, number>)[rg]); const s = [[], [], []] as number[][]; const base = [9, 20, 42]; for (let i = 0; i < pts; i++) for (let k = 0; k < 3; k++) { const v = base[k] + Math.sin(i / 3 + k) * base[k] * .4 + (rr() - .5) * base[k] * .7; s[k].push(Math.max(0, v)); } return s; };
-    let lastRange = '';
 
     const drawBg = () => { const cvs = bgRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); c.clearRect(0, 0, w, h); const step = 40; c.strokeStyle = C('foreground', .04); c.lineWidth = 1; for (let x = 0; x < w; x += step) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); } for (let y = 0; y < h; y += step) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } };
 
@@ -171,11 +184,11 @@ export default function CommandCenter() {
 
     const drawMap = () => { const cvs = mapRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); c.clearRect(0, 0, w, h); const step = 15; c.fillStyle = C('foreground', .12); for (let x = step; x < w; x += step) for (let y = step; y < h; y += step) { const nx = x / w, ny = y / h; const inMass = (nx > .14 && nx < .44 && ny > .2 && ny < .9) || (nx > .44 && nx < .62 && ny > .15 && ny < .55) || (nx > .6 && nx < .9 && ny > .2 && ny < .7); if (inMass) { c.beginPath(); c.arc(x, y, 1.1, 0, 7); c.fill(); } } const hub = [SEDES[0][1] * w, SEDES[0][2] * h]; SEDES.slice(1).forEach((s) => { const p = [s[1] * w, s[2] * h], mx = (hub[0] + p[0]) / 2, my = Math.min(hub[1], p[1]) - 40; c.beginPath(); c.moveTo(hub[0], hub[1]); c.quadraticCurveTo(mx, my, p[0], p[1]); c.strokeStyle = C('primary', .4); c.lineWidth = 1.2; c.stroke(); }); };
 
-    const drawOffline = () => { const cvs = offRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); c.clearRect(0, 0, w, h); const data = [22, 31, 18, 26, 40, 55, 168], max = 180, bw = w / data.length * .5, gap = w / data.length; const labels = ['-6', '-5', '-4', '-3', '-2', 'ayer', 'hoy']; data.forEach((v, i) => { const bh = v / max * (h - 18), x = i * gap + gap / 2 - bw / 2, y = h - bh - 14, last = i === data.length - 1; c.fillStyle = last ? C('destructive') : C('primary', .5); if (last) { c.shadowBlur = 12; c.shadowColor = C('destructive'); } c.fillRect(x, y, bw, bh); c.shadowBlur = 0; c.fillStyle = C('muted-foreground'); c.font = `600 9px ${cssVar('--hw-mono')}`; c.textAlign = 'center'; c.fillText(labels[i], x + bw / 2, h - 2); }); };
 
-    const drawTrend = () => { const cvs = trendRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); if (lastRange !== rangeRef.current) { trendData = genTrend(rangeRef.current); lastRange = rangeRef.current; } c.clearRect(0, 0, w, h); const pad = 8, n = trendData[0].length; let maxV = 0; trendData.forEach((s) => s.forEach((v) => { if (v > maxV) maxV = v; })); maxV *= 1.15; c.strokeStyle = C('foreground', .06); for (let gy = 0; gy <= 4; gy++) { const y = pad + (h - 2 * pad) * gy / 4; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } const cols: Col[] = ['destructive', 'warn-orange', 'primary']; for (let k = 2; k >= 0; k--) { const s = trendData[k]; c.beginPath(); s.forEach((v, i) => { const x = i / (n - 1) * w, y = pad + (h - 2 * pad) * (1 - v / maxV); if (i) c.lineTo(x, y); else c.moveTo(x, y); }); const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, C(cols[k], .22)); g.addColorStop(1, C(cols[k], 0)); c.lineTo(w, h); c.lineTo(0, h); c.closePath(); c.fillStyle = g; c.fill(); c.beginPath(); s.forEach((v, i) => { const x = i / (n - 1) * w, y = pad + (h - 2 * pad) * (1 - v / maxV); if (i) c.lineTo(x, y); else c.moveTo(x, y); }); c.strokeStyle = C(cols[k]); c.lineWidth = 2; c.lineJoin = 'round'; c.shadowBlur = 8; c.shadowColor = C(cols[k], .5); c.stroke(); c.shadowBlur = 0; } (cvs as HTMLCanvasElement & { _m?: { n: number; w: number } })._m = { n, w }; };
+    const drawTrend = () => { const cvs = trendRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); c.clearRect(0, 0, w, h); const td = trendDataRef.current; const series = [td.critica, td.alta]; const pad = 8, n = Math.max(series[0].length, series[1].length); c.strokeStyle = C('foreground', .06); for (let gy = 0; gy <= 4; gy++) { const y = pad + (h - 2 * pad) * gy / 4; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } if (n < 2) { (cvs as HTMLCanvasElement & { _m?: { n: number; w: number } })._m = { n: 0, w }; return; } let maxV = 0; series.forEach((s) => s.forEach((v) => { if (v > maxV) maxV = v; })); maxV = Math.max(1, maxV) * 1.15; const cols: Col[] = ['destructive', 'warn-orange']; for (let k = 1; k >= 0; k--) { const s = series[k]; c.beginPath(); s.forEach((v, i) => { const x = i / (n - 1) * w, y = pad + (h - 2 * pad) * (1 - v / maxV); if (i) c.lineTo(x, y); else c.moveTo(x, y); }); const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, C(cols[k], .22)); g.addColorStop(1, C(cols[k], 0)); c.lineTo(w, h); c.lineTo(0, h); c.closePath(); c.fillStyle = g; c.fill(); c.beginPath(); s.forEach((v, i) => { const x = i / (n - 1) * w, y = pad + (h - 2 * pad) * (1 - v / maxV); if (i) c.lineTo(x, y); else c.moveTo(x, y); }); c.strokeStyle = C(cols[k]); c.lineWidth = 2; c.lineJoin = 'round'; c.shadowBlur = 8; c.shadowColor = C(cols[k], .5); c.stroke(); c.shadowBlur = 0; } (cvs as HTMLCanvasElement & { _m?: { n: number; w: number } })._m = { n, w }; };
+    redrawTrendRef.current = drawTrend;
 
-    const renderStatic = () => { drawBg(); drawGauge(); drawMap(); drawOffline(); drawTrend(); };
+    const renderStatic = () => { drawBg(); drawGauge(); drawMap(); drawTrend(); };
     renderStatic();
 
     // animación gauge → target
@@ -188,7 +201,7 @@ export default function CommandCenter() {
 
     // trend hover
     const cvs = trendRef.current, tip = tipRef.current;
-    const onMove = (e: MouseEvent) => { const m = (cvs as HTMLCanvasElement & { _m?: { n: number; w: number } })._m; if (!m || !tip || !cvs) return; const rect = cvs.getBoundingClientRect(), mx = e.clientX - rect.left, i = Math.max(0, Math.min(m.n - 1, Math.round(mx / m.w * (m.n - 1)))); const L = ['Críticas', 'Altas', 'Medias'], cc: Col[] = ['destructive', 'warn-orange', 'primary']; let html = `<div>PUNTO ${i + 1}</div>`; [0, 1, 2].forEach((k) => { html += `<div class="r"><i style="background:${C(cc[k])}"></i>${L[k]}: <b>${Math.round(trendData[k][i])}</b></div>`; }); tip.innerHTML = html; tip.style.opacity = '1'; const x = i / (m.n - 1) * rect.width; tip.style.left = Math.min(rect.width - 140, Math.max(0, x - 60)) + 'px'; tip.style.top = '6px'; };
+    const onMove = (e: MouseEvent) => { const m = (cvs as HTMLCanvasElement & { _m?: { n: number; w: number } })._m; if (!m || m.n < 2 || !tip || !cvs) return; const rect = cvs.getBoundingClientRect(), mx = e.clientX - rect.left, i = Math.max(0, Math.min(m.n - 1, Math.round(mx / m.w * (m.n - 1)))); const td = trendDataRef.current; const series = [td.critica, td.alta], L = ['Críticas', 'Altas'], cc: Col[] = ['destructive', 'warn-orange']; let html = `<div>PUNTO ${i + 1}</div>`; [0, 1].forEach((k) => { html += `<div class="r"><i style="background:${C(cc[k])}"></i>${L[k]}: <b>${series[k][i] ?? 0}</b></div>`; }); tip.innerHTML = html; tip.style.opacity = '1'; const x = i / (m.n - 1) * rect.width; tip.style.left = Math.min(rect.width - 140, Math.max(0, x - 60)) + 'px'; tip.style.top = '6px'; };
     const onLeave = () => { if (tip) tip.style.opacity = '0'; };
     cvs?.addEventListener('mousemove', onMove); cvs?.addEventListener('mouseleave', onLeave);
 
@@ -232,6 +245,11 @@ export default function CommandCenter() {
   };
   const sedeList: SedeMetrics[] = sedes ?? SEDE_INFO.map((s) => ({ ...s, agentes: 0, agentesActivos: 0, logins7d: 0, usuarios: 0, users: [], agentNames: [], ultimaActividad: null, estado: 'activa' as const }));
   const sedesActivas = sedeList.filter((s) => s.estado === 'activa').length;
+  const offlineAssets = radarData.assets.filter((a) => a.status !== 'active');
+  const offlineCount = d.agTotal > 0 ? Math.max(0, d.agTotal - d.agActivos) : offlineAssets.length;
+  const sistema = pulse?.sistema ?? 'OPERATIVO';
+  const sysColor = sistema === 'ATENCIÓN' ? 'destructive' : sistema === 'EN GESTIÓN' ? 'warn-orange' : 'success';
+  const deltaPct = pulse?.deltaPct ?? 0;
 
   return (
     <div className="relative mx-auto max-w-[1480px]">
@@ -239,12 +257,12 @@ export default function CommandCenter() {
       <div className="flex flex-col gap-4">
         {/* ticker */}
         <div className="hw-ticker hw-reveal">
-          <span className="t"><i style={{ background: 'hsl(var(--success))', boxShadow: '0 0 6px hsl(var(--success))' }} />SISTEMA <b className="hw-blink">OPERATIVO</b></span>
-          <span className="t">INGESTA <b>1.2k</b> ev/min</span>
-          <span className="t">INDEXER <b>245GB</b> · 5%</span>
+          <span className="t"><i style={{ background: `hsl(var(--${sysColor}))`, boxShadow: `0 0 6px hsl(var(--${sysColor}))` }} />SISTEMA <b className="hw-blink" style={{ color: `hsl(var(--${sysColor}))` }}>{sistema}</b></span>
+          <span className="t">INGESTA <b>{pulse ? fmt(pulse.ingestaMin) : '—'}</b> ev/min</span>
+          <span className="t">INDEXER <b>{pulse?.discoPct != null ? pulse.discoPct + '%' : '—'}</b> disco</span>
           <span className="t">AGENTES <b>{d.agActivos}/{d.agTotal}</b></span>
-          <span className="t"><i style={{ background: 'hsl(var(--destructive))', boxShadow: '0 0 6px hsl(var(--destructive))' }} />{d.incBreached} SLA <b style={{ color: 'hsl(var(--destructive))' }}>VENCIDO</b></span>
-          <span className="t">KEV <b style={{ color: 'hsl(var(--success))' }}>0 activas</b></span>
+          <span className="t"><i style={{ background: `hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))`, boxShadow: `0 0 6px hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))` }} />{d.incBreached} SLA <b style={{ color: `hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))` }}>{d.incBreached > 0 ? 'VENCIDO' : 'EN PLAZO'}</b></span>
+          <span className="t">KEV <b style={{ color: `hsl(var(--${(pulse?.kevEnv ?? 0) > 0 ? 'destructive' : 'success'}))` }}>{pulse?.kevEnv ?? 0} activas</b></span>
         </div>
 
         {/* head */}
@@ -257,12 +275,12 @@ export default function CommandCenter() {
 
         {/* KPIs */}
         <div className="hw-reveal grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" style={{ animationDelay: '.06s' }}>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M4 6h16M4 12h16M4 18h10" /> Alertas 24h</div><div className="v">{fmt(d.alertas24h)}</div><div className="d hw-up">▲ 6% VS AYER</div></div>
-          <div className="hud hw-kpi crit"><div className="l"><Ico d="M12 3l9 16H3z" /> Críticas</div><div className="v">{fmt(d.criticas)}</div><div className="d hw-up">▲ 12 NUEVAS</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M4 7h16v13H4z" /> Incidentes</div><div className="v">{d.incOpen}</div><div className="d hw-up">{d.incBreached} SLA VENCIDO</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> UEBA</div><div className="v">{d.uebaOpen}</div><div className="d hw-flat">HOST NUEVO · FALLOS</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> Agentes</div><div className="v">{d.agActivos}<span className="text-sm text-muted-foreground">/{d.agTotal}</span></div><div className="d hw-up">▼ {d.agTotal - d.agActivos} OFFLINE</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M12 8v4l3 2" circle /> SLA</div><div className="v hw-down">{d.slaPct != null ? d.slaPct + '%' : '—'}</div><div className="d hw-down">✓ CASOS EN PLAZO</div></div>
+          <div className="hud hw-kpi"><div className="l"><Ico d="M4 6h16M4 12h16M4 18h10" /> Alertas 24h</div><div className="v">{fmt(d.alertas24h)}</div><div className={`d ${deltaPct > 0 ? 'hw-up' : deltaPct < 0 ? 'hw-down' : 'hw-flat'}`}>{pulse ? `${deltaPct > 0 ? '▲' : deltaPct < 0 ? '▼' : '='} ${Math.abs(deltaPct)}% VS AYER` : '—'}</div></div>
+          <div className="hud hw-kpi crit"><div className="l"><Ico d="M12 3l9 16H3z" /> Críticas</div><div className="v">{fmt(d.criticas)}</div><div className="d hw-flat">NIVEL ≥12 · 24H</div></div>
+          <div className="hud hw-kpi"><div className="l"><Ico d="M4 7h16v13H4z" /> Incidentes</div><div className="v">{d.incOpen}</div><div className={`d ${d.incBreached > 0 ? 'hw-down' : 'hw-flat'}`}>{d.incBreached > 0 ? `${d.incBreached} SLA VENCIDO` : 'SIN VENCIMIENTOS'}</div></div>
+          <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> UEBA</div><div className="v">{d.uebaOpen}</div><div className="d hw-flat">ANOMALÍAS ABIERTAS</div></div>
+          <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> Agentes</div><div className="v">{d.agActivos}<span className="text-sm text-muted-foreground">/{d.agTotal}</span></div><div className={`d ${offlineCount > 0 ? 'hw-down' : 'hw-up'}`}>{offlineCount > 0 ? `▼ ${offlineCount} OFFLINE` : '✓ TODOS ONLINE'}</div></div>
+          <div className="hud hw-kpi"><div className="l"><Ico d="M12 8v4l3 2" circle /> SLA</div><div className={`v ${d.incBreached > 0 ? 'hw-down' : ''}`}>{d.slaPct != null ? d.slaPct + '%' : '—'}</div><div className={`d ${d.incBreached > 0 ? 'hw-down' : 'hw-up'}`}>{d.incBreached > 0 ? `${d.incBreached} FUERA DE PLAZO` : '✓ CASOS EN PLAZO'}</div></div>
         </div>
 
         {/* radar + risk/feed */}
@@ -365,9 +383,20 @@ export default function CommandCenter() {
               </div>
             </div>
             <div className="hud hw-reveal" style={{ animationDelay: '.28s' }}>
-              <div className="hw-chdr"><h3>Offline</h3><span className="sub">7 días</span></div>
-              <div className="flex items-baseline gap-2"><span className="hw-tabular text-[26px] font-bold">168</span><span className="hw-tag">equipos desconectados</span></div>
-              <canvas ref={offRef} className="mt-1.5 block h-[120px] w-full" />
+              <div className="hw-chdr"><h3>Offline</h3><span className="sub">agentes ahora</span></div>
+              <div className="flex items-baseline gap-2"><span className="hw-tabular text-[26px] font-bold" style={{ color: offlineCount > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--success))' }}>{offlineCount}</span><span className="hw-tag">de {d.agTotal} desconectados</span></div>
+              <div className="mt-2 flex max-h-[104px] flex-col gap-1 overflow-y-auto">
+                {offlineAssets.length === 0 ? (
+                  <p className="hw-mono py-4 text-center text-[11px] text-muted-foreground">{offlineCount > 0 ? `${offlineCount} sin detalle de host` : 'Todos los agentes conectados.'}</p>
+                ) : offlineAssets.map((a) => (
+                  <div key={a.name} onClick={() => navigate(`/alertas?agent=${encodeURIComponent(a.name)}`)} title={`${a.os || 'host'} · ${a.ip || ''}`}
+                    className="hw-clip flex cursor-pointer items-center gap-2 border border-border/60 bg-secondary/20 px-2 py-1 transition-colors hover:border-destructive/50">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'hsl(var(--destructive))', boxShadow: '0 0 6px hsl(var(--destructive))' }} />
+                    <span className="truncate text-[12px] font-medium">{a.name}</span>
+                    <span className="hw-mono ml-auto shrink-0 text-[9.5px] uppercase text-muted-foreground">{a.category}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -377,7 +406,7 @@ export default function CommandCenter() {
           <div className="hw-chdr"><h3>Tendencia de seguridad</h3><div className="flex-1" />
             <div className="flex gap-0.5 bg-secondary/60 p-0.5">{(['24h', '7d', '30d', '90d'] as const).map((r) => <button key={r} className={`hw-tab ${range === r ? 'on' : ''}`} onClick={() => setRange(r)}>{r.toUpperCase()}</button>)}</div>
           </div>
-          <div className="hw-legend mb-1.5">{([['destructive', 'Críticas'], ['warn-orange', 'Altas'], ['primary', 'Medias']] as [string, string][]).map((l) => <span key={l[1]}><i style={{ background: `hsl(var(--${l[0]}))` }} />{l[1]}</span>)}</div>
+          <div className="hw-legend mb-1.5">{([['destructive', 'Críticas'], ['warn-orange', 'Altas']] as [string, string][]).map((l) => <span key={l[1]}><i style={{ background: `hsl(var(--${l[0]}))` }} />{l[1]}</span>)}</div>
           <div className="relative h-[220px]"><canvas ref={trendRef} className="block h-[220px] w-full" /><div id="hw-ttip" ref={tipRef} className="hw-clip" /></div>
         </div>
       </div>
