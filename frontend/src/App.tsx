@@ -12,9 +12,8 @@ import Login from '@/pages/Login'; // eager: primera carga (publica)
 
 // Carga diferida por ruta: cada pagina es su propio chunk, se descarga solo al
 // visitarla. Reduce el bundle inicial (antes ~1 MB en un solo archivo).
-const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const CommandCenter = lazy(() => import('@/pages/CommandCenter'));
-const Overview = lazy(() => import('@/pages/Overview'));
+const ExecutiveSummary = lazy(() => import('@/pages/ExecutiveSummary'));
 const AttackMap = lazy(() => import('@/pages/AttackMap'));
 const Alerts = lazy(() => import('@/pages/Alerts'));
 const Incidents = lazy(() => import('@/pages/Incidents'));
@@ -36,7 +35,6 @@ const Audit = lazy(() => import('@/pages/Audit'));
 const SocMetrics = lazy(() => import('@/pages/SocMetrics'));
 const Hunt = lazy(() => import('@/pages/Hunt'));
 const Playbooks = lazy(() => import('@/pages/Playbooks'));
-const RiskBoard = lazy(() => import('@/pages/RiskBoard'));
 const Velociraptor = lazy(() => import('@/pages/Velociraptor'));
 const Detection = lazy(() => import('@/pages/Detection'));
 const ThreatIntel = lazy(() => import('@/pages/ThreatIntel'));
@@ -73,21 +71,11 @@ export default function App() {
         }
       />
       <Route
-        path="/panel"
-        element={
-          <Protected>
-            <AppLayout>
-              <Dashboard />
-            </AppLayout>
-          </Protected>
-        }
-      />
-      <Route
         path="/resumen"
         element={
           <Protected>
             <AppLayout>
-              <Overview />
+              <ExecutiveSummary />
             </AppLayout>
           </Protected>
         }
@@ -298,16 +286,6 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Playbooks />
-            </AppLayout>
-          </Protected>
-        }
-      />
-      <Route
-        path="/riesgo"
-        element={
-          <Protected>
-            <AppLayout>
-              <RiskBoard />
             </AppLayout>
           </Protected>
         }

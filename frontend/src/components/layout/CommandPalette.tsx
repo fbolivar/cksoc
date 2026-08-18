@@ -12,7 +12,6 @@ const COMMANDS: Cmd[] = [
   { label: 'Resumen Ejecutivo', to: '/resumen', sec: 'VISTA' },
   { label: 'Copiloto IA', to: '/copiloto', sec: 'VISTA' },
   { label: 'Métricas SOC', to: '/metricas', sec: 'VISTA' },
-  { label: 'Panel clásico', to: '/panel', sec: 'VISTA' },
   { label: 'Alertas', to: '/alertas', sec: 'DETECTAR' },
   { label: 'Detecciones', to: '/deteccion', sec: 'DETECTAR' },
   { label: 'MITRE ATT&CK', to: '/mitre', sec: 'DETECTAR' },

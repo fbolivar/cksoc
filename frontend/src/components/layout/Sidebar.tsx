@@ -5,7 +5,6 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Gauge,
   Globe2,
   ShieldAlert,
   BellRing,
@@ -52,11 +51,9 @@ const sections: { title: string | null; items: Item[] }[] = [
     title: 'Vista general',
     items: [
       { to: '/', label: 'Command Center', icon: LayoutDashboard },
-      { to: '/resumen', label: 'Resumen Ejecutivo', icon: Gauge },
+      { to: '/resumen', label: 'Resumen Ejecutivo', icon: ShieldCheck },
       { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
       { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
-      { to: '/riesgo', label: 'Riesgo · Ejecutivo', icon: ShieldCheck, roles: ['admin'] },
-      { to: '/panel', label: 'Panel clásico', icon: Grid3x3 },
     ],
   },
   {
