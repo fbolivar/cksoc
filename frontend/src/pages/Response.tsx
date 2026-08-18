@@ -73,7 +73,7 @@ export default function Response() {
   }
 
   const tabs: { id: Tab; label: string; icon: typeof ShieldAlert; n?: number }[] = [
-    { id: 'incidentes', label: 'Incidentes', icon: ShieldAlert, n: incidents.length },
+    { id: 'incidentes', label: 'IPs sospechosas', icon: ShieldAlert, n: incidents.length },
     { id: 'bloqueadas', label: 'IPs bloqueadas', icon: Ban, n: blocked.length },
     { id: 'auditoria', label: 'Auditoría', icon: ShieldCheck, n: audit.length },
   ];
@@ -83,7 +83,7 @@ export default function Response() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight">
-            <ShieldAlert className="h-6 w-6 text-neon" /> Respuesta a incidentes
+            <ShieldAlert className="h-6 w-6 text-neon" /> Respuesta · FortiGate
           </h1>
           <p className="text-sm text-muted-foreground">
             Bloqueo de IPs con confirmación humana · el analista decide, queda registrado
@@ -174,7 +174,7 @@ function IncidentsView({ incidents, isAdmin, expanded, onToggle, onBlock, onUnbl
   onToggle: (ip: string) => void; onBlock: (ip: string, ctx?: string) => void; onUnblock: (ip: string) => void;
 }) {
   if (incidents.length === 0)
-    return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Sin incidentes con IP pública</CardContent></Card>;
+    return <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Sin IPs sospechosas con IP pública</CardContent></Card>;
 
   return (
     <div className="space-y-3">

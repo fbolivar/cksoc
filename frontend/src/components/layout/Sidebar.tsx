@@ -24,13 +24,11 @@ import {
   ScrollText,
   Radar,
   LineChart,
-  Zap,
   ShieldCheck,
   SlidersHorizontal,
   Rss,
   GitMerge,
   Workflow,
-  Grid3x3,
   UserSearch,
   Sparkles,
 } from 'lucide-react';
@@ -62,7 +60,6 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/alertas', label: 'Alertas', icon: ListFilter },
       { to: '/deteccion', label: 'Detecciones', icon: SlidersHorizontal, roles: ['admin', 'analista'] },
       { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
-      { to: '/cobertura-mitre', label: 'Cobertura MITRE', icon: Grid3x3, roles: ['admin', 'analista'] },
       { to: '/comportamiento', label: 'Comportamiento (UEBA)', icon: UserSearch, roles: ['admin', 'analista'] },
       { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
@@ -82,7 +79,6 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta · FortiGate', icon: ShieldAlert, roles: ['admin', 'analista'] },
       { to: '/soar', label: 'Automatización (SOAR)', icon: Workflow, roles: ['admin', 'analista'] },
-      { to: '/playbooks', label: 'Playbooks', icon: Zap, roles: ['admin', 'analista'] },
     ],
   },
   {
@@ -90,10 +86,10 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/activos', label: 'Activos', icon: Server },
       { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug },
-      { to: '/sca', label: 'Config. Assessment', icon: ClipboardCheck },
+      { to: '/sca', label: 'Hardening CIS (SCA)', icon: ClipboardCheck },
       { to: '/fim', label: 'Integridad (FIM)', icon: FileSearch },
       { to: '/hygiene', label: 'IT Hygiene', icon: Activity },
-      { to: '/cumplimiento', label: 'Cumplimiento', icon: Scale },
+      { to: '/cumplimiento', label: 'Cumplimiento normativo', icon: Scale },
     ],
   },
   {

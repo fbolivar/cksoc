@@ -34,13 +34,11 @@ const Backups = lazy(() => import('@/pages/Backups'));
 const Audit = lazy(() => import('@/pages/Audit'));
 const SocMetrics = lazy(() => import('@/pages/SocMetrics'));
 const Hunt = lazy(() => import('@/pages/Hunt'));
-const Playbooks = lazy(() => import('@/pages/Playbooks'));
 const Velociraptor = lazy(() => import('@/pages/Velociraptor'));
 const Detection = lazy(() => import('@/pages/Detection'));
 const ThreatIntel = lazy(() => import('@/pages/ThreatIntel'));
 const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 const Soar = lazy(() => import('@/pages/Soar'));
-const MitreCoverage = lazy(() => import('@/pages/MitreCoverage'));
 const Ueba = lazy(() => import('@/pages/Ueba'));
 const Copilot = lazy(() => import('@/pages/Copilot'));
 
@@ -281,16 +279,6 @@ export default function App() {
         }
       />
       <Route
-        path="/playbooks"
-        element={
-          <Protected>
-            <AppLayout>
-              <Playbooks />
-            </AppLayout>
-          </Protected>
-        }
-      />
-      <Route
         path="/velociraptor"
         element={
           <Protected>
@@ -336,16 +324,6 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Soar />
-            </AppLayout>
-          </Protected>
-        }
-      />
-      <Route
-        path="/cobertura-mitre"
-        element={
-          <Protected>
-            <AppLayout>
-              <MitreCoverage />
             </AppLayout>
           </Protected>
         }
