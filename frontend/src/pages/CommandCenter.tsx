@@ -20,7 +20,9 @@ interface KpiData {
   siemPct: number; vulnCrit: number; incOpen: number; incBreached: number; slaPct: number | null; uebaOpen: number;
   risk: number;
 }
-const FALLBACK: KpiData = { alertas24h: 10000, criticas: 158, agActivos: 21, agTotal: 23, siemPct: 98, vulnCrit: 210, incOpen: 1, incBreached: 1, slaPct: 100, uebaOpen: 4, risk: 63 };
+// Estado inicial NEUTRO (ceros): nunca mostramos cifras inventadas antes de que
+// respondan las APIs; los valores reales llegan en el primer fetch.
+const FALLBACK: KpiData = { alertas24h: 0, criticas: 0, agActivos: 0, agTotal: 0, siemPct: 0, vulnCrit: 0, incOpen: 0, incBreached: 0, slaPct: null, uebaOpen: 0, risk: 0 };
 
 const BAND_COL: Record<string, Col> = { critica: 'destructive', alta: 'warn-orange', media: 'primary', baja: 'cyan' };
 const SEDES: [string, number, number][] = [['Bogotá', .30, .55], ['Medellín', .26, .44], ['La Ceja', .28, .50], ['Entrerríos', .24, .40], ['Fómeque', .33, .58]];

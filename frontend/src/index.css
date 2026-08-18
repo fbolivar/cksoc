@@ -92,27 +92,33 @@
 }
 
 @layer components {
-  /* Tarjeta base HUD: borde tenue, sombra suave y un "tick" coral superior. */
+  /* Tarjeta base = panel HUD táctico (mismo lenguaje que .hud del Command
+     Center): carbón translúcido, esquinas recortadas y corchetes coral.
+     Al vivir en .glass, TODAS las páginas que usan <Card>/<KpiCard> heredan
+     el estilo HUD sin tocar cada archivo. */
   .glass {
-    @apply bg-card border border-border;
     position: relative;
+    background: hsl(var(--card) / 0.72);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border));
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
     box-shadow:
       0 1px 2px rgb(17 17 17 / 0.04),
       0 14px 32px -20px rgb(17 17 17 / 0.18);
-    transition: border-color 0.18s ease;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
   }
-  .glass::before {
+  .glass::before, .glass::after {
     content: "";
     position: absolute;
-    top: 0;
-    left: 16px;
-    width: 26px;
-    height: 2px;
-    background: hsl(var(--primary) / 0.65);
+    width: 15px;
+    height: 15px;
     pointer-events: none;
   }
+  .glass::before { left: -1px; top: -1px; border-left: 2px solid hsl(var(--primary)); border-top: 2px solid hsl(var(--primary)); }
+  .glass::after { right: -1px; bottom: -1px; border-right: 2px solid hsl(var(--primary) / 0.55); border-bottom: 2px solid hsl(var(--primary) / 0.55); }
   .glass:hover {
-    border-color: hsl(var(--primary) / 0.28);
+    border-color: hsl(var(--primary) / 0.4);
+    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.12), 0 18px 44px -24px hsl(var(--foreground) / 0.5);
   }
   /* Métrica destacada (antes neón); ahora coral limpio */
   .neon-text {
