@@ -7,6 +7,7 @@ export interface NdrApp { app: string; count: number }
 export interface NdrDst { ip: string; count: number }
 export interface NdrIps { ts: string; srcip: string | null; dstip: string | null; msg: string; action: string; severity: string | null; attack: string | null }
 export interface NdrIoc { type: string; value: string; source: string; confidence: number; seen: 'domain' | 'ip' }
+export interface NdrTransfer { ts: string; srcip: string | null; dstip: string | null; sentbyte: number; rcvdbyte: number; dstport: string | null; service: string | null }
 
 export interface NdrOverview {
   range: string;
@@ -20,6 +21,8 @@ export interface NdrOverview {
   topDstIps: NdrDst[];
   ipsAlerts: NdrIps[];
   iocHits: NdrIoc[];
+  largeTransfers: NdrTransfer[];
+  largeTransferCount: number;
   generatedAt: string;
 }
 

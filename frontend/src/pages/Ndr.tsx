@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Network, RefreshCw, Loader2, ShieldAlert, Globe2 } from 'lucide-react';
+import { Network, RefreshCw, Loader2, ShieldAlert, Globe2, Upload } from 'lucide-react';
 import { ndrApi, type NdrOverview } from '@/lib/ndr';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 type Range = '1h' | '24h' | '7d';
 const RANGES: Range[] = ['1h', '24h', '7d'];
 const fmt = (n: number) => n.toLocaleString('es-CO');
+const fmtBytes = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${(n / 1e3).toFixed(0)} KB`;
 
 function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
@@ -81,11 +82,12 @@ export default function Ndr() {
       ) : d && (
         <>
           {/* KPIs */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Kpi label="Sesiones" value={fmt(d.sessions)} />
             <Kpi label="Dominios distintos" value={fmt(d.distinctDomains)} />
             <Kpi label="IPs destino" value={fmt(d.distinctDstIps)} />
             <Kpi label="Alertas IPS" value={fmt(d.ipsCount)} danger={d.ipsCount > 0} />
+            <Kpi label="Transferencias grandes" value={fmt(d.largeTransferCount)} danger={d.largeTransferCount > 0} />
           </div>
 
           {/* IOC hits (si hay) */}
@@ -100,6 +102,37 @@ export default function Ndr() {
                   </span>
                 ))}
               </div>
+            </CardContent></Card>
+          )}
+
+          {/* Transferencias salientes grandes (posible exfiltración) */}
+          {d.largeTransfers.length > 0 && (
+            <Card className="border-warn-orange/40 bg-warn-orange/[0.04]"><CardContent className="p-4">
+              <p className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: 'hsl(var(--warn-orange))' }}>
+                <Upload className="h-4 w-4" /> Transferencias salientes grandes · posible exfiltración ({d.largeTransferCount})
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
+                    <th className="px-2 py-1.5 font-medium">Origen</th><th className="px-2 py-1.5 font-medium">Destino</th>
+                    <th className="px-2 py-1.5 font-medium">Servicio</th><th className="px-2 py-1.5 font-medium text-right">Subida</th>
+                    <th className="px-2 py-1.5 font-medium text-right">Bajada</th><th className="px-2 py-1.5 font-medium text-right">Hora</th>
+                  </tr></thead>
+                  <tbody>
+                    {d.largeTransfers.map((t, i) => (
+                      <tr key={i} className="cursor-pointer border-b border-border/30 last:border-0 hover:bg-secondary/40" onClick={() => navigate(`/alertas?srcip=${encodeURIComponent(t.srcip ?? '')}`)}>
+                        <td className="hw-mono px-2 py-1.5 text-xs">{t.srcip}</td>
+                        <td className="hw-mono px-2 py-1.5 text-xs">{t.dstip}{t.dstport ? `:${t.dstport}` : ''}</td>
+                        <td className="px-2 py-1.5 text-xs text-muted-foreground">{t.service ?? '—'}</td>
+                        <td className="hw-tabular px-2 py-1.5 text-right text-xs font-semibold" style={{ color: 'hsl(var(--warn-orange))' }}>↑ {fmtBytes(t.sentbyte)}</td>
+                        <td className="hw-tabular px-2 py-1.5 text-right text-xs text-muted-foreground">↓ {fmtBytes(t.rcvdbyte)}</td>
+                        <td className="hw-mono px-2 py-1.5 text-right text-[10px] text-muted-foreground">{new Date(t.ts).toLocaleTimeString('es-CO')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[10px] text-muted-foreground/70">Sesiones con subida ≥ 10 MB (regla 100600 · MITRE T1048). Revisa si el destino no es un servicio legítimo (Drive/OneDrive/backup).</p>
             </CardContent></Card>
           )}
 

@@ -16,6 +16,7 @@ export interface NdrDomain { domain: string; count: number }
 export interface NdrApp { app: string; count: number }
 export interface NdrDst { ip: string; count: number }
 export interface NdrIps { ts: string; srcip: string | null; dstip: string | null; msg: string; action: string; severity: string | null; attack: string | null }
+export interface NdrTransfer { ts: string; srcip: string | null; dstip: string | null; sentbyte: number; rcvdbyte: number; dstport: string | null; service: string | null }
 export interface NdrIoc { type: string; value: string; source: string; confidence: number; seen: 'domain' | 'ip' }
 
 export interface NdrOverview {
@@ -30,6 +31,8 @@ export interface NdrOverview {
   topDstIps: NdrDst[];
   ipsAlerts: NdrIps[];
   iocHits: NdrIoc[];
+  largeTransfers: NdrTransfer[];
+  largeTransferCount: number;
   generatedAt: string;
 }
 
@@ -100,6 +103,30 @@ async function ipsAlerts(gte: string): Promise<{ count: number; list: NdrIps[] }
   } catch { return { count: 0, list: [] }; }
 }
 
+interface XferHit { _source: { '@timestamp': string; data?: { srcip?: string; dstip?: string; sentbyte?: string; rcvdbyte?: string; dstport?: string; service?: string } } }
+
+/** Transferencias salientes grandes (regla 100600, posible exfiltración). */
+async function largeTransfers(gte: string): Promise<{ count: number; list: NdrTransfer[] }> {
+  try {
+    const { data } = await client().post<{ hits: { total: { value: number } | number; hits: XferHit[] } }>(
+      `/${env.WAZUH_ALERTS_INDEX}/_search`,
+      {
+        size: 25,
+        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { term: { 'rule.id': '100600' } }] } },
+        sort: [{ 'data.sentbyte': { order: 'desc', unmapped_type: 'long' } }],
+        _source: ['@timestamp', 'data.srcip', 'data.dstip', 'data.sentbyte', 'data.rcvdbyte', 'data.dstport', 'data.service'],
+      },
+    );
+    const total = typeof data.hits.total === 'number' ? data.hits.total : data.hits.total.value;
+    const list = data.hits.hits.map((h) => ({
+      ts: h._source['@timestamp'], srcip: h._source.data?.srcip ?? null, dstip: h._source.data?.dstip ?? null,
+      sentbyte: Number(h._source.data?.sentbyte ?? 0), rcvdbyte: Number(h._source.data?.rcvdbyte ?? 0),
+      dstport: h._source.data?.dstport ?? null, service: h._source.data?.service ?? null,
+    }));
+    return { count: total, list };
+  } catch { return { count: 0, list: [] }; }
+}
+
 /** Cruza los dominios/IPs más vistos con los IOCs habilitados. */
 async function iocHits(domains: string[], ips: string[]): Promise<NdrIoc[]> {
   if (!domains.length && !ips.length) return [];
@@ -119,7 +146,7 @@ async function iocHits(domains: string[], ips: string[]): Promise<NdrIoc[]> {
 export async function getNdrOverview(rangeIn: string): Promise<NdrOverview> {
   const range = RANGE[rangeIn] ? rangeIn : '24h';
   const gte = RANGE[range];
-  const [agg, ips] = await Promise.all([overviewAggs(gte), ipsAlerts(gte)]);
+  const [agg, ips, xfer] = await Promise.all([overviewAggs(gte), ipsAlerts(gte), largeTransfers(gte)]);
   const hits = await iocHits(agg.topDomains.map((d) => d.domain), agg.topDstIps.map((d) => d.ip));
   return {
     range,
@@ -133,6 +160,8 @@ export async function getNdrOverview(rangeIn: string): Promise<NdrOverview> {
     topDstIps: agg.topDstIps,
     ipsAlerts: ips.list,
     iocHits: hits,
+    largeTransfers: xfer.list,
+    largeTransferCount: xfer.count,
     generatedAt: new Date().toISOString(),
   };
 }
