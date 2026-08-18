@@ -40,6 +40,7 @@ const ThreatIntel = lazy(() => import('@/pages/ThreatIntel'));
 const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 const Soar = lazy(() => import('@/pages/Soar'));
 const Ueba = lazy(() => import('@/pages/Ueba'));
+const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
 const Copilot = lazy(() => import('@/pages/Copilot'));
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -324,6 +325,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Soar />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/riesgo-entidad"
+        element={
+          <Protected>
+            <AppLayout>
+              <EntityRisk />
             </AppLayout>
           </Protected>
         }

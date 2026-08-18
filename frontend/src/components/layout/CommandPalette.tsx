@@ -16,6 +16,7 @@ const COMMANDS: Cmd[] = [
   { label: 'Detecciones', to: '/deteccion', sec: 'DETECTAR' },
   { label: 'MITRE ATT&CK', to: '/mitre', sec: 'DETECTAR' },
   { label: 'Comportamiento · UEBA', to: '/comportamiento', sec: 'DETECTAR' },
+  { label: 'Riesgo por entidad', to: '/riesgo-entidad', sec: 'DETECTAR' },
   { label: 'Correlación', to: '/correlacion', sec: 'DETECTAR' },
   { label: 'Mapa de ataques', to: '/mapa', sec: 'DETECTAR' },
   { label: 'Threat Hunting', to: '/hunting', sec: 'INVESTIGAR' },

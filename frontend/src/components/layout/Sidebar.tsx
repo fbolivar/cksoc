@@ -31,6 +31,7 @@ import {
   Workflow,
   UserSearch,
   Sparkles,
+  Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -61,6 +62,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/deteccion', label: 'Detecciones', icon: SlidersHorizontal, roles: ['admin', 'analista'] },
       { to: '/mitre', label: 'MITRE ATT&CK', icon: Crosshair },
       { to: '/comportamiento', label: 'Comportamiento (UEBA)', icon: UserSearch, roles: ['admin', 'analista'] },
+      { to: '/riesgo-entidad', label: 'Riesgo por entidad', icon: Target, roles: ['admin', 'analista'] },
       { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
     ],

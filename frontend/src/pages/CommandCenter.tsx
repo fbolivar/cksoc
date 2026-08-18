@@ -10,6 +10,7 @@ import { overviewApi, type Pulse, type RadarAsset, type RiskBand, type SedeMetri
 import { incidentsApi } from '@/lib/incidents';
 import { uebaApi } from '@/lib/ueba';
 import { alertsApi, type AlertHit } from '@/lib/alerts';
+import { entityRiskApi, BAND_VAR, type EntityRisk } from '@/lib/entityRisk';
 
 type Col = 'primary' | 'destructive' | 'success' | 'warn-orange' | 'cyan';
 const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
@@ -45,6 +46,7 @@ export default function CommandCenter() {
   const [radarData, setRadarData] = useState<{ total: number; assets: RadarAsset[] }>({ total: 0, assets: [] });
   const [sedes, setSedes] = useState<SedeMetrics[] | null>(null);
   const [pulse, setPulse] = useState<Pulse | null>(null);
+  const [triage, setTriage] = useState<EntityRisk[]>([]);
   const navigate = useNavigate();
 
   const riskRef = useRef(FALLBACK.risk);
@@ -75,7 +77,10 @@ export default function CommandCenter() {
     const loadPulse = () => overviewApi.pulse().then((p) => { if (alive) setPulse(p); }).catch(() => undefined);
     void loadPulse();
     const pulseIv = setInterval(loadPulse, 60000);
-    return () => { alive = false; clearInterval(pulseIv); };
+    const loadTriage = () => entityRiskApi.triage(6).then((t) => { if (alive) setTriage(t); }).catch(() => undefined);
+    void loadTriage();
+    const triageIv = setInterval(loadTriage, 90000);
+    return () => { alive = false; clearInterval(pulseIv); clearInterval(triageIv); };
   }, []);
 
   // Tendencia real: recarga al cambiar el rango y refresca cada 60s.
@@ -331,6 +336,36 @@ export default function CommandCenter() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* prioridad de triage (RBA) */}
+        <div className="hud hw-reveal" style={{ animationDelay: '.19s' }}>
+          <div className="hw-chdr"><h3>Prioridad de triage</h3><span className="sub">riesgo acumulado por entidad · RBA</span><div className="flex-1" />
+            <button className="hw-mono text-[10px] uppercase tracking-wide text-primary hover:underline" onClick={() => navigate('/riesgo-entidad')}>ver todo →</button>
+          </div>
+          {triage.length === 0 ? (
+            <p className="hw-mono py-6 text-center text-[11px] text-muted-foreground">Calculando prioridad…</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {triage.map((e) => {
+                const v = BAND_VAR[e.band];
+                const go = () => navigate(e.type === 'host' ? `/alertas?agent=${encodeURIComponent(e.entity)}` : `/comportamiento?user=${encodeURIComponent(e.entity)}`);
+                return (
+                  <div key={`${e.type}-${e.entity}`} onClick={go} title={`${e.entity} · riesgo ${e.score}`}
+                    className="hw-clip flex cursor-pointer items-center gap-2.5 border border-border bg-secondary/20 p-2.5 transition-colors hover:border-primary/50">
+                    <span className="hw-tabular flex h-9 w-9 shrink-0 items-center justify-center rounded text-sm font-bold" style={{ color: `hsl(var(--${v}))`, background: `hsl(var(--${v}) / .12)` }}>{e.score}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="hw-mono text-[8.5px] uppercase tracking-wide text-muted-foreground">{e.type === 'host' ? 'HOST' : 'USER'}</span>
+                        <span className="truncate text-[12px] font-semibold">{e.entity}</span>
+                      </div>
+                      <p className="hw-mono truncate text-[9.5px] text-muted-foreground">{e.contributions[0]?.label ?? ''}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* map + quick/offline */}
