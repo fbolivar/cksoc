@@ -9,6 +9,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { overviewApi, type RadarAsset, type RiskBand, type SedeMetrics } from '@/lib/overview';
 import { incidentsApi } from '@/lib/incidents';
 import { uebaApi } from '@/lib/ueba';
+import { alertsApi, type AlertHit } from '@/lib/alerts';
 
 type Col = 'primary' | 'destructive' | 'success' | 'warn-orange' | 'cyan';
 const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
@@ -21,14 +22,7 @@ interface KpiData {
 }
 const FALLBACK: KpiData = { alertas24h: 10000, criticas: 158, agActivos: 21, agTotal: 23, siemPct: 98, vulnCrit: 210, incOpen: 1, incBreached: 1, slaPct: 100, uebaOpen: 4, risk: 63 };
 
-const FEED = [
-  ['destructive', '100210', 'Borrado en repositorio protegido GVM', 'PRIN-WINSRV01'],
-  ['warn-orange', '5710', 'SSH: intento con usuario inexistente', '45.134.26.9'],
-  ['destructive', '100002', 'UEBA: 79 fallos de auth · Julian Martinez', 'GVMCORP'],
-  ['primary', '550', 'FIM: cambio de checksum en /etc', 'gvm-soc-app'],
-  ['warn-orange', '100210', 'Borrado en repositorio protegido', 'GVMBOGLOG01'],
-  ['cyan', '31530', 'Múltiples conexiones bloqueadas (FortiGate)', 'FW-GVM'],
-] as const;
+const BAND_COL: Record<string, Col> = { critica: 'destructive', alta: 'warn-orange', media: 'primary', baja: 'cyan' };
 const SEDES: [string, number, number][] = [['Bogotá', .30, .55], ['Medellín', .26, .44], ['La Ceja', .28, .50], ['Entrerríos', .24, .40], ['Fómeque', .33, .58]];
 const SEDE_INFO: { name: string; region: string; rol?: string }[] = [
   { name: 'Bogotá', region: 'Cundinamarca', rol: 'Principal' },
@@ -41,7 +35,8 @@ const SEDE_INFO: { name: string; region: string; rol?: string }[] = [
 export default function CommandCenter() {
   const [d, setD] = useState<KpiData>(FALLBACK);
   const [clock, setClock] = useState('');
-  const [feed, setFeed] = useState<number[]>([0, 1, 2, 3, 4, 5]);
+  const [feed, setFeed] = useState<AlertHit[]>([]);
+  const [feedLoaded, setFeedLoaded] = useState(false);
   const [range, setRange] = useState<'24h' | '7d' | '30d' | '90d'>('7d');
   const [filter, setFilter] = useState<'all' | 'ep' | 'srv' | 'net'>('all');
 
@@ -87,10 +82,27 @@ export default function CommandCenter() {
   useEffect(() => {
     const t = setInterval(() => setClock(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })), 1000);
     setClock(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    const reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
-    let n = 6;
-    const f = reduce ? null : setInterval(() => { setFeed((prev) => [n++ % FEED.length, ...prev].slice(0, 7)); }, 3400);
-    return () => { clearInterval(t); if (f) clearInterval(f); };
+    return () => { clearInterval(t); };
+  }, []);
+
+  // Feed en vivo: últimas alertas de nivel alto+ (crítica + alta), refresco cada 45s.
+  useEffect(() => {
+    let alive = true;
+    const fetchFeed = async () => {
+      try {
+        const [crit, alta] = await Promise.all([
+          alertsApi.search({ range: '24h', band: 'critica', page: 0, size: 6 }),
+          alertsApi.search({ range: '24h', band: 'alta', page: 0, size: 6 }),
+        ]);
+        if (!alive) return;
+        const merged = [...crit.items, ...alta.items].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 8);
+        setFeed(merged);
+      } catch { /* mantiene lo anterior */ }
+      finally { if (alive) setFeedLoaded(true); }
+    };
+    void fetchFeed();
+    const iv = setInterval(fetchFeed, 45000);
+    return () => { alive = false; clearInterval(iv); };
   }, []);
 
   // --- canvases ---
@@ -281,11 +293,21 @@ export default function CommandCenter() {
               </div>
             </div>
             <div className="hud hw-reveal flex-1" style={{ animationDelay: '.18s' }}>
-              <div className="hw-chdr"><h3>Feed en vivo</h3><span className="sub">alertas nivel alto+</span></div>
+              <div className="hw-chdr"><h3>Feed en vivo</h3><span className="sub">alertas nivel alto+ · 24h</span></div>
               <div className="flex max-h-[230px] flex-col overflow-y-auto">
-                {feed.map((idx, i) => { const it = FEED[idx]; return (
-                  <div className="hw-fe" key={`${idx}-${i}`}><span className="sev" style={{ background: `hsl(var(--${it[0]}))`, boxShadow: `0 0 6px hsl(var(--${it[0]}))` }} /><span className="ft">{new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span><span className="fx">[{it[1]}] {it[2]}</span><span className="fa">{it[3]}</span></div>
-                ); })}
+                {feed.length === 0 ? (
+                  <p className="hw-mono py-8 text-center text-[11px] text-muted-foreground">{feedLoaded ? 'Sin alertas de nivel alto en las últimas 24 h.' : 'Cargando…'}</p>
+                ) : feed.map((a) => {
+                  const col = BAND_COL[a.band] ?? 'primary';
+                  return (
+                    <div className="hw-fe cursor-pointer" key={a.id} onClick={() => navigate(`/alertas?agent=${encodeURIComponent(a.agent)}`)} title={`Nivel ${a.level} · ${a.agent}`}>
+                      <span className="sev" style={{ background: `hsl(var(--${col}))`, boxShadow: `0 0 6px hsl(var(--${col}))` }} />
+                      <span className="ft">{new Date(a.timestamp).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="fx">[{a.ruleId}] {a.description}</span>
+                      <span className="fa">{a.agent}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
