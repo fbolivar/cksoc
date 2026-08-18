@@ -212,9 +212,9 @@ export async function getMatches(): Promise<IocMatch[]> {
   // IPs (campo principal, muchos valores).
   if (ipMap.size) for (const b of await aggField('data.srcip', 3000)) { const s = ipMap.get(b.key); if (s) push(b, 'ip', s); }
 
-  // Dominios.
+  // Dominios (incluye el SNI/hostname del FortiGate — Application Control).
   if (domainMap.size) {
-    for (const field of ['data.dns.question.name', 'data.win.eventdata.queryName', 'data.dstname']) {
+    for (const field of ['data.dns.question.name', 'data.win.eventdata.queryName', 'data.dstname', 'data.hostname']) {
       for (const b of await aggField(field)) { const s = domainMap.get(String(b.key).toLowerCase()); if (s) push(b, 'domain', s); }
     }
   }
