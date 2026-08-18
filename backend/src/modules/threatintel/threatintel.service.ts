@@ -22,7 +22,21 @@ export interface Ioc {
   last_match_at: string | null;
   match_count: number;
   created_at: string;
+  confidence: number;              // confianza base 0-100
+  last_seen_feed: string | null;   // última vez reportado por un feed (NULL = manual)
+  effective_confidence: number;    // confianza tras el envejecimiento
+  age_days: number;                // días desde que se vio por última vez
 }
+
+// Decaimiento de confianza por día sin re-observación en feeds (los IOCs manuales
+// no envejecen). A ~3 pts/día, un IOC que sale de todos los feeds pierde relevancia
+// en ~2-3 semanas, y a los 30 días el aging lo deshabilita.
+const DECAY_PER_DAY = 3;
+const STALE_DAYS = 30;
+const AGE_DAYS_SQL = "FLOOR(EXTRACT(EPOCH FROM (now() - COALESCE(last_seen_feed, created_at))) / 86400)::int";
+const EFF_CONF_SQL =
+  `CASE WHEN last_seen_feed IS NULL THEN confidence
+        ELSE GREATEST(0, confidence - ${AGE_DAYS_SQL} * ${DECAY_PER_DAY}) END`;
 
 export interface IocMatch {
   value: string;
@@ -49,7 +63,9 @@ export async function listIocs(opts: { type?: string; q?: string; limit?: number
   if (opts.type && IOC_TYPES.includes(opts.type as IocType)) { params.push(opts.type); where.push(`ioc_type = $${params.length}`); }
   if (opts.q) { params.push(`%${opts.q}%`); where.push(`value ILIKE $${params.length}`); }
   const lim = Math.min(Math.max(opts.limit ?? 200, 1), 1000);
-  const sql = `SELECT * FROM iocs ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY match_count DESC, created_at DESC LIMIT ${lim}`;
+  const sql = `SELECT *, ${AGE_DAYS_SQL} AS age_days, ${EFF_CONF_SQL} AS effective_confidence
+               FROM iocs ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+               ORDER BY match_count DESC, ${EFF_CONF_SQL} DESC, created_at DESC LIMIT ${lim}`;
   return query<Ioc>(sql, params);
 }
 
@@ -68,10 +84,10 @@ export async function addIoc(input: { type: string; value: string; description?:
   if (!VALIDATORS[type].test(value)) throw new HttpError(400, `Valor no válido para tipo ${type}`);
   const tags = Array.isArray(input.tags) ? input.tags.slice(0, 10).map((t) => String(t).slice(0, 40)) : [];
   const rows = await query<Ioc>(
-    `INSERT INTO iocs (ioc_type, value, source, description, tags, added_by)
-     VALUES ($1, $2, 'manual', $3, $4, $5)
-     ON CONFLICT (ioc_type, value) DO UPDATE SET description = EXCLUDED.description, tags = EXCLUDED.tags, enabled = TRUE
-     RETURNING *`,
+    `INSERT INTO iocs (ioc_type, value, source, description, tags, added_by, confidence)
+     VALUES ($1, $2, 'manual', $3, $4, $5, 90)
+     ON CONFLICT (ioc_type, value) DO UPDATE SET description = EXCLUDED.description, tags = EXCLUDED.tags, enabled = TRUE, confidence = 90
+     RETURNING *, ${AGE_DAYS_SQL} AS age_days, ${EFF_CONF_SQL} AS effective_confidence`,
     [type, value.toLowerCase(), input.description ?? null, tags, userId]
   );
   return rows[0];
@@ -104,14 +120,17 @@ export async function refreshFeeds(): Promise<{ name: string; count: number; sta
         arr.push(it.value);
         byType.set(it.type, arr);
       }
+      const conf = def.confidence ?? 60;
       for (const [type, vals] of byType) {
         for (let i = 0; i < vals.length; i += 2000) {
           const chunk = vals.slice(i, i + 2000);
           await query(
-            `INSERT INTO iocs (ioc_type, value, source)
-             SELECT $1, v, $2 FROM unnest($3::text[]) AS v
-             ON CONFLICT (ioc_type, value) DO UPDATE SET source = EXCLUDED.source, enabled = TRUE`,
-            [type, def.name, chunk]
+            `INSERT INTO iocs (ioc_type, value, source, confidence, last_seen_feed)
+             SELECT $1, v, $2, $3, now() FROM unnest($4::text[]) AS v
+             ON CONFLICT (ioc_type, value) DO UPDATE
+               SET source = EXCLUDED.source, enabled = TRUE, last_seen_feed = now(),
+                   confidence = GREATEST(iocs.confidence, EXCLUDED.confidence)`,
+            [type, def.name, conf, chunk]
           );
         }
       }
@@ -127,6 +146,15 @@ export async function refreshFeeds(): Promise<{ name: string; count: number; sta
     );
     results.push({ name: def.name, count, status });
   }
+  // Aging: deshabilita IOCs de feeds no re-observados en STALE_DAYS (los manuales
+  // no envejecen). Si vuelven a un feed, el upsert los reactiva.
+  await query(
+    `UPDATE iocs SET enabled = FALSE
+      WHERE source <> 'manual' AND enabled = TRUE
+        AND last_seen_feed IS NOT NULL
+        AND last_seen_feed < now() - ($1 || ' days')::interval`,
+    [STALE_DAYS]
+  ).catch(() => undefined);
   return results;
 }
 

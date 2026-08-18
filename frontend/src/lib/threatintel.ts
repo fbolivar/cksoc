@@ -14,6 +14,10 @@ export interface Ioc {
   last_match_at: string | null;
   match_count: number;
   created_at: string;
+  confidence: number;
+  last_seen_feed: string | null;
+  effective_confidence: number;
+  age_days: number;
 }
 
 export interface FeedStatus {

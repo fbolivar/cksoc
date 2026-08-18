@@ -339,6 +339,10 @@ CREATE TABLE IF NOT EXISTS iocs (
     UNIQUE (ioc_type, value)
 );
 CREATE INDEX IF NOT EXISTS idx_iocs_type_value ON iocs(ioc_type, value);
+-- Threat Intel: confianza (0-100) y frescura (aging). last_seen_feed = última vez
+-- que un feed reportó el IOC; NULL para IOCs manuales (no envejecen).
+ALTER TABLE iocs ADD COLUMN IF NOT EXISTS confidence     SMALLINT NOT NULL DEFAULT 50;
+ALTER TABLE iocs ADD COLUMN IF NOT EXISTS last_seen_feed TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_iocs_enabled ON iocs(enabled);
 
 CREATE TABLE IF NOT EXISTS ioc_feeds (

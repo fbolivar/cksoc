@@ -14,6 +14,8 @@ export interface FeedDef {
   parse: (raw: string) => TypedIoc[];
   /** Tope de indicadores a ingerir por corrida (acota tamaño/tiempo). */
   cap?: number;
+  /** Confianza base (0-100) de los IOCs de este feed. */
+  confidence?: number;
 }
 
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
@@ -41,17 +43,27 @@ export const FEEDS: FeedDef[] = [
   {
     name: 'abuse.ch Feodo Tracker',
     url: 'https://feodotracker.abuse.ch/downloads/ipblocklist.txt',
+    confidence: 90,
     parse: (raw) => lines(raw).filter((l) => IPV4.test(l)).map((v) => ({ type: 'ip', value: v })),
   },
   {
     name: 'abuse.ch SSLBL',
     url: 'https://sslbl.abuse.ch/blacklist/sslipblacklist.txt',
+    confidence: 85,
     parse: (raw) => lines(raw).map((l) => l.split(',')[0].trim()).filter((l) => IPV4.test(l)).map((v) => ({ type: 'ip', value: v })),
+  },
+  {
+    name: 'blocklist.de',
+    url: 'https://lists.blocklist.de/lists/all.txt',
+    cap: 40000,
+    confidence: 65,
+    parse: (raw) => lines(raw).filter((l) => IPV4.test(l)).map((v) => ({ type: 'ip', value: v })),
   },
   {
     name: 'abuse.ch URLhaus',
     url: 'https://urlhaus.abuse.ch/downloads/text_online/',
     cap: 6000,
+    confidence: 80,
     parse: (raw) => {
       const out: TypedIoc[] = [];
       for (const l of lines(raw)) {
@@ -67,6 +79,7 @@ export const FEEDS: FeedDef[] = [
     name: 'abuse.ch ThreatFox',
     url: 'https://threatfox.abuse.ch/export/csv/recent/',
     cap: 8000,
+    confidence: 80,
     parse: (raw) => {
       const out: TypedIoc[] = [];
       for (const l of lines(raw)) {
@@ -88,6 +101,7 @@ export const FEEDS: FeedDef[] = [
     name: 'abuse.ch MalwareBazaar',
     url: 'https://bazaar.abuse.ch/export/txt/sha256/recent/',
     cap: 6000,
+    confidence: 85,
     parse: (raw) => lines(raw).filter((l) => SHA256.test(l)).map((v) => ({ type: 'sha256', value: v.toLowerCase() })),
   },
 ];

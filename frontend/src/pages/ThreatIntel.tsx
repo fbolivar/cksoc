@@ -210,16 +210,25 @@ export default function ThreatIntel() {
                     <th className="px-4 py-2 font-medium">Tipo</th>
                     <th className="px-2 py-2 font-medium">Valor</th>
                     <th className="px-2 py-2 font-medium">Fuente</th>
+                    <th className="px-2 py-2 font-medium">Confianza</th>
                     <th className="px-2 py-2 font-medium text-right">Matches</th>
                     {canManage && <th className="px-2 py-2 font-medium text-right">Acción</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {iocs.map((i) => (
-                    <tr key={i.id} className="border-b border-border/30 last:border-0 hover:bg-secondary/40">
+                    <tr key={i.id} className={`border-b border-border/30 last:border-0 hover:bg-secondary/40 ${!i.enabled ? 'opacity-45' : ''}`}>
                       <td className="whitespace-nowrap px-4 py-2"><span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase">{i.ioc_type}</span></td>
                       <td className="max-w-md px-2 py-2 font-mono text-[11px]"><span className="block truncate">{i.value}</span></td>
                       <td className="px-2 py-2 text-xs text-muted-foreground">{i.source}</td>
+                      <td className="px-2 py-2">
+                        <div className="flex items-center gap-2" title={`Confianza ${i.effective_confidence}/100${i.last_seen_feed ? ` · visto hace ${i.age_days}d` : ' · manual'}${!i.enabled ? ' · envejecido (deshabilitado)' : ''}`}>
+                          <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-secondary">
+                            <div className="h-full rounded-full" style={{ width: `${i.effective_confidence}%`, background: i.effective_confidence >= 70 ? 'hsl(var(--destructive))' : i.effective_confidence >= 40 ? 'hsl(var(--warn-orange))' : 'hsl(var(--muted-foreground))' }} />
+                          </div>
+                          <span className="hw-mono text-[10px] text-muted-foreground">{i.effective_confidence}{i.last_seen_feed && i.age_days > 0 ? ` · ${i.age_days}d` : ''}</span>
+                        </div>
+                      </td>
                       <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{i.match_count}</td>
                       {canManage && (
                         <td className="px-2 py-2 text-right">
