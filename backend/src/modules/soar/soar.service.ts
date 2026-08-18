@@ -13,10 +13,11 @@ import { HttpError } from '../auth/auth.service';
 import { block } from '../response/response.service';
 import { createIncident } from '../incidents/incidents.service';
 import { runHelper } from '../velociraptor/velociraptor.helper';
+import { disableAdUser, disableM365User } from '../identity/identity.service';
 import { logger } from '../../config/logger';
 
 export type TriggerType = 'ioc_ip_match' | 'rule_level' | 'rule_id';
-export type ActionType = 'block_ip' | 'isolate_host' | 'create_incident';
+export type ActionType = 'block_ip' | 'isolate_host' | 'create_incident' | 'disable_ad_user' | 'disable_m365_user';
 export type Mode = 'auto' | 'approval';
 
 export interface AutomationRule {
@@ -36,11 +37,14 @@ export interface AutomationRule {
 }
 
 const TRIGGERS: TriggerType[] = ['ioc_ip_match', 'rule_level', 'rule_id'];
-const ACTIONS: ActionType[] = ['block_ip', 'isolate_host', 'create_incident'];
+const ACTIONS: ActionType[] = ['block_ip', 'isolate_host', 'create_incident', 'disable_ad_user', 'disable_m365_user'];
+const USER_ACTIONS: ActionType[] = ['disable_ad_user', 'disable_m365_user'];
 
 // Campo del Indexer por el que se agrupan las entidades según la acción.
 function entityField(action: ActionType): string {
-  return action === 'isolate_host' ? 'agent.name' : 'data.srcip';
+  if (action === 'isolate_host') return 'agent.name';
+  if (USER_ACTIONS.includes(action)) return 'data.srcuser'; // acciones sobre usuario
+  return 'data.srcip';
 }
 
 // --- CRUD de reglas ---
@@ -158,6 +162,14 @@ async function executeAction(action: ActionType, entity: string, rule?: Automati
         source: { ip: entity },
       }, actorId);
       return { ok: true, detail: { executed: 'create_incident', incident_id: inc.id } };
+    }
+    if (action === 'disable_ad_user') {
+      const r = await disableAdUser(entity);
+      return { ok: true, detail: { executed: 'disable_ad_user', dn: r.dn } };
+    }
+    if (action === 'disable_m365_user') {
+      const r = await disableM365User(entity);
+      return { ok: true, detail: { executed: 'disable_m365_user', revoked: r.revoked } };
     }
     return { ok: false, detail: { error: 'acción desconocida' } };
   } catch (err) {

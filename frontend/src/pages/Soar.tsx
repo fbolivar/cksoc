@@ -21,6 +21,8 @@ const ACTION_LABEL: Record<ActionType, string> = {
   block_ip: 'Bloquear IP (FortiGate)',
   isolate_host: 'Aislar host (Velociraptor)',
   create_incident: 'Crear incidente',
+  disable_ad_user: 'Deshabilitar cuenta AD (LDAP)',
+  disable_m365_user: 'Deshabilitar cuenta M365 (Graph)',
 };
 const STATUS_COLOR: Record<string, string> = {
   pending: '#d97706', executed: '#059669', failed: '#dc2626', skipped: '#6b7280', rejected: '#6b7280',
@@ -271,7 +273,14 @@ function RuleModal({ onClose, onCreated }: { onClose: () => void; onCreated: () 
               <option value="block_ip">Bloquear la IP en FortiGate</option>
               <option value="isolate_host">Aislar el host en Velociraptor</option>
               <option value="create_incident">Crear un incidente</option>
+              <option value="disable_ad_user">Deshabilitar la cuenta en AD (LDAP)</option>
+              <option value="disable_m365_user">Deshabilitar la cuenta en M365 (Graph)</option>
             </select>
+            {(action === 'disable_ad_user' || action === 'disable_m365_user') && (
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-700">
+                ⚠️ Acción sobre <b>usuario</b> (campo data.srcuser de la alerta). Requiere configurar {action === 'disable_ad_user' ? 'LDAP (AD)' : 'Microsoft Graph (M365)'} en el .env; si no, la ejecución quedará registrada como "no configurado".
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <div className="flex-1 space-y-1.5"><label className="text-xs text-muted-foreground">Modo</label>

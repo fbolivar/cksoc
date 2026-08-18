@@ -105,6 +105,19 @@ const schema = z.object({
   // El desbloqueo manual (clear_users) revierte antes; esto es una red de seguridad.
   FORTIGATE_BAN_SECONDS: z.coerce.number().int().positive().default(86400),
   FORTIGATE_TLS_REJECT_UNAUTHORIZED: boolish.default('false'),
+
+  // --- Respuesta de identidad (SOAR #7): deshabilitar cuentas / cuarentena ---
+  // Active Directory por LDAP (deshabilitar cuenta on-prem):
+  LDAP_URL: z.string().optional(),          // ldap://IP:389 o ldaps://IP:636
+  LDAP_BIND_DN: z.string().optional(),      // CN=svc-hexwatch,OU=...,DC=...
+  LDAP_BIND_PASSWORD: z.string().optional(),
+  LDAP_BASE_DN: z.string().optional(),      // DC=empresa,DC=local
+  LDAP_USER_ATTR: z.string().default('sAMAccountName'),
+  LDAP_TLS_REJECT_UNAUTHORIZED: boolish.default('false'),
+  // Microsoft Graph (M365/Azure AD: revocar/deshabilitar, cuarentena de correo):
+  GRAPH_TENANT_ID: z.string().optional(),
+  GRAPH_CLIENT_ID: z.string().optional(),
+  GRAPH_CLIENT_SECRET: z.string().optional(),
   // IPs publicas criticas que NUNCA se pueden bloquear (coma-separadas):
   // gateway, DNS, IP publica de la entidad, IPs de admins, etc.
   RESPONSE_WHITELIST_IPS: z.string().default(''),

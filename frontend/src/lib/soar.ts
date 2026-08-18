@@ -2,7 +2,7 @@
 import { api } from './api';
 
 export type TriggerType = 'ioc_ip_match' | 'rule_level' | 'rule_id';
-export type ActionType = 'block_ip' | 'isolate_host' | 'create_incident';
+export type ActionType = 'block_ip' | 'isolate_host' | 'create_incident' | 'disable_ad_user' | 'disable_m365_user';
 export type Mode = 'auto' | 'approval';
 
 export interface AutomationRule {
