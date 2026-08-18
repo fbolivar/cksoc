@@ -6,7 +6,6 @@ import { LogOut, Menu, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from './ThemeToggle';
 import { NotificationBell } from './NotificationBell';
 
 const roleLabels: Record<string, string> = {
@@ -38,7 +37,6 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
 
       <div className="flex items-center gap-2.5">
         <NotificationBell />
-        <ThemeToggle />
         {user && (
           <Link to="/cuenta" className="flex items-center gap-2.5 rounded-full border border-border bg-card px-2 py-1 pr-3 hover:bg-secondary transition-colors" title="Mi cuenta y seguridad">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-background text-xs font-semibold">
