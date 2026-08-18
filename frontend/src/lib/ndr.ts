@@ -13,6 +13,7 @@ export interface NdrTransfer {
   dstcountry: string | null; sessionid: string | null;
   srcHost: string | null; srcOs: string | null; srcUser: string | null;
   dstDomain: string | null; dstVerdict: string | null; dstIsp: string | null; dstAbuse: number | null; dstIoc: boolean;
+  trusted: boolean; riskRank: number;
 }
 
 export interface NdrOverview {

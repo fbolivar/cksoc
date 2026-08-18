@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { Network, RefreshCw, Loader2, ShieldAlert, Globe2, Upload } from 'lucide-react';
-import { ndrApi, type NdrOverview } from '@/lib/ndr';
+import { ndrApi, type NdrOverview, type NdrTransfer } from '@/lib/ndr';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -42,11 +42,49 @@ function BarRow({ label, count, max, onClick, mono }: { label: string; count: nu
   );
 }
 
+function XferCard({ t, onGo }: { t: NdrTransfer; onGo: (t: NdrTransfer) => void }) {
+  const vv = VERDICT_VAR[t.dstVerdict ?? ''] ?? 'muted-foreground';
+  return (
+    <div className="hw-clip flex flex-wrap items-center gap-3 border border-border bg-secondary/20 p-2.5">
+      {/* subida + veredicto */}
+      <div className="flex w-24 shrink-0 flex-col items-center gap-0.5">
+        <span className="hw-tabular text-base font-bold" style={{ color: 'hsl(var(--warn-orange))' }}>↑ {fmtBytes(t.sentbyte)}</span>
+        {t.dstVerdict && <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase" style={{ color: `hsl(var(--${vv}))`, background: `hsl(var(--${vv}) / .12)` }}>{t.dstVerdict}</span>}
+      </div>
+      {/* origen (PC + usuario) */}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-sm font-semibold">{t.srcHost ?? t.srcip}</span>
+          {t.srcUser && <span className="hw-mono rounded bg-primary/12 px-1.5 py-0.5 text-[10px] text-primary">👤 {t.srcUser}</span>}
+        </div>
+        <p className="hw-mono truncate text-[10px] text-muted-foreground">{t.srcip}{t.srcOs ? ` · ${t.srcOs}` : ''}</p>
+      </div>
+      <span className="shrink-0 text-muted-foreground">→</span>
+      {/* destino */}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Globe2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate text-sm font-medium">{t.dstDomain ?? t.dstip}</span>
+          {t.dstIoc && <span className="rounded bg-destructive/15 px-1 py-0.5 text-[9px] font-semibold text-destructive">IOC</span>}
+          {t.dstAbuse != null && t.dstAbuse > 0 && <span className="rounded bg-destructive/15 px-1 py-0.5 text-[9px] font-semibold text-destructive">abuse {t.dstAbuse}</span>}
+        </div>
+        <p className="hw-mono truncate text-[10px] text-muted-foreground">{t.dstip}{t.dstport ? `:${t.dstport}` : ''} · {t.service ?? '—'}{t.dstcountry ? ` · ${t.dstcountry}` : ''}{t.dstIsp ? ` · ${t.dstIsp}` : ''}</p>
+      </div>
+      {/* hora + accion */}
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="hw-tabular text-[10px] text-muted-foreground">↓ {fmtBytes(t.rcvdbyte)} · {new Date(t.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
+        <button onClick={() => onGo(t)} className="hw-mono text-[10px] text-primary hover:underline">investigar →</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Ndr() {
   const [range, setRange] = useState<Range>('24h');
   const [d, setD] = useState<NdrOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showTrusted, setShowTrusted] = useState(false);
   const navigate = useNavigate();
 
   async function load(r: Range) {
@@ -107,53 +145,33 @@ export default function Ndr() {
           )}
 
           {/* Transferencias salientes grandes (posible exfiltración) */}
-          {d.largeTransfers.length > 0 && (
-            <Card className="border-warn-orange/40 bg-warn-orange/[0.04]"><CardContent className="p-4">
-              <p className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: 'hsl(var(--warn-orange))' }}>
-                <Upload className="h-4 w-4" /> Transferencias salientes grandes · posible exfiltración ({d.largeTransferCount})
-              </p>
-              <div className="space-y-2">
-                {d.largeTransfers.map((t, i) => {
-                  const vv = VERDICT_VAR[t.dstVerdict ?? ''] ?? 'muted-foreground';
-                  const go = () => navigate(t.srcHost ? `/alertas?agent=${encodeURIComponent(t.srcHost)}` : `/alertas?srcip=${encodeURIComponent(t.srcip ?? '')}`);
-                  return (
-                    <div key={i} className="hw-clip flex flex-wrap items-center gap-3 border border-border bg-secondary/20 p-2.5">
-                      {/* subida + veredicto */}
-                      <div className="flex w-24 shrink-0 flex-col items-center gap-0.5">
-                        <span className="hw-tabular text-base font-bold" style={{ color: 'hsl(var(--warn-orange))' }}>↑ {fmtBytes(t.sentbyte)}</span>
-                        {t.dstVerdict && <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase" style={{ color: `hsl(var(--${vv}))`, background: `hsl(var(--${vv}) / .12)` }}>{t.dstVerdict}</span>}
-                      </div>
-                      {/* origen (PC + usuario) */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="truncate text-sm font-semibold">{t.srcHost ?? t.srcip}</span>
-                          {t.srcUser && <span className="hw-mono rounded bg-primary/12 px-1.5 py-0.5 text-[10px] text-primary">👤 {t.srcUser}</span>}
-                        </div>
-                        <p className="hw-mono truncate text-[10px] text-muted-foreground">{t.srcip}{t.srcOs ? ` · ${t.srcOs}` : ''}</p>
-                      </div>
-                      <span className="shrink-0 text-muted-foreground">→</span>
-                      {/* destino */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <Globe2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <span className="truncate text-sm font-medium">{t.dstDomain ?? t.dstip}</span>
-                          {t.dstIoc && <span className="rounded bg-destructive/15 px-1 py-0.5 text-[9px] font-semibold text-destructive">IOC</span>}
-                          {t.dstAbuse != null && t.dstAbuse > 0 && <span className="rounded bg-destructive/15 px-1 py-0.5 text-[9px] font-semibold text-destructive">abuse {t.dstAbuse}</span>}
-                        </div>
-                        <p className="hw-mono truncate text-[10px] text-muted-foreground">{t.dstip}{t.dstport ? `:${t.dstport}` : ''} · {t.service ?? '—'}{t.dstcountry ? ` · ${t.dstcountry}` : ''}{t.dstIsp ? ` · ${t.dstIsp}` : ''}</p>
-                      </div>
-                      {/* hora + accion */}
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="hw-tabular text-[10px] text-muted-foreground">↓ {fmtBytes(t.rcvdbyte)} · {new Date(t.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
-                        <button onClick={go} className="hw-mono text-[10px] text-primary hover:underline">investigar →</button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-[10px] text-muted-foreground/70">Sesiones con subida ≥ 10 MB (regla 100600 · MITRE T1048). Origen/usuario por correlación con agentes Wazuh; reputación del destino vía AbuseIPDB. El contenido va cifrado (no hay DLP) — el servicio/dominio es el indicio.</p>
-            </CardContent></Card>
-          )}
+          {d.largeTransfers.length > 0 && (() => {
+            const review = d.largeTransfers.filter((t) => !t.trusted);
+            const trusted = d.largeTransfers.filter((t) => t.trusted);
+            const go = (t: NdrTransfer) => navigate(t.srcHost ? `/alertas?agent=${encodeURIComponent(t.srcHost)}` : `/alertas?srcip=${encodeURIComponent(t.srcip ?? '')}`);
+            return (
+              <Card className={review.length > 0 ? 'border-warn-orange/40 bg-warn-orange/[0.04]' : ''}><CardContent className="p-4">
+                <p className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: review.length > 0 ? 'hsl(var(--warn-orange))' : undefined }}>
+                  <Upload className="h-4 w-4" /> Transferencias salientes grandes · posible exfiltración
+                  {review.length > 0 && <span>({review.length} a revisar)</span>}
+                </p>
+                {review.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-muted-foreground">✓ Ninguna transferencia grande a destinos sospechosos. Todo va a nube corporativa conocida.</p>
+                ) : (
+                  <div className="space-y-2">{review.map((t, i) => <XferCard key={i} t={t} onGo={go} />)}</div>
+                )}
+                {trusted.length > 0 && (
+                  <div className="mt-3">
+                    <button onClick={() => setShowTrusted((v) => !v)} className="hw-mono text-[11px] text-muted-foreground hover:text-foreground">
+                      {showTrusted ? '▾' : '▸'} {trusted.length} transferencias a nube confiable (Office365, Google, etc.) — {showTrusted ? 'ocultar' : 'mostrar'}
+                    </button>
+                    {showTrusted && <div className="mt-2 space-y-2 opacity-60">{trusted.map((t, i) => <XferCard key={i} t={t} onGo={go} />)}</div>}
+                  </div>
+                )}
+                <p className="mt-2 text-[10px] text-muted-foreground/70">Sesiones con subida ≥ 10 MB (regla 100600 · MITRE T1048), ordenadas por riesgo. Origen/usuario por correlación con agentes Wazuh; reputación del destino vía AbuseIPDB. La nube corporativa conocida (reputación limpia) se separa para resaltar lo anómalo. El contenido va cifrado (no hay DLP).</p>
+              </CardContent></Card>
+            );
+          })()}
 
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Top talkers */}

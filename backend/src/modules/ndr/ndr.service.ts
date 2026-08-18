@@ -32,6 +32,8 @@ export interface NdrTransfer {
   dstIsp: string | null;
   dstAbuse: number | null;
   dstIoc: boolean;
+  trusted: boolean;          // destino de nube conocida y reputación limpia
+  riskRank: number;          // 0 (confiable) .. 5 (IOC) para ordenar
 }
 export interface NdrIoc { type: string; value: string; source: string; confidence: number; seen: 'domain' | 'ip' }
 
@@ -142,6 +144,7 @@ async function largeTransfers(gte: string): Promise<{ count: number; list: NdrTr
       duration: Number(h._source.data?.duration ?? 0), appcat: h._source.data?.appcat ?? null,
       dstcountry: h._source.data?.dstcountry ?? null, sessionid: h._source.data?.sessionid ?? null,
       srcHost: null, srcOs: null, srcUser: null, dstDomain: null, dstVerdict: null, dstIsp: null, dstAbuse: null, dstIoc: false,
+      trusted: false, riskRank: 2,
     }));
     return { count: total, list };
   } catch { return { count: 0, list: [] }; }
@@ -184,22 +187,27 @@ async function enrichTransfers(list: NdrTransfer[], gte: string): Promise<NdrTra
   const repByIp = new Map<string, Awaited<ReturnType<typeof enrichIp>>>();
   for (const ip of dstips.slice(0, 15)) { const e = await enrichIp(ip).catch(() => null); if (e) repByIp.set(ip, e); }
 
-  return list.map((t) => {
+  const enriched = list.map((t) => {
     const ag = t.srcip ? agentByIp.get(t.srcip) : undefined;
     const rep = t.dstip ? repByIp.get(t.dstip) : undefined;
-    return {
-      ...t,
-      srcHost: ag?.name ?? null,
-      srcOs: ag?.os ?? null,
-      srcUser: ag?.name ? (userByHost.get(ag.name) ?? null) : null,
-      dstDomain: t.dstip ? (domainByDst.get(t.dstip) ?? null) : null,
-      dstVerdict: rep?.verdict ?? null,
-      dstIsp: rep?.reputation?.isp ?? null,
-      dstAbuse: rep?.reputation?.abuseScore ?? null,
-      dstIoc: rep?.ioc?.matched ?? false,
-    };
+    const verdict = rep?.verdict ?? null;
+    const ioc = rep?.ioc?.matched ?? false;
+    const isp = rep?.reputation?.isp ?? null;
+    const domain = t.dstip ? (domainByDst.get(t.dstip) ?? null) : null;
+    // Nube conocida + reputación limpia = confiable (ruido esperado).
+    const trusted = !ioc && verdict === 'limpio' && TRUSTED_RE.test(`${t.service ?? ''} ${isp ?? ''} ${domain ?? ''}`);
+    // Riesgo para ordenar: IOC > malicioso > sospechoso > desconocido > limpio-no-confiable > confiable.
+    const riskRank = ioc ? 5 : verdict === 'malicioso' ? 4 : verdict === 'sospechoso' ? 3
+      : (verdict === 'limpio' ? (trusted ? 0 : 1) : 2);
+    return { ...t, srcHost: ag?.name ?? null, srcOs: ag?.os ?? null, srcUser: ag?.name ? (userByHost.get(ag.name) ?? null) : null, dstDomain: domain, dstVerdict: verdict, dstIsp: isp, dstAbuse: rep?.reputation?.abuseScore ?? null, dstIoc: ioc, trusted, riskRank };
   });
+  // #1: los de mayor riesgo primero; a igual riesgo, mayor subida.
+  enriched.sort((a, b) => b.riskRank - a.riskRank || b.sentbyte - a.sentbyte);
+  return enriched;
 }
+
+// Destinos de nube corporativa esperada (no exfiltración): se separan del panel.
+const TRUSTED_RE = /microsoft|office365|onedrive|sharepoint|windows|google|gmail|youtube|amazon|\baws\b|apple|icloud|dropbox|cloudflare|akamai|fastly|meta|whatsapp|facebook/i;
 
 /** Cruza los dominios/IPs más vistos con los IOCs habilitados. */
 async function iocHits(domains: string[], ips: string[]): Promise<NdrIoc[]> {
