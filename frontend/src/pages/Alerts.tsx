@@ -11,6 +11,7 @@ import { incidentsApi, type Severity } from '@/lib/incidents';
 import { responseApi } from '@/lib/response';
 import { velociraptorApi } from '@/lib/velociraptor';
 import { copilotApi } from '@/lib/copilot';
+import { enrichmentApi, VERDICT_META, type IpEnrichment } from '@/lib/enrichment';
 import { useAuth } from '@/lib/auth';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent } from '@/components/ui/card';
@@ -83,6 +84,8 @@ export default function Alerts() {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiBusy, setAiBusy] = useState<null | 'explain' | 'triage'>(null);
   const [aiText, setAiText] = useState<string | null>(null);
+  const [enrich, setEnrich] = useState<IpEnrichment | null>(null);
+  const [enrichLoading, setEnrichLoading] = useState(false);
 
   useEffect(() => { copilotApi.status().then((s) => setAiEnabled(s.enabled)).catch(() => setAiEnabled(false)); }, []);
 
@@ -180,6 +183,17 @@ export default function Alerts() {
     setAiText(null);
     setAiBusy(null);
     setDetail({ hit, source: null });
+    // Enriquecimiento automático de la IP de origen (geo + reputación + IOC).
+    setEnrich(null);
+    if (hit.srcip) {
+      setEnrichLoading(true);
+      enrichmentApi.ip(hit.srcip)
+        .then((e) => { if (my === detailSeq.current) setEnrich(e); })
+        .catch(() => undefined)
+        .finally(() => { if (my === detailSeq.current) setEnrichLoading(false); });
+    } else {
+      setEnrichLoading(false);
+    }
     try {
       const source = await alertsApi.detail(hit.index, hit.id);
       if (my === detailSeq.current) setDetail({ hit, source });
@@ -367,6 +381,32 @@ export default function Alerts() {
                 )}
                 {detail.hit.groups.length > 0 && (
                   <p className="mt-1 text-[10px] text-muted-foreground/70">grupos: {detail.hit.groups.join(', ')}</p>
+                )}
+                {/* Enriquecimiento automático de la IP de origen */}
+                {detail.hit.srcip && (enrichLoading || enrich) && (
+                  <div className="mt-3 rounded-md border border-border/70 bg-secondary/20 p-2.5">
+                    {enrichLoading && !enrich ? (
+                      <p className="flex items-center gap-2 text-[11px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Enriqueciendo {detail.hit.srcip}…</p>
+                    ) : enrich ? (
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-medium text-muted-foreground">Enriquecimiento · {enrich.ip}</span>
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ color: `hsl(var(--${VERDICT_META[enrich.verdict].var}))`, background: `hsl(var(--${VERDICT_META[enrich.verdict].var}) / .12)` }}>
+                            {VERDICT_META[enrich.verdict].label}
+                          </span>
+                          {enrich.ioc?.matched && <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-semibold text-destructive">IOC: {enrich.ioc.source}</span>}
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                          {enrich.geo && <span>📍 {enrich.geo.city ? `${enrich.geo.city}, ` : ''}{enrich.geo.country || enrich.geo.isoCode}</span>}
+                          {enrich.reputation?.configured && <span>AbuseIPDB: <b className="text-foreground/80">{enrich.reputation.abuseScore}/100</b>{enrich.reputation.totalReports ? ` · ${enrich.reputation.totalReports} reportes` : ''}</span>}
+                          {enrich.reputation?.isp && <span>ISP: {enrich.reputation.isp}</span>}
+                          {enrich.reputation?.usageType && <span>{enrich.reputation.usageType}</span>}
+                          <span>Alertas 24h: <b className="text-foreground/80">{enrich.alerts24h}</b></span>
+                          {!enrich.isPublic && <span className="text-cyan-500">IP interna</span>}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
                 {aiEnabled && (
                   <div className="mt-3 rounded-md border border-neon/20 bg-neon/[0.03] p-2.5">
