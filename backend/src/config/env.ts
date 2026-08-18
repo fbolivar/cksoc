@@ -97,9 +97,13 @@ const schema = z.object({
   ATTACKS_ENRICH_MAX: z.coerce.number().default(60),
 
   // --- Respuesta semi-automatica (FortiGate) ---
-  FORTIGATE_HOST: z.string().optional(), // ej: 192.168.50.1
+  // HOST incluye puerto si no es 443, ej: 192.168.2.1:12443
+  FORTIGATE_HOST: z.string().optional(),
   FORTIGATE_API_TOKEN: z.string().optional(),
-  FORTIGATE_BLOCKLIST_GROUP: z.string().default('WAZUH_BLOCKLIST'),
+  FORTIGATE_BLOCKLIST_GROUP: z.string().default('WAZUH_BLOCKLIST'), // (legacy, enfoque address-group)
+  // Segundos de cuarentena en cada bloqueo (endpoint monitor/user/banned).
+  // El desbloqueo manual (clear_users) revierte antes; esto es una red de seguridad.
+  FORTIGATE_BAN_SECONDS: z.coerce.number().int().positive().default(86400),
   FORTIGATE_TLS_REJECT_UNAUTHORIZED: boolish.default('false'),
   // IPs publicas criticas que NUNCA se pueden bloquear (coma-separadas):
   // gateway, DNS, IP publica de la entidad, IPs de admins, etc.
