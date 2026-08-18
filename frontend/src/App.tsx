@@ -41,6 +41,7 @@ const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 const Soar = lazy(() => import('@/pages/Soar'));
 const Ueba = lazy(() => import('@/pages/Ueba'));
 const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
+const Ndr = lazy(() => import('@/pages/Ndr'));
 const Copilot = lazy(() => import('@/pages/Copilot'));
 const OnCall = lazy(() => import('@/pages/OnCall'));
 const HumanFactor = lazy(() => import('@/pages/HumanFactor'));
@@ -97,6 +98,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Incidents />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/ndr"
+        element={
+          <Protected>
+            <AppLayout>
+              <Ndr />
             </AppLayout>
           </Protected>
         }

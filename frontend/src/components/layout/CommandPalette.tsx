@@ -19,6 +19,7 @@ const COMMANDS: Cmd[] = [
   { label: 'Riesgo por entidad', to: '/riesgo-entidad', sec: 'DETECTAR' },
   { label: 'Correlación', to: '/correlacion', sec: 'DETECTAR' },
   { label: 'Mapa de ataques', to: '/mapa', sec: 'DETECTAR' },
+  { label: 'NDR · Red', to: '/ndr', sec: 'DETECTAR' },
   { label: 'Threat Hunting', to: '/hunting', sec: 'INVESTIGAR' },
   { label: 'Threat Intelligence', to: '/threat-intel', sec: 'INVESTIGAR' },
   { label: 'Velociraptor · DFIR', to: '/velociraptor', sec: 'INVESTIGAR' },

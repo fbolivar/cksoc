@@ -33,6 +33,7 @@ import {
   Sparkles,
   Target,
   CalendarClock,
+  Network,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -66,6 +67,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/riesgo-entidad', label: 'Riesgo por entidad', icon: Target, roles: ['admin', 'analista'] },
       { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
+      { to: '/ndr', label: 'NDR · Red', icon: Network, roles: ['admin', 'analista'] },
     ],
   },
   {
