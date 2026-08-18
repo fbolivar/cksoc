@@ -42,6 +42,7 @@ const Soar = lazy(() => import('@/pages/Soar'));
 const Ueba = lazy(() => import('@/pages/Ueba'));
 const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
 const Copilot = lazy(() => import('@/pages/Copilot'));
+const OnCall = lazy(() => import('@/pages/OnCall'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -275,6 +276,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Hunt />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/oncall"
+        element={
+          <Protected>
+            <AppLayout>
+              <OnCall />
             </AppLayout>
           </Protected>
         }

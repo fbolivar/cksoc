@@ -4,8 +4,16 @@
  */
 import { query } from '../../config/db';
 import { getPolicy, slaFor, type IncidentSla, type SlaPolicy } from './sla.service';
+import { notifyOnCall } from '../oncall/oncall.service';
 
 export type Severity = 'baja' | 'media' | 'alta' | 'critica';
+
+/** Ranking de severidad para detectar escalamientos. */
+const SEV_RANK: Record<string, number> = { baja: 1, media: 2, alta: 3, critica: 4 };
+/** Dispara el escalamiento on-call sin bloquear la respuesta. */
+function escalate(subject: string, body: string): void {
+  void notifyOnCall(subject, body).catch(() => undefined);
+}
 export type Status = 'abierto' | 'en_curso' | 'resuelto' | 'cerrado';
 
 export interface IncidentSource {
@@ -126,6 +134,11 @@ export async function createIncident(
   );
   const id = rows[0].id;
   await addSystemNote(id, userId, 'Incidente creado.');
+  // Escala al analista de guardia si nace crítico/alto.
+  if (data.severity === 'critica' || data.severity === 'alta') {
+    escalate(`Nuevo incidente ${data.severity}: ${data.title}`,
+      `Se creó un incidente de severidad ${data.severity.toUpperCase()}.\n\nTítulo: ${data.title}${data.description ? `\n\n${data.description}` : ''}\n\nAtiéndelo en HexWatch → Incidentes.`);
+  }
   return (await getIncident(id))!;
 }
 
@@ -146,8 +159,8 @@ export async function updateIncident(
   patch: { status?: Status; severity?: Severity; assigneeId?: string | null },
   userId: string
 ): Promise<IncidentDetail | null> {
-  const cur = (await query<{ status: Status; severity: Severity; assignee_id: string | null }>(
-    'SELECT status, severity, assignee_id FROM incidents WHERE id = $1', [id]
+  const cur = (await query<{ status: Status; severity: Severity; assignee_id: string | null; title: string }>(
+    'SELECT status, severity, assignee_id, title FROM incidents WHERE id = $1', [id]
   ))[0];
   if (!cur) return null;
 
@@ -182,6 +195,13 @@ export async function updateIncident(
   params.push(id);
   await query(`UPDATE incidents SET ${sets.join(', ')} WHERE id = $${p}`, params);
   for (const n of sysNotes) await addSystemNote(id, userId, n);
+  // Escala si la severidad SUBIÓ a alta/crítica.
+  if (patch.severity && patch.severity !== cur.severity
+      && (SEV_RANK[patch.severity] ?? 0) > (SEV_RANK[cur.severity] ?? 0)
+      && (patch.severity === 'critica' || patch.severity === 'alta')) {
+    escalate(`Incidente escaló a ${patch.severity}: ${cur.title}`,
+      `El incidente "${cur.title}" subió de ${cur.severity.toUpperCase()} a ${patch.severity.toUpperCase()}.\n\nAtiéndelo en HexWatch → Incidentes.`);
+  }
   return getIncident(id);
 }
 

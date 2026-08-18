@@ -467,3 +467,17 @@ INSERT INTO sla_policy (severity, ack_minutes, resolve_minutes) VALUES
     ('media',   120, 1440),
     ('baja',    480, 4320)
 ON CONFLICT (severity) DO NOTHING;
+
+-- Turnos de guardia (on-call): quién es responsable en cada franja horaria.
+-- Alimenta el escalamiento de incidentes (notifica al analista de guardia).
+CREATE TABLE IF NOT EXISTS oncall_shifts (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    starts_at   TIMESTAMPTZ NOT NULL,
+    ends_at     TIMESTAMPTZ NOT NULL,
+    note        TEXT,
+    created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT oncall_range_valid CHECK (ends_at > starts_at)
+);
+CREATE INDEX IF NOT EXISTS idx_oncall_range ON oncall_shifts (starts_at, ends_at);

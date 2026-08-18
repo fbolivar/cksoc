@@ -32,6 +32,7 @@ import {
   UserSearch,
   Sparkles,
   Target,
+  CalendarClock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -102,6 +103,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     title: 'Operación',
     items: [
       { to: '/notificaciones', label: 'Notificaciones', icon: BellRing },
+      { to: '/oncall', label: 'On-call · Turnos', icon: CalendarClock, roles: ['admin', 'analista'] },
       { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse },
       { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, roles: ['admin'] },
       { to: '/auditoria', label: 'Auditoría', icon: ScrollText, roles: ['admin'] },

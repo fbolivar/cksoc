@@ -33,6 +33,7 @@ const COMMANDS: Cmd[] = [
   { label: 'Cumplimiento normativo', to: '/cumplimiento', sec: 'POSTURA' },
   { label: 'Reportes', to: '/reportes', sec: 'OPERACIÓN' },
   { label: 'Notificaciones', to: '/notificaciones', sec: 'OPERACIÓN' },
+  { label: 'On-call · Turnos', to: '/oncall', sec: 'OPERACIÓN' },
   { label: 'Salud del SIEM', to: '/salud', sec: 'OPERACIÓN' },
   { label: 'Auditoría', to: '/auditoria', sec: 'OPERACIÓN' },
   { label: 'Gestión de usuarios', to: '/gestion', sec: 'OPERACIÓN' },
