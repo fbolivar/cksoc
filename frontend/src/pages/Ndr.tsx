@@ -15,6 +15,7 @@ type Range = '1h' | '24h' | '7d';
 const RANGES: Range[] = ['1h', '24h', '7d'];
 const fmt = (n: number) => n.toLocaleString('es-CO');
 const fmtBytes = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${(n / 1e3).toFixed(0)} KB`;
+const VERDICT_VAR: Record<string, string> = { malicioso: 'destructive', sospechoso: 'warn-orange', limpio: 'success', interno: 'cyan', desconocido: 'muted-foreground' };
 
 function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
@@ -111,28 +112,46 @@ export default function Ndr() {
               <p className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: 'hsl(var(--warn-orange))' }}>
                 <Upload className="h-4 w-4" /> Transferencias salientes grandes · posible exfiltración ({d.largeTransferCount})
               </p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                    <th className="px-2 py-1.5 font-medium">Origen</th><th className="px-2 py-1.5 font-medium">Destino</th>
-                    <th className="px-2 py-1.5 font-medium">Servicio</th><th className="px-2 py-1.5 font-medium text-right">Subida</th>
-                    <th className="px-2 py-1.5 font-medium text-right">Bajada</th><th className="px-2 py-1.5 font-medium text-right">Hora</th>
-                  </tr></thead>
-                  <tbody>
-                    {d.largeTransfers.map((t, i) => (
-                      <tr key={i} className="cursor-pointer border-b border-border/30 last:border-0 hover:bg-secondary/40" onClick={() => navigate(`/alertas?srcip=${encodeURIComponent(t.srcip ?? '')}`)}>
-                        <td className="hw-mono px-2 py-1.5 text-xs">{t.srcip}</td>
-                        <td className="hw-mono px-2 py-1.5 text-xs">{t.dstip}{t.dstport ? `:${t.dstport}` : ''}</td>
-                        <td className="px-2 py-1.5 text-xs text-muted-foreground">{t.service ?? '—'}</td>
-                        <td className="hw-tabular px-2 py-1.5 text-right text-xs font-semibold" style={{ color: 'hsl(var(--warn-orange))' }}>↑ {fmtBytes(t.sentbyte)}</td>
-                        <td className="hw-tabular px-2 py-1.5 text-right text-xs text-muted-foreground">↓ {fmtBytes(t.rcvdbyte)}</td>
-                        <td className="hw-mono px-2 py-1.5 text-right text-[10px] text-muted-foreground">{new Date(t.ts).toLocaleTimeString('es-CO')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-2">
+                {d.largeTransfers.map((t, i) => {
+                  const vv = VERDICT_VAR[t.dstVerdict ?? ''] ?? 'muted-foreground';
+                  const go = () => navigate(t.srcHost ? `/alertas?agent=${encodeURIComponent(t.srcHost)}` : `/alertas?srcip=${encodeURIComponent(t.srcip ?? '')}`);
+                  return (
+                    <div key={i} className="hw-clip flex flex-wrap items-center gap-3 border border-border bg-secondary/20 p-2.5">
+                      {/* subida + veredicto */}
+                      <div className="flex w-24 shrink-0 flex-col items-center gap-0.5">
+                        <span className="hw-tabular text-base font-bold" style={{ color: 'hsl(var(--warn-orange))' }}>↑ {fmtBytes(t.sentbyte)}</span>
+                        {t.dstVerdict && <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase" style={{ color: `hsl(var(--${vv}))`, background: `hsl(var(--${vv}) / .12)` }}>{t.dstVerdict}</span>}
+                      </div>
+                      {/* origen (PC + usuario) */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="truncate text-sm font-semibold">{t.srcHost ?? t.srcip}</span>
+                          {t.srcUser && <span className="hw-mono rounded bg-primary/12 px-1.5 py-0.5 text-[10px] text-primary">👤 {t.srcUser}</span>}
+                        </div>
+                        <p className="hw-mono truncate text-[10px] text-muted-foreground">{t.srcip}{t.srcOs ? ` · ${t.srcOs}` : ''}</p>
+                      </div>
+                      <span className="shrink-0 text-muted-foreground">→</span>
+                      {/* destino */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Globe2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate text-sm font-medium">{t.dstDomain ?? t.dstip}</span>
+                          {t.dstIoc && <span className="rounded bg-destructive/15 px-1 py-0.5 text-[9px] font-semibold text-destructive">IOC</span>}
+                          {t.dstAbuse != null && t.dstAbuse > 0 && <span className="rounded bg-destructive/15 px-1 py-0.5 text-[9px] font-semibold text-destructive">abuse {t.dstAbuse}</span>}
+                        </div>
+                        <p className="hw-mono truncate text-[10px] text-muted-foreground">{t.dstip}{t.dstport ? `:${t.dstport}` : ''} · {t.service ?? '—'}{t.dstcountry ? ` · ${t.dstcountry}` : ''}{t.dstIsp ? ` · ${t.dstIsp}` : ''}</p>
+                      </div>
+                      {/* hora + accion */}
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="hw-tabular text-[10px] text-muted-foreground">↓ {fmtBytes(t.rcvdbyte)} · {new Date(t.ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <button onClick={go} className="hw-mono text-[10px] text-primary hover:underline">investigar →</button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="mt-2 text-[10px] text-muted-foreground/70">Sesiones con subida ≥ 10 MB (regla 100600 · MITRE T1048). Revisa si el destino no es un servicio legítimo (Drive/OneDrive/backup).</p>
+              <p className="mt-2 text-[10px] text-muted-foreground/70">Sesiones con subida ≥ 10 MB (regla 100600 · MITRE T1048). Origen/usuario por correlación con agentes Wazuh; reputación del destino vía AbuseIPDB. El contenido va cifrado (no hay DLP) — el servicio/dominio es el indicio.</p>
             </CardContent></Card>
           )}
 
