@@ -43,6 +43,7 @@ const Ueba = lazy(() => import('@/pages/Ueba'));
 const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
 const Copilot = lazy(() => import('@/pages/Copilot'));
 const OnCall = lazy(() => import('@/pages/OnCall'));
+const HumanFactor = lazy(() => import('@/pages/HumanFactor'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -206,6 +207,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <SiemHealth />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/factor-humano"
+        element={
+          <Protected>
+            <AppLayout>
+              <HumanFactor />
             </AppLayout>
           </Protected>
         }

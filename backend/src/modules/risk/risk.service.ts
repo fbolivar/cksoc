@@ -12,6 +12,7 @@ import { getVulnerabilities } from '../vulnerabilities/vuln.service';
 import { getSca } from '../sca/sca.service';
 import { cachedHealth, getOverallHealth } from '../health/siem-health.service';
 import { listBackups } from '../backups/backups.service';
+import { getHumanFactor } from '../phishing/phishing.service';
 import { logger } from '../../config/logger';
 
 export type Status = 'good' | 'warn' | 'bad' | 'pending';
@@ -120,17 +121,34 @@ export async function getRiskBoard(): Promise<RiskBoard> {
     });
   } catch (err) { logger.warn({ err }, 'risk: identidades'); domains.push(pending('identidades', 'Proteger identidades y accesos', '¿Están protegidos los accesos a los sistemas críticos?')); }
 
-  // ---------- 4. Fortalecer el factor humano (sin fuente) ----------
-  domains.push({
-    key: 'factor_humano', title: 'Fortalecer el factor humano',
-    businessQuestion: '¿Nuestra gente es una defensa o un riesgo?',
-    status: 'pending', posture: null,
-    kpis: [
-      { label: 'Tasa de clics en phishing', value: '—', status: 'pending', source: 'pending', note: 'Requiere plataforma de simulación de phishing' },
-      { label: '% empleados capacitados', value: '—', status: 'pending', source: 'pending', note: 'Requiere LMS / registro de capacitación' },
-      { label: 'Incidentes reportados por usuarios', value: '—', status: 'pending', source: 'pending', note: 'Requiere canal de reporte' },
-    ],
-  });
+  // ---------- 4. Fortalecer el factor humano (campañas de phishing) ----------
+  try {
+    const hf = await getHumanFactor();
+    if (!hf) {
+      domains.push({
+        key: 'factor_humano', title: 'Fortalecer el factor humano',
+        businessQuestion: '¿Nuestra gente es una defensa o un riesgo?',
+        status: 'pending', posture: null,
+        kpis: [
+          { label: 'Tasa de clics en phishing', value: '—', status: 'pending', source: 'pending', note: 'Registra una campaña en Factor Humano' },
+          { label: 'Reportado por usuarios', value: '—', status: 'pending', source: 'pending', note: 'Registra una campaña en Factor Humano' },
+          { label: '% empleados capacitados', value: '—', status: 'pending', source: 'pending', note: 'Registra una campaña en Factor Humano' },
+        ],
+      });
+    } else {
+      domains.push({
+        key: 'factor_humano', title: 'Fortalecer el factor humano',
+        businessQuestion: '¿Nuestra gente es una defensa o un riesgo?',
+        status: st(hf.posture, 75, 50), posture: hf.posture,
+        kpis: [
+          { label: 'Tasa de clics en phishing', value: `${hf.clickRate}%`, status: hf.clickRate <= 5 ? 'good' : hf.clickRate <= 15 ? 'warn' : 'bad', source: 'real' },
+          { label: 'Reportado por usuarios', value: `${hf.reportRate}%`, status: hf.reportRate >= 30 ? 'good' : hf.reportRate >= 10 ? 'warn' : 'bad', source: 'real' },
+          { label: '% empleados capacitados', value: `${hf.trainedPct}%`, status: hf.trainedPct >= 80 ? 'good' : hf.trainedPct >= 50 ? 'warn' : 'bad', source: 'real' },
+          { label: 'Campañas (12 m)', value: `${hf.campaigns}`, status: 'good', source: 'real' },
+        ],
+      });
+    }
+  } catch (err) { logger.warn({ err }, 'risk: factor_humano'); domains.push(pending('factor_humano', 'Fortalecer el factor humano', '¿Nuestra gente es una defensa o un riesgo?')); }
 
   // ---------- 5. Resiliencia del negocio ----------
   try {

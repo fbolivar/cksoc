@@ -30,6 +30,7 @@ const COMMANDS: Cmd[] = [
   { label: 'Hardening CIS (SCA)', to: '/sca', sec: 'POSTURA' },
   { label: 'Integridad (FIM)', to: '/fim', sec: 'POSTURA' },
   { label: 'IT Hygiene', to: '/hygiene', sec: 'POSTURA' },
+  { label: 'Factor humano', to: '/factor-humano', sec: 'POSTURA' },
   { label: 'Cumplimiento normativo', to: '/cumplimiento', sec: 'POSTURA' },
   { label: 'Reportes', to: '/reportes', sec: 'OPERACIÓN' },
   { label: 'Notificaciones', to: '/notificaciones', sec: 'OPERACIÓN' },

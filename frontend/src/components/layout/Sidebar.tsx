@@ -92,6 +92,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/sca', label: 'Hardening CIS (SCA)', icon: ClipboardCheck },
       { to: '/fim', label: 'Integridad (FIM)', icon: FileSearch },
       { to: '/hygiene', label: 'IT Hygiene', icon: Activity },
+      { to: '/factor-humano', label: 'Factor humano', icon: Users },
       { to: '/cumplimiento', label: 'Cumplimiento normativo', icon: Scale },
     ],
   },

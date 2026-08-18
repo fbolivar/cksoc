@@ -485,3 +485,19 @@ CREATE TABLE IF NOT EXISTS oncall_shifts (
     CONSTRAINT oncall_range_valid CHECK (ends_at > starts_at)
 );
 CREATE INDEX IF NOT EXISTS idx_oncall_range ON oncall_shifts (starts_at, ends_at);
+
+-- Factor humano: resultados de campañas de phishing / concienciación. Alimenta el
+-- dominio "factor_humano" del Resumen Ejecutivo (hasta ahora sin fuente).
+CREATE TABLE IF NOT EXISTS phishing_campaigns (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name         VARCHAR(200) NOT NULL,
+    run_date     DATE NOT NULL,
+    sent         INTEGER NOT NULL DEFAULT 0,
+    clicked      INTEGER NOT NULL DEFAULT 0,
+    reported     INTEGER NOT NULL DEFAULT 0,
+    trained_pct  SMALLINT NOT NULL DEFAULT 0,
+    note         TEXT,
+    created_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_phishing_date ON phishing_campaigns (run_date DESC);
