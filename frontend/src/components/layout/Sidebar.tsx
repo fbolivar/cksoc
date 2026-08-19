@@ -34,6 +34,7 @@ import {
   Target,
   CalendarClock,
   Network,
+  Cloud,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -68,6 +69,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
       { to: '/ndr', label: 'NDR · Red', icon: Network, roles: ['admin', 'analista'] },
+      { to: '/office365', label: 'Office 365', icon: Cloud, roles: ['admin', 'analista'] },
     ],
   },
   {

@@ -42,6 +42,7 @@ const Soar = lazy(() => import('@/pages/Soar'));
 const Ueba = lazy(() => import('@/pages/Ueba'));
 const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
 const Ndr = lazy(() => import('@/pages/Ndr'));
+const Office365 = lazy(() => import('@/pages/Office365'));
 const Copilot = lazy(() => import('@/pages/Copilot'));
 const OnCall = lazy(() => import('@/pages/OnCall'));
 const HumanFactor = lazy(() => import('@/pages/HumanFactor'));
@@ -108,6 +109,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Ndr />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/office365"
+        element={
+          <Protected>
+            <AppLayout>
+              <Office365 />
             </AppLayout>
           </Protected>
         }

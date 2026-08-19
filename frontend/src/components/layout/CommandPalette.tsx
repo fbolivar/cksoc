@@ -20,6 +20,7 @@ const COMMANDS: Cmd[] = [
   { label: 'Correlación', to: '/correlacion', sec: 'DETECTAR' },
   { label: 'Mapa de ataques', to: '/mapa', sec: 'DETECTAR' },
   { label: 'NDR · Red', to: '/ndr', sec: 'DETECTAR' },
+  { label: 'Office 365', to: '/office365', sec: 'DETECTAR' },
   { label: 'Threat Hunting', to: '/hunting', sec: 'INVESTIGAR' },
   { label: 'Threat Intelligence', to: '/threat-intel', sec: 'INVESTIGAR' },
   { label: 'Velociraptor · DFIR', to: '/velociraptor', sec: 'INVESTIGAR' },
