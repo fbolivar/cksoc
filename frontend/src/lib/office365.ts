@@ -1,7 +1,7 @@
 /** Cliente del dashboard Office 365. */
 import { api } from './api';
 
-export interface NamedCount { key: string; count: number; country?: string }
+export interface NamedCount { key: string; count: number; country?: string; system?: boolean }
 export interface RuleCount { desc: string; count: number; level: number }
 export interface TimePoint { ts: number; count: number }
 

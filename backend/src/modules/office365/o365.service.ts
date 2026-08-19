@@ -12,7 +12,13 @@ import { geolocate, isPublicIP } from '../geo/geoip.service';
 const RANGE: Record<string, string> = { '24h': 'now-24h', '7d': 'now-7d', '30d': 'now-30d' };
 const O365_FILTER = { bool: { should: [{ match: { 'rule.groups': 'office365' } }, { exists: { field: 'data.office365' } }], minimum_should_match: 1 } };
 
-export interface NamedCount { key: string; count: number; country?: string }
+export interface NamedCount { key: string; count: number; country?: string; system?: boolean }
+
+/** Identidad de sistema/anónima de Microsoft (SharePoint/OneDrive), no una persona real. */
+function isSystemUser(u?: string): boolean {
+  if (!u) return false;
+  return /^urn:spo:/i.test(u) || /^urn:/i.test(u) || u.toLowerCase() === 'app@sharepoint';
+}
 export interface RuleCount { desc: string; count: number; level: number }
 export interface TimePoint { ts: number; count: number }
 
@@ -36,13 +42,16 @@ export interface O365Overview {
   generatedAt: string;
 }
 
-interface TermB { key: string; doc_count: number }
+interface TermB { key: string; doc_count: number; tu?: { buckets: TermB[] } }
 interface RuleB extends TermB { lvl: { value: number | null } }
 
 function withGeo(buckets: TermB[]): NamedCount[] {
   return buckets.map((b) => {
     const g = isPublicIP(b.key) ? geolocate(b.key) : null;
-    return { key: b.key, count: b.doc_count, country: g?.country || (isPublicIP(b.key) ? '' : 'interna') };
+    // Una IP es "infra Microsoft" si su único usuario es una identidad de sistema (urn:...).
+    const topUser = b.tu?.buckets?.[0]?.key;
+    const system = isSystemUser(topUser);
+    return { key: b.key, count: b.doc_count, country: g?.country || (isPublicIP(b.key) ? '' : 'interna'), system };
   });
 }
 
@@ -62,7 +71,7 @@ export async function getO365Overview(rangeIn: string): Promise<O365Overview> {
   const main = await getIndexerClient().post<{
     hits: { total: { value: number } | number };
     aggregations: {
-      users: { buckets: TermB[] }; ips: { buckets: TermB[] }; ops: { buckets: TermB[] };
+      users: { buckets: TermB[] }; ips: { buckets: (TermB & { tu?: { buckets: TermB[] } })[] }; ops: { buckets: TermB[] };
       workloads: { buckets: TermB[] }; rules: { buckets: RuleB[] };
       timeline: { buckets: { key: number; doc_count: number }[] };
       cUsers: { value: number }; cIps: { value: number };
@@ -73,7 +82,7 @@ export async function getO365Overview(rangeIn: string): Promise<O365Overview> {
     query: { bool: { filter: base } },
     aggs: {
       users: { terms: { field: 'data.office365.UserId', size: 15 } },
-      ips: { terms: { field: 'data.office365.ClientIP', size: 15 } },
+      ips: { terms: { field: 'data.office365.ClientIP', size: 20 }, aggs: { tu: { terms: { field: 'data.office365.UserId', size: 2 } } } },
       ops: { terms: { field: 'data.office365.Operation', size: 15 } },
       workloads: { terms: { field: 'data.office365.Workload', size: 12 } },
       rules: { terms: { field: 'rule.description', size: 12 }, aggs: { lvl: { max: { field: 'rule.level' } } } },

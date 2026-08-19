@@ -31,9 +31,9 @@ function Kpi({ label, value, icon: Icon, danger }: { label: string; value: strin
   );
 }
 
-function BarList({ title, icon: Icon, items, max, mono, onClick, suffix }: {
+function BarList({ title, icon: Icon, items, max, mono, onClick, suffix, footer }: {
   title: string; icon?: typeof Users; items: { label: string; count: number; note?: string }[]; max: number;
-  mono?: boolean; onClick?: (label: string) => void; suffix?: string;
+  mono?: boolean; onClick?: (label: string) => void; suffix?: string; footer?: React.ReactNode;
 }) {
   return (
     <Card><CardContent className="p-4">
@@ -51,6 +51,7 @@ function BarList({ title, icon: Icon, items, max, mono, onClick, suffix }: {
           ))}
         </div>
       )}
+      {footer}
     </CardContent></Card>
   );
 }
@@ -60,6 +61,7 @@ export default function Office365() {
   const [d, setD] = useState<O365Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showInfra, setShowInfra] = useState(false);
   const navigate = useNavigate();
 
   async function load(r: Range) {
@@ -72,6 +74,9 @@ export default function Office365() {
 
   const maxTl = useMemo(() => Math.max(1, ...(d?.timeline ?? []).map((t) => t.count)), [d]);
   const nc = (arr: NamedCount[], clean = false) => arr.map((x) => ({ label: clean ? cleanUser(x.key) : x.key, count: x.count, note: x.country }));
+  // Separa IPs de personas reales de la infraestructura de Microsoft (usuario de sistema urn:...).
+  const realIps = useMemo(() => (d?.topClientIps ?? []).filter((x) => !x.system), [d]);
+  const infraIps = useMemo(() => (d?.topClientIps ?? []).filter((x) => x.system), [d]);
   const goUser = (u: string) => navigate(`/alertas?q=${encodeURIComponent(u)}`);
   const goIp = (ip: string) => navigate(`/alertas?srcip=${encodeURIComponent(ip)}`);
 
@@ -160,7 +165,15 @@ export default function Office365() {
             <BarList title="Top usuarios" icon={Users} onClick={goUser}
               items={nc(d.topUsers, true)} max={Math.max(1, ...d.topUsers.map((x) => x.count))} />
             <BarList title="Top IPs cliente (con país)" icon={Globe2} mono onClick={goIp}
-              items={nc(d.topClientIps)} max={Math.max(1, ...d.topClientIps.map((x) => x.count))} />
+              items={(showInfra ? d.topClientIps : realIps).map((x) => ({ label: x.key, count: x.count, note: x.system ? `${x.country || 'MS'} · infra MS` : x.country }))}
+              max={Math.max(1, ...(showInfra ? d.topClientIps : realIps).map((x) => x.count), 1)}
+              footer={infraIps.length > 0 && (
+                <button onClick={() => setShowInfra((v) => !v)} className="mt-3 w-full rounded-md border border-dashed border-border py-1.5 text-[11px] text-muted-foreground hover:text-foreground">
+                  {showInfra
+                    ? '▲ Ocultar infraestructura Microsoft'
+                    : `▾ ${infraIps.length} IP${infraIps.length > 1 ? 's' : ''} de infraestructura Microsoft ocultas (sync/sistema, no personas)`}
+                </button>
+              )} />
             <BarList title="Top operaciones" items={d.topOperations.map((x) => ({ label: x.key, count: x.count }))}
               max={Math.max(1, ...d.topOperations.map((x) => x.count))} />
             <BarList title="Top reglas (por evento)" items={d.topRules.map((r) => ({ label: r.desc, count: r.count, note: `nivel ${r.level}` }))}
