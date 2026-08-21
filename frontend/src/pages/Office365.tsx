@@ -6,10 +6,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Cloud, RefreshCw, Loader2, Users, Globe2, LogIn, Download, FileText, UserCog, UserCheck, ShieldOff, UserPlus } from 'lucide-react';
-import { office365Api, type O365Overview, type NamedCount, type M365Directory } from '@/lib/office365';
+import { Cloud, RefreshCw, Loader2, Users, Globe2, LogIn, Download, FileText, UserCog, UserCheck, ShieldOff, UserPlus, Lightbulb, Ban, Trash2, AlertTriangle } from 'lucide-react';
+import { office365Api, type O365Overview, type NamedCount, type M365Directory, type IdentityRecs, type IdentityRec } from '@/lib/office365';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth';
+
+const SEV_COLOR: Record<string, string> = { alta: 'destructive', media: 'warn-orange', baja: 'success' };
+const SEV_LABEL: Record<string, string> = { alta: 'ALTA', media: 'MEDIA', baja: 'BAJA' };
 
 type Range = '24h' | '7d' | '30d';
 const RANGES: Range[] = ['24h', '7d', '30d'];
@@ -82,6 +86,38 @@ export default function Office365() {
       .catch((e) => setIdentErr((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo consultar el directorio M365'))
       .finally(() => setIdentLoading(false));
   }, []);
+
+  // Recomendaciones de higiene de identidad + acciones (deshabilitar / eliminar).
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  const [recs, setRecs] = useState<IdentityRecs | null>(null);
+  const [recsLoading, setRecsLoading] = useState(true);
+  const [recsErr, setRecsErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ upn: string; action: 'disable' | 'delete' } | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
+
+  async function loadRecs() {
+    setRecsLoading(true); setRecsErr(null);
+    try { setRecs(await office365Api.recommendations()); }
+    catch (e) { setRecsErr((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudieron cargar las recomendaciones'); }
+    finally { setRecsLoading(false); }
+  }
+  useEffect(() => { loadRecs(); }, []);
+
+  async function runAction(upn: string, action: 'disable' | 'delete') {
+    setBusy(upn); setActionMsg(null);
+    try {
+      if (action === 'delete') await office365Api.deleteIdentity(upn);
+      else await office365Api.disableIdentity(upn);
+      setActionMsg(`${action === 'delete' ? 'Cuenta eliminada' : 'Cuenta deshabilitada'}: ${upn}`);
+      setConfirm(null);
+      await loadRecs();
+      office365Api.identities().then(setIdent).catch(() => undefined);
+    } catch (e) {
+      setActionMsg((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'La acción falló');
+    } finally { setBusy(null); }
+  }
 
   const maxTl = useMemo(() => Math.max(1, ...(d?.timeline ?? []).map((t) => t.count)), [d]);
   const nc = (arr: NamedCount[], clean = false) => arr.map((x) => ({ label: clean ? cleanUser(x.key) : x.key, count: x.count, note: x.country }));
@@ -202,6 +238,75 @@ export default function Office365() {
                 )}
                 <p className="mt-3 text-[10px] text-muted-foreground/60">Fuente: Microsoft Graph · GET /users (solo lectura){ident.truncated ? ' · muestra parcial (>999)' : ''} · {new Date(ident.generatedAt).toLocaleTimeString('es-CO')}</p>
               </>
+            )}
+          </CardContent></Card>
+
+          {/* Recomendaciones · Higiene de identidades M365 (con acciones) */}
+          <Card><CardContent className="p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4" style={{ color: 'hsl(var(--warn-orange))' }} /> Recomendaciones · Higiene de identidades M365</p>
+              <button onClick={loadRecs} className="hw-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">recalcular</button>
+            </div>
+            {actionMsg && <p className="mb-2 text-xs" style={{ color: 'hsl(var(--primary))' }}>{actionMsg}</p>}
+            {recsLoading ? (
+              <p className="flex items-center gap-2 py-4 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analizando invitados y su actividad…</p>
+            ) : recsErr ? (
+              <p className="py-3 text-xs text-amber-700">{recsErr}</p>
+            ) : !recs?.configured ? (
+              <p className="py-3 text-xs text-muted-foreground">Microsoft Graph no está configurado.</p>
+            ) : recs.items.length === 0 ? (
+              <p className="py-3 text-xs text-muted-foreground">Sin invitados externos. Nada que revisar 👍</p>
+            ) : (
+              <div className="space-y-2.5">
+                {recs.items.map((r: IdentityRec) => {
+                  const c = SEV_COLOR[r.severity] ?? 'muted-foreground';
+                  const cf = confirm?.upn === r.upn ? confirm : null;
+                  return (
+                    <div key={r.upn} className="hw-clip border border-border p-3" style={{ borderLeft: `3px solid hsl(var(--${c}))` }}>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="hw-mono rounded px-1.5 py-0.5 text-[9px] font-bold" style={{ color: `hsl(var(--${c}))`, background: `hsl(var(--${c}) / .12)` }}>{SEV_LABEL[r.severity]}</span>
+                            <span className="text-xs font-semibold">{r.title}</span>
+                          </div>
+                          <p className="mt-1 truncate text-xs text-foreground/90">{r.displayName} <span className="hw-mono text-muted-foreground">· {r.mail || r.upn}</span></p>
+                          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{r.reason}</p>
+                          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground/80">
+                            <span>estado: {r.state}</span>
+                            {r.ageDays != null && <span>edad: {r.ageDays}d</span>}
+                            <span>grupos: {r.groups ?? 's/d'}</span>
+                            <span>actividad 30d: {r.activity30d}</span>
+                            <span>{r.enabled ? 'habilitada' : 'deshabilitada'}</span>
+                          </div>
+                        </div>
+                        {!cf ? (
+                          <div className="flex shrink-0 gap-1.5">
+                            {r.actions.includes('disable') && r.enabled && (
+                              <button disabled={busy === r.upn} onClick={() => setConfirm({ upn: r.upn, action: 'disable' })}
+                                className="flex items-center gap-1 rounded border border-input px-2 py-1 text-[11px] hover:bg-secondary disabled:opacity-50"><Ban className="h-3 w-3" /> Deshabilitar</button>
+                            )}
+                            {r.actions.includes('delete') && isAdmin && (
+                              <button disabled={busy === r.upn} onClick={() => setConfirm({ upn: r.upn, action: 'delete' })}
+                                className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-white disabled:opacity-50" style={{ background: 'hsl(var(--destructive))' }}><Trash2 className="h-3 w-3" /> Eliminar</button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground"><AlertTriangle className="h-3 w-3" style={{ color: 'hsl(var(--warn-orange))' }} /> ¿{cf.action === 'delete' ? 'Eliminar' : 'Deshabilitar'}?</span>
+                            <button disabled={busy === r.upn} onClick={() => runAction(r.upn, cf.action)}
+                              className="rounded px-2 py-1 text-[11px] text-white disabled:opacity-50" style={{ background: `hsl(var(--${cf.action === 'delete' ? 'destructive' : 'primary'}))` }}>{busy === r.upn ? '…' : 'Sí'}</button>
+                            <button disabled={busy === r.upn} onClick={() => setConfirm(null)} className="rounded border border-input px-2 py-1 text-[11px] hover:bg-secondary">No</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {!isAdmin && recs.items.some((r) => r.actions.includes('delete')) && (
+                  <p className="text-[10px] text-muted-foreground/70">La acción «Eliminar» requiere rol admin.</p>
+                )}
+                <p className="text-[10px] text-muted-foreground/60">Análisis: Graph (invitados + grupos) × auditoría O365 (actividad 30d) · {new Date(recs.generatedAt).toLocaleTimeString('es-CO')}</p>
+              </div>
             )}
           </CardContent></Card>
 

@@ -36,7 +36,20 @@ export interface M365Directory {
   generatedAt: string;
 }
 
+export type RecSeverity = 'alta' | 'media' | 'baja';
+export interface IdentityRec {
+  upn: string; displayName: string; mail: string; enabled: boolean;
+  state: string; created: string | null; ageDays: number | null;
+  groups: number | null; activity30d: number; lastActivity: string | null;
+  severity: RecSeverity; title: string; reason: string;
+  actions: string[]; personalEmail: boolean; system: boolean;
+}
+export interface IdentityRecs { configured: boolean; generatedAt: string; items: IdentityRec[] }
+
 export const office365Api = {
   overview: (range: string) => api.get<O365Overview>('/office365', { params: { range } }).then((r) => r.data),
   identities: () => api.get<M365Directory>('/office365/identities').then((r) => r.data),
+  recommendations: () => api.get<IdentityRecs>('/office365/recommendations').then((r) => r.data),
+  disableIdentity: (upn: string) => api.post('/office365/identities/disable', { upn }).then((r) => r.data),
+  deleteIdentity: (upn: string) => api.post('/office365/identities/delete', { upn }).then((r) => r.data),
 };

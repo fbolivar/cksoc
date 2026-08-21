@@ -13,6 +13,7 @@ import axios from 'axios';
 import https from 'node:https';
 import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
+import { getIndexerClient } from '../wazuh/wazuh.client';
 
 // ---------------------------------------------------------------------------
 // Active Directory (LDAP)
@@ -142,7 +143,7 @@ export async function quarantineSenderInMailbox(mailbox: string, sender: string)
 // ---------------------------------------------------------------------------
 // Directorio M365 (SOLO LECTURA) — alimenta el panel de Identidades en HexWatch.
 // ---------------------------------------------------------------------------
-interface RawUser { displayName?: string; userPrincipalName?: string; accountEnabled?: boolean; userType?: string; createdDateTime?: string }
+interface RawUser { displayName?: string; userPrincipalName?: string; accountEnabled?: boolean; userType?: string; createdDateTime?: string; mail?: string; externalUserState?: string }
 export interface M365Identity { displayName: string; upn: string; enabled: boolean; guest: boolean; created: string | null }
 export interface M365Directory {
   configured: boolean;
@@ -190,6 +191,126 @@ export async function listM365Identities(): Promise<M365Directory> {
   } catch (err) {
     mapGraphError(err, 'listar identidades M365');
   }
+}
+
+/** Elimina una cuenta del tenant (Graph DELETE /users). Destructivo — solo admin. */
+export async function deleteM365User(upn: string): Promise<{ upn: string; deleted: true }> {
+  if (!isGraphConfigured()) throw new HttpError(503, 'Microsoft Graph no configurado');
+  const u = upn.trim();
+  if (!u) throw new HttpError(400, 'Se requiere el UPN del usuario');
+  try {
+    const token = await graphToken();
+    await graph().delete(`/users/${encodeURIComponent(u)}`, { headers: { Authorization: `Bearer ${token}` } });
+    return { upn: u, deleted: true };
+  } catch (err) {
+    mapGraphError(err, 'eliminar usuario M365');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recomendaciones de higiene de identidad (invitados externos) — SOLO LECTURA.
+// Cruza Graph (guests + grupos) con la actividad real de auditoría O365 (indexer)
+// y produce un veredicto accionable por invitado.
+// ---------------------------------------------------------------------------
+const PERSONAL_DOMAINS = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com', 'yahoo.es', 'live.com', 'icloud.com', 'protonmail.com'];
+
+export type RecSeverity = 'alta' | 'media' | 'baja';
+export interface IdentityRec {
+  upn: string; displayName: string; mail: string; enabled: boolean;
+  state: string; created: string | null; ageDays: number | null;
+  groups: number | null; activity30d: number; lastActivity: string | null;
+  severity: RecSeverity; title: string; reason: string;
+  actions: string[]; personalEmail: boolean; system: boolean;
+}
+
+interface IdxSearch { hits: { total: { value: number } | number }; aggregations?: { last?: { value_as_string?: string } } }
+
+export async function getIdentityRecommendations(): Promise<{ configured: boolean; generatedAt: string; items: IdentityRec[] }> {
+  const out = (configured: boolean, items: IdentityRec[] = []) => ({ configured, generatedAt: new Date().toISOString(), items });
+  if (!isGraphConfigured()) return out(false);
+
+  const token = await graphToken();
+  const gh = { Authorization: `Bearer ${token}`, ConsistencyLevel: 'eventual' };
+  const sel = 'displayName,userPrincipalName,mail,externalUserState,createdDateTime,accountEnabled';
+  let guests: RawUser[];
+  try {
+    const { data } = await graph().get<{ value?: RawUser[] }>(
+      `/users?$filter=${encodeURIComponent("userType eq 'Guest'")}&$select=${sel}&$top=100`, { headers: gh });
+    guests = data.value ?? [];
+  } catch (err) {
+    mapGraphError(err, 'listar invitados M365');
+  }
+
+  const idx = getIndexerClient();
+  const now = Date.now();
+  const items: IdentityRec[] = [];
+
+  for (const u of guests) {
+    const upn = u.userPrincipalName ?? '';
+    const mail = u.mail ?? '';
+    const created = u.createdDateTime ?? null;
+    const ageDays = created ? Math.floor((now - new Date(created).getTime()) / 86_400_000) : null;
+    const state = u.externalUserState ?? 'Desconocido';
+    const enabled = Boolean(u.accountEnabled);
+
+    // Grupos/equipos (puede no ser accesible sin GroupMember.Read.All).
+    let groups: number | null = null;
+    try {
+      const { data: mo } = await graph().get<{ value?: unknown[] }>(`/users/${encodeURIComponent(upn)}/memberOf?$select=id`, { headers: gh });
+      groups = (mo.value ?? []).length;
+    } catch { groups = null; }
+
+    // Actividad real en auditoría O365 (por mail y UPN), últimos 30 días.
+    let activity30d = 0; let lastActivity: string | null = null;
+    try {
+      const ids = [mail, upn].filter(Boolean);
+      const { data: r } = await idx.post<IdxSearch>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+        size: 0, track_total_hits: true,
+        query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-30d' } } }, { terms: { 'data.office365.UserId': ids } }] } },
+        aggs: { last: { max: { field: '@timestamp' } } },
+      });
+      const t = r.hits.total; activity30d = typeof t === 'number' ? t : t.value;
+      lastActivity = r.aggregations?.last?.value_as_string ?? null;
+    } catch { /* indexer opcional */ }
+
+    const domain = (mail.split('@')[1] || '').toLowerCase();
+    const personalEmail = PERSONAL_DOMAINS.includes(domain);
+    const system = domain.endsWith('teams.mail.microsoft') || upn.toLowerCase().startsWith('no-reply');
+    const noGroups = (groups ?? 0) === 0;
+
+    let severity: RecSeverity = 'baja';
+    let title = 'Invitado activo';
+    let reason = '';
+    let actions: string[] = ['disable'];
+
+    if (system) {
+      severity = 'baja'; title = 'Artefacto de Teams';
+      reason = 'Identidad de sistema creada por Teams al invitar externos a una reunión. Inofensiva; se puede eliminar para limpiar el directorio.';
+      actions = ['delete'];
+    } else if (state === 'PendingAcceptance' && (ageDays ?? 0) > 30 && activity30d === 0 && noGroups) {
+      severity = 'alta'; title = 'Invitación pendiente sin aceptar — eliminar';
+      reason = `Invitada hace ${ageDays} días y nunca aceptó (${state}). Sin grupos ni actividad: identidad externa muerta que solo suma superficie de ataque.${personalEmail ? ' Correo personal.' : ''}`;
+      actions = ['delete', 'disable'];
+    } else if (activity30d === 0 && noGroups) {
+      severity = 'media'; title = 'Invitado sin uso — revisar';
+      reason = `${state === 'Accepted' ? 'Aceptó la invitación pero' : 'Estado ' + state + ';'} no tiene grupos ni actividad en 30 días. Validar con negocio si sigue siendo necesario.${personalEmail ? ' Correo personal.' : ''}`;
+      actions = ['disable', 'delete'];
+    } else if (activity30d > 0) {
+      severity = 'baja'; title = 'Invitado activo';
+      reason = `${activity30d} eventos en 30 días (último ${(lastActivity || '').slice(0, 10)}). En uso.`;
+      actions = ['disable'];
+    } else {
+      severity = 'media'; title = 'Invitado sin actividad reciente';
+      reason = `Sin actividad en 30 días.${personalEmail ? ' Correo personal.' : ''}`;
+      actions = ['disable', 'delete'];
+    }
+
+    items.push({ upn, displayName: u.displayName || '(sin nombre)', mail, enabled, state, created, ageDays, groups, activity30d, lastActivity, severity, title, reason, actions, personalEmail, system });
+  }
+
+  const rank: Record<RecSeverity, number> = { alta: 0, media: 1, baja: 2 };
+  items.sort((a, b) => rank[a.severity] - rank[b.severity] || (b.ageDays ?? 0) - (a.ageDays ?? 0));
+  return out(true, items);
 }
 
 function mapGraphError(err: unknown, ctx: string): never {
