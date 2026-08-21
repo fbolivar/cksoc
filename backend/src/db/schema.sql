@@ -501,3 +501,24 @@ CREATE TABLE IF NOT EXISTS phishing_campaigns (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_phishing_date ON phishing_campaigns (run_date DESC);
+
+-- ---------------------------------------------------------------------
+-- Licenciamiento (código de activación firmado Ed25519). Fila única id=1.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS license (
+    id           INTEGER PRIMARY KEY DEFAULT 1,
+    code         TEXT        NOT NULL,
+    customer     TEXT,
+    license_id   TEXT,
+    issued_at    TIMESTAMPTZ,
+    expires_at   TIMESTAMPTZ,
+    activated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    activated_by UUID,
+    CONSTRAINT license_singleton CHECK (id = 1)
+);
+
+CREATE TABLE IF NOT EXISTS license_state (
+    id           INTEGER PRIMARY KEY DEFAULT 1,
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT license_state_singleton CHECK (id = 1)
+);

@@ -13,6 +13,7 @@ import Login from '@/pages/Login'; // eager: primera carga (publica)
 // Carga diferida por ruta: cada pagina es su propio chunk, se descarga solo al
 // visitarla. Reduce el bundle inicial (antes ~1 MB en un solo archivo).
 const CommandCenter = lazy(() => import('@/pages/CommandCenter'));
+const LicensePage = lazy(() => import('@/pages/License'));
 const ExecutiveSummary = lazy(() => import('@/pages/ExecutiveSummary'));
 const AttackMap = lazy(() => import('@/pages/AttackMap'));
 const Alerts = lazy(() => import('@/pages/Alerts'));
@@ -399,6 +400,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Copilot />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/licencia"
+        element={
+          <Protected>
+            <AppLayout>
+              <LicensePage />
             </AppLayout>
           </Protected>
         }

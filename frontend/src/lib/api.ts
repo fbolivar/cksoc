@@ -30,6 +30,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem(TOKEN_KEY);
     }
+    // Licencia inactiva/vencida -> avisa al layout para mostrar el bloqueo.
+    if (error.response?.status === 402) {
+      window.dispatchEvent(new CustomEvent('hw-license-lock'));
+    }
     return Promise.reject(error);
   }
 );

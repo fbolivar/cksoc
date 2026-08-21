@@ -1,13 +1,35 @@
 /** Layout principal: Sidebar (desktop) + drawer movil + Topbar + contenido. */
-import { Suspense, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { Sidebar, SidebarNav } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CommandPalette } from './CommandPalette';
 import { CopilotDock } from './CopilotDock';
+import { fetchLicenseStatus, type LicenseStatus } from '@/lib/license';
+import { LockScreen } from '@/components/LockScreen';
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [lic, setLic] = useState<LicenseStatus | null>(null);
+  const [licLoading, setLicLoading] = useState(true);
+
+  const refreshLic = useCallback(() => { void fetchLicenseStatus(true).then(setLic).catch(() => undefined); }, []);
+  useEffect(() => {
+    fetchLicenseStatus()
+      .then(setLic)
+      .catch(() => setLic({ state: 'none', message: 'No se pudo verificar la licencia.' }))
+      .finally(() => setLicLoading(false));
+    const h = () => refreshLic();
+    window.addEventListener('hw-license-lock', h);
+    return () => window.removeEventListener('hw-license-lock', h);
+  }, [refreshLic]);
+
+  if (licLoading) {
+    return <div className="flex h-screen items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  }
+  if (!lic || lic.state !== 'active') {
+    return <LockScreen status={lic} onActivated={setLic} />;
+  }
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
@@ -39,6 +61,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <Topbar onMenuClick={() => setMobileOpen(true)} />
+          {lic.daysLeft != null && lic.daysLeft <= 15 && (
+            <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-center text-xs text-amber-700">
+              Licencia por vencer: {lic.daysLeft} día(s) restantes{lic.expiresAt ? ` (${lic.expiresAt.slice(0, 10)})` : ''}. Renueva en Operación → Licenciamiento.
+            </div>
+          )}
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
             <Suspense
               fallback={

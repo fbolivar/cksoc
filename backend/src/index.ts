@@ -19,7 +19,9 @@ import { getCookie } from './config/cookies';
 import { logger } from './config/logger';
 import type { JwtPayload } from './types';
 import { apiLimiter } from './middleware/rateLimit';
+import { licenseGate } from './middleware/license';
 import { authRouter } from './modules/auth/auth.routes';
+import { licenseRouter } from './modules/license/license.routes';
 import { wazuhRouter } from './modules/wazuh/wazuh.routes';
 import { notificationsRouter } from './modules/notifications/notifications.routes';
 import { reportsRouter } from './modules/reports/reports.routes';
@@ -100,6 +102,9 @@ app.get('/health', async (_req, res) => {
 // API con rate limiting general
 app.use('/api', apiLimiter);
 app.use('/api/auth', authRouter);
+app.use('/api/license', licenseRouter);
+// Gate de licenciamiento: a partir de aquí, todo requiere licencia vigente.
+app.use(licenseGate);
 app.use('/api/wazuh', wazuhRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/reports/executive', executiveRouter); // antes de /api/reports

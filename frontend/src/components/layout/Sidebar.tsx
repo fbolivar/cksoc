@@ -33,6 +33,7 @@ import {
   Sparkles,
   Target,
   CalendarClock,
+  KeyRound,
   Network,
   Cloud,
 } from 'lucide-react';
@@ -113,6 +114,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, roles: ['admin'] },
       { to: '/auditoria', label: 'Auditoría', icon: ScrollText, roles: ['admin'] },
       { to: '/gestion', label: 'Gestión', icon: Users, roles: ['admin'] },
+      { to: '/licencia', label: 'Licenciamiento', icon: KeyRound, roles: ['admin'] },
     ],
   },
 ];
