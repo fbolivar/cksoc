@@ -6,8 +6,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Cloud, RefreshCw, Loader2, Users, Globe2, LogIn, Download, FileText } from 'lucide-react';
-import { office365Api, type O365Overview, type NamedCount } from '@/lib/office365';
+import { Cloud, RefreshCw, Loader2, Users, Globe2, LogIn, Download, FileText, UserCog, UserCheck, ShieldOff, UserPlus } from 'lucide-react';
+import { office365Api, type O365Overview, type NamedCount, type M365Directory } from '@/lib/office365';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -71,6 +71,17 @@ export default function Office365() {
     finally { setLoading(false); }
   }
   useEffect(() => { load(range); }, [range]);
+
+  // Directorio M365 vía Graph (independiente del rango; se carga una vez).
+  const [ident, setIdent] = useState<M365Directory | null>(null);
+  const [identErr, setIdentErr] = useState<string | null>(null);
+  const [identLoading, setIdentLoading] = useState(true);
+  useEffect(() => {
+    office365Api.identities()
+      .then(setIdent)
+      .catch((e) => setIdentErr((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo consultar el directorio M365'))
+      .finally(() => setIdentLoading(false));
+  }, []);
 
   const maxTl = useMemo(() => Math.max(1, ...(d?.timeline ?? []).map((t) => t.count)), [d]);
   const nc = (arr: NamedCount[], clean = false) => arr.map((x) => ({ label: clean ? cleanUser(x.key) : x.key, count: x.count, note: x.country }));
@@ -136,6 +147,62 @@ export default function Office365() {
                 );
               })}
             </div>
+          </CardContent></Card>
+
+          {/* Identidades M365 (Microsoft Graph) — directorio en vivo */}
+          <Card><CardContent className="p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-sm font-semibold"><UserCog className="h-4 w-4 text-muted-foreground" /> Identidades M365 · Microsoft Graph</p>
+              <span className="hw-mono text-[10px] uppercase tracking-widest text-muted-foreground">directorio en vivo</span>
+            </div>
+            {identLoading ? (
+              <p className="flex items-center gap-2 py-4 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Consultando el directorio del tenant…</p>
+            ) : identErr ? (
+              <p className="py-3 text-xs text-amber-700">{identErr}</p>
+            ) : !ident?.configured ? (
+              <p className="py-3 text-xs text-muted-foreground">Microsoft Graph no está configurado (define GRAPH_TENANT_ID / GRAPH_CLIENT_ID / GRAPH_CLIENT_SECRET).</p>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <Kpi label="Usuarios" value={fmt(ident.total)} icon={Users} />
+                  <Kpi label="Habilitados" value={fmt(ident.enabled)} icon={UserCheck} />
+                  <Kpi label="Deshabilitados" value={fmt(ident.disabled)} icon={ShieldOff} danger={ident.disabled > 0} />
+                  <Kpi label="Invitados externos" value={fmt(ident.guests)} icon={UserPlus} danger={ident.guests > 0} />
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Invitados externos (revisión de gobernanza)</p>
+                    {ident.guestList.length === 0 ? <p className="text-xs text-muted-foreground">Ninguno</p> : ident.guestList.map((u, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 py-0.5 text-xs">
+                        <span className="shrink-0 truncate cursor-pointer hover:text-primary" onClick={() => goUser(u.upn)} title={u.upn}>{u.displayName}</span>
+                        <span className="hw-mono max-w-[55%] truncate text-[10px] text-muted-foreground" title={u.upn}>{u.upn}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Cuentas recientes</p>
+                    {ident.recent.map((u, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 py-0.5 text-xs">
+                        <span className="truncate cursor-pointer hover:text-primary" onClick={() => goUser(u.upn)} title={u.upn}>
+                          <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle" style={{ background: u.enabled ? 'hsl(var(--success))' : 'hsl(var(--destructive))' }} />
+                          {u.displayName}
+                        </span>
+                        <span className="hw-mono shrink-0 text-[10px] text-muted-foreground">{u.created ? u.created.slice(0, 10) : '—'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {ident.disabled > 0 && (
+                  <div className="mt-3">
+                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Cuentas deshabilitadas</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ident.disabledList.map((u, i) => <span key={i} className="hw-mono rounded bg-secondary px-2 py-0.5 text-[10px]" title={u.upn}>{u.displayName}</span>)}
+                    </div>
+                  </div>
+                )}
+                <p className="mt-3 text-[10px] text-muted-foreground/60">Fuente: Microsoft Graph · GET /users (solo lectura){ident.truncated ? ' · muestra parcial (>999)' : ''} · {new Date(ident.generatedAt).toLocaleTimeString('es-CO')}</p>
+              </>
+            )}
           </CardContent></Card>
 
           {/* Sign-ins (Azure AD) + Actividad de archivos */}

@@ -25,6 +25,18 @@ export interface O365Overview {
   generatedAt: string;
 }
 
+export interface M365Identity { displayName: string; upn: string; enabled: boolean; guest: boolean; created: string | null }
+export interface M365Directory {
+  configured: boolean;
+  total: number; enabled: number; disabled: number; guests: number;
+  truncated: boolean;
+  recent: M365Identity[];
+  disabledList: M365Identity[];
+  guestList: M365Identity[];
+  generatedAt: string;
+}
+
 export const office365Api = {
   overview: (range: string) => api.get<O365Overview>('/office365', { params: { range } }).then((r) => r.data),
+  identities: () => api.get<M365Directory>('/office365/identities').then((r) => r.data),
 };

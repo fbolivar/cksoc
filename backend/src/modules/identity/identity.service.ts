@@ -139,6 +139,59 @@ export async function quarantineSenderInMailbox(mailbox: string, sender: string)
   }
 }
 
+// ---------------------------------------------------------------------------
+// Directorio M365 (SOLO LECTURA) — alimenta el panel de Identidades en HexWatch.
+// ---------------------------------------------------------------------------
+interface RawUser { displayName?: string; userPrincipalName?: string; accountEnabled?: boolean; userType?: string; createdDateTime?: string }
+export interface M365Identity { displayName: string; upn: string; enabled: boolean; guest: boolean; created: string | null }
+export interface M365Directory {
+  configured: boolean;
+  total: number; enabled: number; disabled: number; guests: number;
+  truncated: boolean;
+  recent: M365Identity[];
+  disabledList: M365Identity[];
+  guestList: M365Identity[];
+  generatedAt: string;
+}
+
+/** Lista usuarios del tenant (Graph GET /users, solo lectura) y arma un resumen. */
+export async function listM365Identities(): Promise<M365Directory> {
+  const base = (configured: boolean): M365Directory => ({
+    configured, total: 0, enabled: 0, disabled: 0, guests: 0, truncated: false,
+    recent: [], disabledList: [], guestList: [], generatedAt: new Date().toISOString(),
+  });
+  if (!isGraphConfigured()) return base(false);
+  try {
+    const token = await graphToken();
+    const { data } = await graph().get<{ value?: RawUser[]; '@odata.nextLink'?: string }>(
+      '/users?$select=displayName,userPrincipalName,accountEnabled,userType,createdDateTime&$top=999',
+      { headers: { Authorization: `Bearer ${token}`, ConsistencyLevel: 'eventual' } },
+    );
+    const users: M365Identity[] = (data.value ?? []).map((u) => ({
+      displayName: u.displayName || '(sin nombre)',
+      upn: u.userPrincipalName || '',
+      enabled: Boolean(u.accountEnabled),
+      guest: u.userType === 'Guest',
+      created: u.createdDateTime ?? null,
+    }));
+    const recent = [...users].sort((a, b) => (b.created || '').localeCompare(a.created || ''));
+    return {
+      configured: true,
+      total: users.length,
+      enabled: users.filter((u) => u.enabled).length,
+      disabled: users.filter((u) => !u.enabled).length,
+      guests: users.filter((u) => u.guest).length,
+      truncated: Boolean(data['@odata.nextLink']),
+      recent: recent.slice(0, 10),
+      disabledList: users.filter((u) => !u.enabled).slice(0, 25),
+      guestList: users.filter((u) => u.guest).slice(0, 25),
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    mapGraphError(err, 'listar identidades M365');
+  }
+}
+
 function mapGraphError(err: unknown, ctx: string): never {
   if (err instanceof HttpError) throw err;
   const e = err as { response?: { status: number; data?: { error?: { message?: string } } } };
