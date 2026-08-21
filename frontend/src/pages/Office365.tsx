@@ -244,7 +244,7 @@ export default function Office365() {
           {/* Recomendaciones · Higiene de identidades M365 (con acciones) */}
           <Card><CardContent className="p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4" style={{ color: 'hsl(var(--warn-orange))' }} /> Recomendaciones · Higiene de identidades M365</p>
+              <p className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4" style={{ color: 'hsl(var(--warn-orange))' }} /> Recomendaciones · Identidades M365</p>
               <button onClick={loadRecs} className="hw-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">recalcular</button>
             </div>
             {actionMsg && <p className="mb-2 text-xs" style={{ color: 'hsl(var(--primary))' }}>{actionMsg}</p>}
@@ -255,7 +255,7 @@ export default function Office365() {
             ) : !recs?.configured ? (
               <p className="py-3 text-xs text-muted-foreground">Microsoft Graph no está configurado.</p>
             ) : recs.items.length === 0 ? (
-              <p className="py-3 text-xs text-muted-foreground">Sin invitados externos. Nada que revisar 👍</p>
+              <p className="py-3 text-xs text-muted-foreground">Sin recomendaciones de identidad ahora (invitados y sign-ins en orden) 👍</p>
             ) : (
               <div className="space-y-2.5">
                 {recs.items.map((r: IdentityRec) => {
@@ -267,16 +267,13 @@ export default function Office365() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <span className="hw-mono rounded px-1.5 py-0.5 text-[9px] font-bold" style={{ color: `hsl(var(--${c}))`, background: `hsl(var(--${c}) / .12)` }}>{SEV_LABEL[r.severity]}</span>
+                            <span className="hw-mono rounded bg-secondary px-1 py-0.5 text-[8.5px] uppercase tracking-wider text-muted-foreground">{r.kind === 'signin' ? 'sign-in' : 'invitado'}</span>
                             <span className="text-xs font-semibold">{r.title}</span>
                           </div>
                           <p className="mt-1 truncate text-xs text-foreground/90">{r.displayName} <span className="hw-mono text-muted-foreground">· {r.mail || r.upn}</span></p>
                           <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{r.reason}</p>
                           <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground/80">
-                            <span>estado: {r.state}</span>
-                            {r.ageDays != null && <span>edad: {r.ageDays}d</span>}
-                            <span>grupos: {r.groups ?? 's/d'}</span>
-                            <span>actividad 30d: {r.activity30d}</span>
-                            <span>{r.enabled ? 'habilitada' : 'deshabilitada'}</span>
+                            {r.meta.map((m, k) => <span key={k}>{m.label}: {m.value}</span>)}
                           </div>
                         </div>
                         {!cf ? (
@@ -305,7 +302,7 @@ export default function Office365() {
                 {!isAdmin && recs.items.some((r) => r.actions.includes('delete')) && (
                   <p className="text-[10px] text-muted-foreground/70">La acción «Eliminar» requiere rol admin.</p>
                 )}
-                <p className="text-[10px] text-muted-foreground/60">Análisis: Graph (invitados + grupos) × auditoría O365 (actividad 30d) · {new Date(recs.generatedAt).toLocaleTimeString('es-CO')}</p>
+                <p className="text-[10px] text-muted-foreground/60">Análisis: Graph (invitados + grupos) × auditoría O365 (actividad + sign-ins) · {new Date(recs.generatedAt).toLocaleTimeString('es-CO')}</p>
               </div>
             )}
           </CardContent></Card>

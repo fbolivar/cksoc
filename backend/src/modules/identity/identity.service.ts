@@ -14,6 +14,7 @@ import https from 'node:https';
 import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
 import { getIndexerClient } from '../wazuh/wazuh.client';
+import { geolocate, isPublicIP } from '../geo/geoip.service';
 
 // ---------------------------------------------------------------------------
 // Active Directory (LDAP)
@@ -216,14 +217,17 @@ const PERSONAL_DOMAINS = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com'
 
 export type RecSeverity = 'alta' | 'media' | 'baja';
 export interface IdentityRec {
+  kind: 'guest' | 'signin';
   upn: string; displayName: string; mail: string; enabled: boolean;
-  state: string; created: string | null; ageDays: number | null;
-  groups: number | null; activity30d: number; lastActivity: string | null;
   severity: RecSeverity; title: string; reason: string;
-  actions: string[]; personalEmail: boolean; system: boolean;
+  meta: { label: string; value: string }[];
+  actions: string[];
 }
 
 interface IdxSearch { hits: { total: { value: number } | number }; aggregations?: { last?: { value_as_string?: string } } }
+interface TermBucket { key: string; doc_count: number }
+interface SignInUserBucket { key: string; doc_count: number; fail: { doc_count: number }; ok: { doc_count: number }; ips: { buckets: TermBucket[] }; last: { value_as_string?: string } }
+interface SignInAgg { aggregations?: { users?: { buckets: SignInUserBucket[] } } }
 
 export async function getIdentityRecommendations(): Promise<{ configured: boolean; generatedAt: string; items: IdentityRec[] }> {
   const out = (configured: boolean, items: IdentityRec[] = []) => ({ configured, generatedAt: new Date().toISOString(), items });
@@ -305,11 +309,73 @@ export async function getIdentityRecommendations(): Promise<{ configured: boolea
       actions = ['disable', 'delete'];
     }
 
-    items.push({ upn, displayName: u.displayName || '(sin nombre)', mail, enabled, state, created, ageDays, groups, activity30d, lastActivity, severity, title, reason, actions, personalEmail, system });
+    const meta = [
+      { label: 'estado', value: state },
+      { label: 'edad', value: ageDays != null ? `${ageDays}d` : 's/d' },
+      { label: 'grupos', value: groups != null ? String(groups) : 's/d' },
+      { label: 'actividad 30d', value: String(activity30d) },
+      { label: 'cuenta', value: enabled ? 'habilitada' : 'deshabilitada' },
+    ];
+    items.push({ kind: 'guest', upn, displayName: u.displayName || '(sin nombre)', mail, enabled, severity, title, reason, meta, actions });
   }
 
+  // ---------- Amenazas de identidad por sign-ins O365 (últimos 7 días) ----------
+  // Fuerza bruta (muchos fallidos) y/o sign-in EXITOSO desde país inusual (fuera CO).
+  try {
+    const { data: si } = await idx.post<SignInAgg>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+      size: 0,
+      query: { bool: { filter: [
+        { range: { '@timestamp': { gte: 'now-7d' } } },
+        { terms: { 'data.office365.Operation': ['UserLoggedIn', 'UserLoginFailed'] } },
+      ] } },
+      aggs: { users: { terms: { field: 'data.office365.UserId', size: 80 }, aggs: {
+        fail: { filter: { term: { 'data.office365.Operation': 'UserLoginFailed' } } },
+        ok: { filter: { term: { 'data.office365.Operation': 'UserLoggedIn' } } },
+        ips: { terms: { field: 'data.office365.ActorIpAddress', size: 12 } },
+        last: { max: { field: '@timestamp' } },
+      } } },
+    });
+    for (const b of si.aggregations?.users?.buckets ?? []) {
+      const upn = b.key;
+      if (!upn.includes('@') || upn.startsWith('urn:')) continue; // salta identidades de sistema
+      const failed = b.fail.doc_count; const ok = b.ok.doc_count;
+      const countries = new Set<string>();
+      let foreignSuccessIps = 0;
+      for (const ib of b.ips.buckets ?? []) {
+        if (!isPublicIP(ib.key)) continue;
+        const g = geolocate(ib.key);
+        if (g?.country) {
+          countries.add(g.country);
+          if (g.isoCode && g.isoCode !== 'CO') foreignSuccessIps += 1;
+        }
+      }
+      const foreignCountries = [...countries].filter((c) => c !== 'Colombia');
+      const bruteForce = failed >= 15;
+      const foreignSuccess = ok > 0 && foreignCountries.length > 0 && foreignSuccessIps > 0;
+      if (!bruteForce && !foreignSuccess) continue;
+
+      const meta = [
+        { label: 'fallidos 7d', value: String(failed) },
+        { label: 'exitosos 7d', value: String(ok) },
+        { label: 'IPs', value: String((b.ips.buckets ?? []).length) },
+        { label: 'países', value: [...countries].join(' / ') || '—' },
+      ];
+      if (foreignSuccess) {
+        items.push({ kind: 'signin', upn, displayName: upn.split('@')[0], mail: upn, enabled: true,
+          severity: 'alta', title: 'Sign-in exitoso desde país inusual',
+          reason: `Inició sesión con éxito desde ${foreignCountries.join(', ')} (fuera de Colombia) en los últimos 7 días. Posible cuenta comprometida — contener y verificar con la persona.`,
+          meta, actions: ['disable'] });
+      } else {
+        items.push({ kind: 'signin', upn, displayName: upn.split('@')[0], mail: upn, enabled: true,
+          severity: 'media', title: 'Posible ataque de credenciales',
+          reason: `${failed} inicios de sesión fallidos en 7 días (posible fuerza bruta / password spray). Revisar y, si procede, forzar cambio de contraseña o contener.`,
+          meta, actions: [] });
+      }
+    }
+  } catch { /* sin datos de sign-in: se omite */ }
+
   const rank: Record<RecSeverity, number> = { alta: 0, media: 1, baja: 2 };
-  items.sort((a, b) => rank[a.severity] - rank[b.severity] || (b.ageDays ?? 0) - (a.ageDays ?? 0));
+  items.sort((a, b) => rank[a.severity] - rank[b.severity]);
   return out(true, items);
 }
 

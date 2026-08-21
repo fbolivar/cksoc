@@ -38,11 +38,11 @@ export interface M365Directory {
 
 export type RecSeverity = 'alta' | 'media' | 'baja';
 export interface IdentityRec {
+  kind: 'guest' | 'signin';
   upn: string; displayName: string; mail: string; enabled: boolean;
-  state: string; created: string | null; ageDays: number | null;
-  groups: number | null; activity30d: number; lastActivity: string | null;
   severity: RecSeverity; title: string; reason: string;
-  actions: string[]; personalEmail: boolean; system: boolean;
+  meta: { label: string; value: string }[];
+  actions: string[];
 }
 export interface IdentityRecs { configured: boolean; generatedAt: string; items: IdentityRec[] }
 
