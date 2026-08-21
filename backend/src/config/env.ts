@@ -58,6 +58,7 @@ const schema = z.object({
   SMTP_FROM: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
+  ACTION_DIGEST_CRON: z.string().optional(), // digest del Centro de Acción (default cada 6h)
 
   // --- Motor de notificaciones por correo (umbrales + anti-flood + digest) ---
   ALERT_RECIPIENTS: z.string().default(''), // coma-separado

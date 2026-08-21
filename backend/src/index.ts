@@ -65,6 +65,7 @@ import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
 import { uebaRouter, startUebaScheduler } from './modules/ueba/ueba.routes';
 import { copilotRouter } from './modules/copilot/copilot.routes';
 import { actionCenterRouter } from './modules/action-center/action-center.routes';
+import { startActionDigestScheduler } from './modules/action-center/action-center.scheduler';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -231,6 +232,9 @@ startThreatIntelScheduler();
 
 // SOAR: motor de respuesta automatizada (evalúa reglas cada 3 min)
 startSoarScheduler();
+
+// Digest periódico del Centro de Acción por Telegram (pendientes de todos los módulos)
+startActionDigestScheduler();
 
 // UEBA: motor de analítica de comportamiento (escanea cada 15 min)
 startUebaScheduler();
