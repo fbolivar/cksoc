@@ -64,6 +64,7 @@ import { correlationRouter } from './modules/correlation/correlation.routes';
 import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
 import { uebaRouter, startUebaScheduler } from './modules/ueba/ueba.routes';
 import { copilotRouter } from './modules/copilot/copilot.routes';
+import { actionCenterRouter } from './modules/action-center/action-center.routes';
 import { setIo } from './modules/realtime/bus';
 import { startMetricsBroadcast } from './modules/realtime/metrics';
 import { startScheduler } from './modules/notifications/scheduler';
@@ -143,6 +144,7 @@ app.use('/api/correlation', correlationRouter);
 app.use('/api/soar', soarRouter);
 app.use('/api/ueba', uebaRouter);
 app.use('/api/copilot', copilotRouter);
+app.use('/api/action-center', actionCenterRouter);
 
 // 404 para rutas /api desconocidas
 app.use('/api', (_req, res) => {

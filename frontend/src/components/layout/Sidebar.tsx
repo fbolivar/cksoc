@@ -34,6 +34,7 @@ import {
   Target,
   CalendarClock,
   KeyRound,
+  Inbox,
   Network,
   Cloud,
 } from 'lucide-react';
@@ -54,6 +55,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     title: 'Vista general',
     items: [
       { to: '/', label: 'Command Center', icon: LayoutDashboard },
+      { to: '/centro-accion', label: 'Centro de Acción', icon: Inbox, roles: ['admin', 'analista'] },
       { to: '/resumen', label: 'Resumen Ejecutivo', icon: ShieldCheck },
       { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
       { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
