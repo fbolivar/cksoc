@@ -7,6 +7,7 @@
 import { getAssetList } from '../assets/assets.service';
 import { getVulnerabilities } from '../vulnerabilities/vuln.service';
 import { getIndexerClient } from '../wazuh/wazuh.client';
+import { isFortigateConfigured } from '../response/fortigate.service';
 import { env } from '../../config/env';
 
 export type AssetCategory = 'ep' | 'srv' | 'net';
@@ -47,6 +48,56 @@ function bandOf(risk: number, disconnected: boolean): RiskBand {
 
 interface AgAgg { key: string; doc_count: number; max: { value: number | null }; crit: { doc_count: number }; high: { doc_count: number } }
 
+/**
+ * FortiGate como activo de RED en el radar. No es un agente Wazuh (manda syslog),
+ * así que se construye aparte: riesgo desde sus eventos reales del SIEM (grupo
+ * `fortigate`) y estado por heartbeat (¿emitió syslog hace poco?). Si el firewall
+ * no está configurado o el indexer no responde, devuelve null (no se inventa).
+ */
+async function getFortigateAsset(): Promise<RadarAsset | null> {
+  if (!isFortigateConfigured()) return null;
+  const host = (env.FORTIGATE_HOST || '').split(':')[0];
+  try {
+    const client = getIndexerClient();
+    const { data } = await client.post<{
+      hits: { total: { value: number } | number };
+      aggregations?: { last: { value: number | null }; mx: { value: number | null }; crit: { doc_count: number }; high: { doc_count: number } };
+    }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+      size: 0,
+      track_total_hits: true,
+      query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }, { match: { 'rule.groups': 'fortigate' } }] } },
+      aggs: {
+        last: { max: { field: '@timestamp' } },
+        mx: { max: { field: 'rule.level' } },
+        crit: { filter: { range: { 'rule.level': { gte: 12 } } } },
+        high: { filter: { range: { 'rule.level': { gte: 8, lt: 12 } } } },
+      },
+    });
+    const t = data.hits.total;
+    const count = typeof t === 'number' ? t : t.value;
+    const ag = data.aggregations;
+    const crit = ag?.crit.doc_count ?? 0;
+    const high = ag?.high.doc_count ?? 0;
+    const max = Math.round(ag?.mx.value ?? 0);
+    const lastMs = ag?.last.value ?? 0;
+    // Heartbeat: activo si emitió syslog en los últimos 20 min.
+    const disconnected = !(lastMs > 0 && Date.now() - lastMs < 20 * 60_000);
+    // Sin vulnerabilidades (no hay escaneo del FW); el riesgo sale de su actividad.
+    const alertScore = Math.min(30, Math.log2(1 + crit) * 6 + Math.log2(1 + high) * 2);
+    const sevScore = Math.min(8, (max / 16) * 8);
+    const blind = disconnected ? 12 : 0;
+    let risk = Math.round(alertScore + sevScore + blind);
+    risk = Math.max(disconnected ? 12 : 2, Math.min(100, risk));
+    return {
+      name: 'FW-FortiGate', category: 'net', risk, band: bandOf(risk, disconnected),
+      criticalVulns: 0, highVulns: 0, alerts24h: count, critAlerts: crit, maxLevel: max,
+      status: disconnected ? 'disconnected' : 'active', os: 'FortiOS · firewall perimetral', ip: host,
+    };
+  } catch {
+    return null; // sin datos del indexer: no se dibuja un punto inventado
+  }
+}
+
 export async function getAssetRadar(): Promise<AssetRadar> {
   const [agentsR, vulnR] = await Promise.allSettled([getAssetList(), getVulnerabilities()]);
   const agents = agentsR.status === 'fulfilled' ? agentsR.value : [];
@@ -79,6 +130,9 @@ export async function getAssetRadar(): Promise<AssetRadar> {
     for (const b of data.aggregations?.ag?.buckets ?? []) amap.set(b.key, { count: b.doc_count, crit: b.crit.doc_count, high: b.high.doc_count, max: Math.round(b.max.value ?? 0) });
   } catch { /* sin alertas: se degrada a solo vulns/estado */ }
 
+  // FortiGate (activo de red) en paralelo — no es un agente Wazuh.
+  const fortiP = getFortigateAsset();
+
   const assets: RadarAsset[] = agents.map((a) => {
     const v = vmap.get(a.name) ?? { critical: 0, high: 0 };
     const al = amap.get(a.name) ?? { count: 0, crit: 0, high: 0, max: 0 };
@@ -97,7 +151,11 @@ export async function getAssetRadar(): Promise<AssetRadar> {
       criticalVulns: v.critical, highVulns: v.high, alerts24h: al.count, critAlerts: al.crit, maxLevel: al.max,
       status: a.status, os: a.os, ip: a.ip,
     };
-  }).sort((x, y) => y.risk - x.risk).slice(0, 300);
+  });
 
-  return { total: agents.length, assets, generatedAt: new Date().toISOString() };
+  // Añade el FortiGate (si está) y ordena/recorta el conjunto completo.
+  const forti = await fortiP;
+  const all = (forti ? [...assets, forti] : assets).sort((x, y) => y.risk - x.risk).slice(0, 300);
+
+  return { total: agents.length + (forti ? 1 : 0), assets: all, generatedAt: new Date().toISOString() };
 }
