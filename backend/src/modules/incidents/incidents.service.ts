@@ -3,6 +3,7 @@
  * resuelto/cerrado), asignacion, notas y timeline de eventos del sistema.
  */
 import { query } from '../../config/db';
+import { HttpError } from '../auth/auth.service';
 import { getPolicy, slaFor, type IncidentSla, type SlaPolicy } from './sla.service';
 import { notifyOnCall } from '../oncall/oncall.service';
 
@@ -203,6 +204,21 @@ export async function updateIncident(
       `El incidente "${cur.title}" subió de ${cur.severity.toUpperCase()} a ${patch.severity.toUpperCase()}.\n\nAtiéndelo en HexWatch → Incidentes.`);
   }
   return getIncident(id);
+}
+
+/** Escala manualmente un incidente al analista de guardia (SLA vencido). */
+export async function escalateIncident(id: string, userId: string): Promise<{ escalated: true; delivered: boolean; to: string[]; onCall: string | null; reason: string }> {
+  const inc = (await query<{ title: string; severity: string; status: string }>(
+    'SELECT title, severity, status FROM incidents WHERE id = $1', [id]
+  ))[0];
+  if (!inc) throw new HttpError(404, 'Incidente no encontrado');
+  const res = await notifyOnCall(
+    `Escalamiento (SLA vencido): ${inc.severity} "${inc.title}"`,
+    `El incidente "${inc.title}" (severidad ${inc.severity.toUpperCase()}, estado ${inc.status}) tiene el SLA VENCIDO y fue escalado manualmente.\n\nAtiéndelo en HexWatch → Incidentes.`
+  );
+  await addSystemNote(id, userId, `Escalado al on-call${res.onCall ? ` (${res.onCall})` : ''}: ${res.delivered ? 'notificación enviada' : `no entregada (${res.reason})`}.`);
+  await query('UPDATE incidents SET updated_at = now() WHERE id = $1', [id]);
+  return { escalated: true, ...res };
 }
 
 export async function assignableUsers(): Promise<{ id: string; name: string; role: string }[]> {

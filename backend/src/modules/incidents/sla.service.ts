@@ -56,6 +56,38 @@ export function slaFor(row: SlaRow, policy: Map<string, SlaPolicy>, now = Date.n
   return { ackDueAt: new Date(ackDue).toISOString(), resolveDueAt: new Date(resDue).toISOString(), ackBreached, resolveBreached, state };
 }
 
+// --- Recomendaciones: incidentes abiertos con SLA vencido (para escalar) ---
+export interface BreachRec {
+  id: string; title: string; severity: string; status: string;
+  createdAt: string; assigneeName: string | null;
+  ackBreached: boolean; resolveBreached: boolean; overdueMin: number;
+}
+
+export async function slaBreachedIncidents(): Promise<BreachRec[]> {
+  const rows = await query<SlaRow & { id: string; title: string; assignee_name: string | null }>(
+    `SELECT i.id, i.title, i.severity, i.status, i.created_at, i.acknowledged_at, i.closed_at,
+            ua.full_name AS assignee_name
+       FROM incidents i LEFT JOIN users ua ON ua.id = i.assignee_id
+      WHERE i.status IN ('abierto','en_curso')`
+  );
+  const policy = new Map<string, SlaPolicy>((await getPolicy()).map((p) => [p.severity, p]));
+  const now = Date.now();
+  const out: BreachRec[] = [];
+  for (const r of rows) {
+    const sla = slaFor(r, policy, now);
+    if (sla.state !== 'breached') continue;
+    const due = new Date(sla.resolveBreached ? sla.resolveDueAt : sla.ackDueAt).getTime();
+    out.push({
+      id: r.id, title: r.title, severity: r.severity, status: r.status, createdAt: r.created_at,
+      assigneeName: r.assignee_name, ackBreached: sla.ackBreached, resolveBreached: sla.resolveBreached,
+      overdueMin: Math.round((now - due) / 60000),
+    });
+  }
+  const order = ['critica', 'alta', 'media', 'baja'];
+  out.sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity) || b.overdueMin - a.overdueMin);
+  return out;
+}
+
 // --- Métricas agregadas ---
 export interface CaseMetrics {
   windowDays: number;

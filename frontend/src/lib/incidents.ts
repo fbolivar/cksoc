@@ -46,7 +46,15 @@ export interface IncidentDetail extends IncidentListItem {
   timeline: IncidentNote[];
 }
 
+export interface BreachRec {
+  id: string; title: string; severity: Severity; status: Status;
+  createdAt: string; assigneeName: string | null;
+  ackBreached: boolean; resolveBreached: boolean; overdueMin: number;
+}
+
 export const incidentsApi = {
+  recommendations: () => api.get<{ items: BreachRec[] }>('/incidents/recommendations').then((r) => r.data.items),
+  escalate: (id: string) => api.post<{ escalated: boolean; delivered: boolean; onCall: string | null; reason: string }>(`/incidents/${id}/escalate`, {}).then((r) => r.data),
   list: (f: { status?: string; severity?: string; assignee?: string; q?: string } = {}) =>
     api.get<{ incidents: IncidentListItem[] }>('/incidents', { params: f }).then((r) => r.data.incidents),
   get: (id: string) => api.get<IncidentDetail>(`/incidents/${id}`).then((r) => r.data),

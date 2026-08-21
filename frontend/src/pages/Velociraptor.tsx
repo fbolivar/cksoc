@@ -9,10 +9,10 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import {
   Crosshair, RefreshCw, Loader2, ExternalLink, ServerCog, MonitorSmartphone, Radio,
-  ChevronRight, ChevronDown, X, Search, Play, CheckCircle2, Table2, WifiOff, Wifi, Stethoscope,
+  ChevronRight, ChevronDown, X, Search, Play, CheckCircle2, Table2, WifiOff, Wifi, Stethoscope, Lightbulb,
 } from 'lucide-react';
 import {
-  velociraptorApi, type VeloClient, type VeloFlow, type VeloArtifact, type VeloResultSource, type EndpointAction,
+  velociraptorApi, type VeloClient, type VeloFlow, type VeloArtifact, type VeloResultSource, type EndpointAction, type VeloRec,
 } from '@/lib/velociraptor';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -58,6 +58,17 @@ export default function Velociraptor() {
   // Modales
   const [collectFor, setCollectFor] = useState<VeloClient | null>(null);
   const [resultsFor, setResultsFor] = useState<{ client: VeloClient; flow: VeloFlow } | null>(null);
+  // Recomendaciones (hosts de alto riesgo).
+  const [recs, setRecs] = useState<VeloRec[]>([]);
+  const [recBusy, setRecBusy] = useState<string | null>(null);
+  const [recMsg, setRecMsg] = useState<{ host: string; url?: string; error?: string } | null>(null);
+
+  async function collectRec(host: string) {
+    setRecBusy(host); setRecMsg(null);
+    try { const r = await velociraptorApi.collect(host); setRecMsg({ host, url: r.url }); }
+    catch (e) { setRecMsg({ host, error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo lanzar la colección' }); }
+    finally { setRecBusy(null); }
+  }
 
   async function endpointAction(c: VeloClient, action: EndpointAction) {
     if (action === 'isolate' && !confirm(`¿AISLAR ${c.host} de la red? Cortará todo su tráfico salvo Velociraptor (contención). Podrás liberarlo después.`)) return;
@@ -93,6 +104,7 @@ export default function Velociraptor() {
     try {
       const list = await velociraptorApi.clients();
       if (my === seq.current) setClients(list);
+      velociraptorApi.recommendations().then((d) => { if (my === seq.current) setRecs(d.items ?? []); }).catch(() => undefined);
     } catch (e) {
       if (my === seq.current) {
         setClients(null);
@@ -135,6 +147,44 @@ export default function Velociraptor() {
       </div>
 
       {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
+
+      {/* Recomendaciones · Hosts de alto riesgo (triage forense) */}
+      {recs.length > 0 && (
+        <Card className="border-amber-500/40"><CardContent className="p-4">
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-amber-500" /> Recomendaciones · Hosts de alto riesgo (triage forense)</p>
+          <div className="space-y-2">
+            {recs.map((r) => {
+              const col = r.severity === 'alta' ? '#dc2626' : '#d97706';
+              return (
+                <div key={r.host} className="hw-clip flex flex-wrap items-center justify-between gap-2 border border-border p-2.5" style={{ borderLeft: `3px solid ${col}` }}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="hw-mono rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: col, background: `${col}22` }}>{r.band.toUpperCase()} · {r.risk}</span>
+                      <span className="truncate text-xs font-semibold">{r.host}</span>
+                      {r.status !== 'active' && <span className="text-[10px] text-rose-600">desconectado</span>}
+                      {r.isolated && <span className="text-[10px] text-amber-600">aislado</span>}
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">{r.reason}</p>
+                    <div className="mt-0.5 text-[10px] text-muted-foreground/70">{r.ip || '—'} · {r.os}</div>
+                  </div>
+                  {recMsg?.host === r.host && recMsg.url ? (
+                    <a href={recMsg.url} target="_blank" rel="noreferrer" className="flex shrink-0 items-center gap-1 text-[11px] text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> Colección lanzada <ExternalLink className="h-3 w-3" /></a>
+                  ) : r.hasVelo ? (
+                    <button disabled={recBusy === r.host} onClick={() => collectRec(r.host)}
+                      className="flex shrink-0 items-center gap-1 rounded px-2.5 py-1 text-[11px] text-white disabled:opacity-50" style={{ background: 'hsl(var(--primary))' }}>
+                      {recBusy === r.host ? '…' : <><Stethoscope className="h-3 w-3" /> Investigar</>}
+                    </button>
+                  ) : (
+                    <span className="shrink-0 text-[10px] text-muted-foreground/70">sin cliente Velociraptor</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {recMsg?.error && <p className="mt-2 text-xs text-rose-600">{recMsg.error}</p>}
+          <p className="mt-2 text-[10px] text-muted-foreground/60">Riesgo del radar (vulnerabilidades + alertas 24h + estado). «Investigar» lanza una colección forense (triage) en el host.</p>
+        </CardContent></Card>
+      )}
 
       <Card>
         <CardContent className="p-0">

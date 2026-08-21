@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink, Ban, CheckCircle2, Timer, Gauge, AlertTriangle } from 'lucide-react';
-import { incidentsApi, SEV, ST, SLA_STATE, fmtDuration, type IncidentListItem, type IncidentDetail, type Severity, type Status, type CaseMetrics, type SlaState } from '@/lib/incidents';
+import { incidentsApi, SEV, ST, SLA_STATE, fmtDuration, type IncidentListItem, type IncidentDetail, type Severity, type Status, type CaseMetrics, type SlaState, type BreachRec } from '@/lib/incidents';
 import { responseApi } from '@/lib/response';
 import { velociraptorApi } from '@/lib/velociraptor';
 import { useAuth } from '@/lib/auth';
@@ -59,6 +59,21 @@ export default function Incidents() {
   const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockResult, setBlockResult] = useState<{ ok?: boolean; error?: string } | null>(null);
+  const [recs, setRecs] = useState<BreachRec[]>([]);
+  const [escBusy, setEscBusy] = useState<string | null>(null);
+  const [escMsg, setEscMsg] = useState<string | null>(null);
+
+  function loadRecs() { incidentsApi.recommendations().then(setRecs).catch(() => setRecs([])); }
+  async function escalar(id: string) {
+    setEscBusy(id); setEscMsg(null);
+    try {
+      const r = await incidentsApi.escalate(id);
+      setEscMsg(r.delivered ? `Escalado y notificado${r.onCall ? ` a ${r.onCall}` : ''}.` : `Escalado y registrado, pero sin notificar: ${r.reason}.`);
+      loadRecs();
+    } catch (e) {
+      setEscMsg((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo escalar el incidente');
+    } finally { setEscBusy(null); }
+  }
 
   // Bloquea en el FortiGate la IP de origen del incidente (enlazada a la alerta
   // origen si existe). El backend aplica la lista blanca y rechaza IPs protegidas.
@@ -95,6 +110,7 @@ export default function Incidents() {
     catch (e) { setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo cargar incidentes'); }
     finally { setLoading(false); }
     incidentsApi.metrics().then(setMetrics).catch(() => undefined);
+    loadRecs();
   }
   useEffect(() => { loadList(); /* eslint-disable-next-line */ }, [statusF]);
   useEffect(() => { if (canManage) incidentsApi.users().then(setUsers).catch(() => undefined); }, [canManage]);
@@ -170,6 +186,41 @@ export default function Incidents() {
             </div>
           )}
         </>
+      )}
+
+      {/* Recomendaciones · Incidentes con SLA vencido (con acción Escalar) */}
+      {!sel && recs.length > 0 && (
+        <Card className="border-rose-500/40"><CardContent className="p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold"><AlertTriangle className="h-4 w-4 text-rose-600" /> Recomendaciones · Incidentes con SLA vencido</p>
+            <span className="hw-mono text-[10px] uppercase tracking-widest text-muted-foreground">{recs.length} caso{recs.length > 1 ? 's' : ''}</span>
+          </div>
+          {escMsg && <p className="mb-2 text-xs" style={{ color: 'hsl(var(--primary))' }}>{escMsg}</p>}
+          <div className="space-y-2">
+            {recs.map((r) => (
+              <div key={r.id} className="hw-clip flex flex-wrap items-center justify-between gap-2 border border-border p-2.5" style={{ borderLeft: `3px solid ${SEV[r.severity].color}` }}>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Chip color={SEV[r.severity].color} label={SEV[r.severity].label} />
+                    <span className="cursor-pointer truncate text-xs font-semibold hover:text-primary" onClick={() => setSel(r.id)}>{r.title}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 text-[10px] text-muted-foreground">
+                    <span>{ST[r.status].label}</span>
+                    <span className="text-rose-600">{r.resolveBreached ? 'resolución' : 'reconocimiento'} vencido hace {fmtDuration(r.overdueMin)}</span>
+                    <span>asignado: {r.assigneeName ?? 'sin asignar'}</span>
+                  </div>
+                </div>
+                {canManage && (
+                  <button disabled={escBusy === r.id} onClick={() => escalar(r.id)}
+                    className="flex shrink-0 items-center gap-1 rounded px-2.5 py-1 text-[11px] text-white disabled:opacity-50" style={{ background: 'hsl(var(--warn-orange))' }}>
+                    {escBusy === r.id ? '…' : <><Send className="h-3 w-3" /> Escalar</>}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-muted-foreground/60">Escalar notifica al analista de guardia (on-call) por correo y deja constancia en el timeline del caso.</p>
+        </CardContent></Card>
       )}
 
       {/* Lista */}

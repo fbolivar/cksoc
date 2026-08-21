@@ -8,10 +8,43 @@ import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
 import { auditFromReq } from '../audit/audit.service';
 import { runHelper } from './velociraptor.helper';
+import { getAssetRadar } from '../overview/radar.service';
 
 export const velociraptorRouter = Router();
 
 velociraptorRouter.use(authenticate);
+
+interface VeloClient { client_id?: string; host?: string; isolated?: boolean }
+
+// Recomendaciones: hosts de alto riesgo (radar) para triage forense con Velociraptor.
+velociraptorRouter.get('/recommendations', requireRole('admin', 'analista'), async (_req, res) => {
+  try {
+    const [radar, list] = await Promise.all([getAssetRadar(), runHelper(['list'])]);
+    const clients: VeloClient[] = Array.isArray(list) ? list : [];
+    const veloHosts = new Map<string, { clientId: string; isolated: boolean }>();
+    for (const c of clients) if (c?.host) veloHosts.set(String(c.host).toLowerCase(), { clientId: c.client_id ?? '', isolated: Boolean(c.isolated) });
+
+    const items = radar.assets
+      .filter((a) => a.band === 'critico' || a.band === 'alto')
+      .map((a) => {
+        const velo = veloHosts.get(a.name.toLowerCase());
+        const drivers: string[] = [];
+        if (a.criticalVulns) drivers.push(`${a.criticalVulns} vulns críticas`);
+        if (a.critAlerts) drivers.push(`${a.critAlerts} alertas críticas 24h`);
+        if (a.highVulns && !a.criticalVulns) drivers.push(`${a.highVulns} vulns altas`);
+        if (a.status !== 'active') drivers.push('agente desconectado');
+        return {
+          host: a.name, ip: a.ip, os: a.os, category: a.category, risk: a.risk, band: a.band, status: a.status,
+          severity: a.band === 'critico' ? 'alta' : 'media',
+          reason: `Riesgo ${a.risk}/100${drivers.length ? ' — ' + drivers.join(', ') : ''}. Recolecta evidencia forense (triage) para investigar.`,
+          hasVelo: Boolean(velo), isolated: velo?.isolated ?? false,
+        };
+      });
+    res.json({ available: true, items, generatedAt: new Date().toISOString() });
+  } catch (e) {
+    res.status(502).json({ available: false, items: [], error: (e as Error).message });
+  }
+});
 
 // Estado de la integración (para que el UI muestre/oculte el botón).
 velociraptorRouter.get('/status', requireRole('admin', 'analista'), async (_req, res) => {

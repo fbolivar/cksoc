@@ -12,13 +12,20 @@ import { z } from 'zod';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
 import {
-  listIncidents, getIncident, createIncident, updateIncident, addComment, assignableUsers,
+  listIncidents, getIncident, createIncident, updateIncident, addComment, assignableUsers, escalateIncident,
 } from './incidents.service';
-import { metrics, getPolicy, updatePolicy } from './sla.service';
+import { metrics, getPolicy, updatePolicy, slaBreachedIncidents } from './sla.service';
+import { auditFromReq } from '../audit/audit.service';
 
 export const incidentsRouter = Router();
 incidentsRouter.use(authenticate);
 const manage = requireRole('admin', 'analista');
+
+// Recomendaciones: incidentes abiertos con SLA vencido (para escalar). Antes de /:id.
+incidentsRouter.get('/recommendations', async (_req: Request, res: Response) => {
+  try { res.json({ items: await slaBreachedIncidents(), generatedAt: new Date().toISOString() }); }
+  catch { res.status(500).json({ error: 'No se pudieron generar las recomendaciones de SLA' }); }
+});
 
 incidentsRouter.get('/metrics', async (req: Request, res: Response) => {
   try {
@@ -105,6 +112,17 @@ incidentsRouter.patch('/:id', manage, async (req: Request, res: Response) => {
     res.json(inc);
   } catch {
     res.status(500).json({ error: 'No se pudo actualizar el incidente' });
+  }
+});
+
+incidentsRouter.post('/:id/escalate', manage, async (req: Request, res: Response) => {
+  try {
+    const r = await escalateIncident(req.params.id, req.user!.id);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'incident_escalate', target: req.params.id, result: 'ok', detail: { delivered: r.delivered, onCall: r.onCall } });
+    res.json(r);
+  } catch (e) {
+    const status = (e as { status?: number }).status ?? 500;
+    res.status(status).json({ error: (e as { message?: string }).message ?? 'No se pudo escalar el incidente' });
   }
 });
 

@@ -49,7 +49,15 @@ export interface VeloResultSource {
   rows: Record<string, unknown>[];
 }
 
+export interface VeloRec {
+  host: string; ip: string; os: string; category: string;
+  risk: number; band: string; status: string;
+  severity: 'alta' | 'media'; reason: string; hasVelo: boolean; isolated: boolean;
+}
+
 export const velociraptorApi = {
+  recommendations: () =>
+    api.get<{ available: boolean; items: VeloRec[]; error?: string }>('/velociraptor/recommendations').then((r) => r.data),
   status: () =>
     api.get<{ available: boolean; clients?: number; error?: string }>('/velociraptor/status').then((r) => r.data),
   clients: () => api.get<{ clients: VeloClient[] }>('/velociraptor/clients').then((r) => r.data.clients),
