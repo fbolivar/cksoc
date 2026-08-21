@@ -14,6 +14,7 @@ import { block } from '../response/response.service';
 import { createIncident } from '../incidents/incidents.service';
 import { runHelper } from '../velociraptor/velociraptor.helper';
 import { disableAdUser, disableM365User } from '../identity/identity.service';
+import { sendTelegram, isTelegramConfigured } from '../notifications/telegram.service';
 import { logger } from '../../config/logger';
 
 export type TriggerType = 'ioc_ip_match' | 'rule_level' | 'rule_id';
@@ -221,10 +222,28 @@ async function onCooldown(ruleId: string, entity: string, cooldownMin: number): 
   return r.length > 0;
 }
 
+const ACTION_ES: Record<ActionType, string> = {
+  block_ip: 'bloqueó IP', isolate_host: 'aisló host', create_incident: 'creó incidente',
+  disable_ad_user: 'deshabilitó cuenta AD', disable_m365_user: 'deshabilitó cuenta M365',
+};
+
+/** Aviso por Telegram del resultado de una corrida del motor (si hay novedades). */
+async function notifySoarRun(autoDone: string[], pending: number): Promise<void> {
+  if (!isTelegramConfigured() || !env.TELEGRAM_CHAT_ID) return;
+  if (autoDone.length === 0 && pending === 0) return;
+  const lines = ['🤖 *HexWatch · SOAR*'];
+  if (autoDone.length) { lines.push(`🔒 Acciones automáticas (${autoDone.length}):`); for (const a of autoDone.slice(0, 8)) lines.push(`  • ${a}`); }
+  if (pending) lines.push(`🙋 ${pending} acción(es) esperan tu aprobación en el *Centro de Acción*.`);
+  try { await sendTelegram([env.TELEGRAM_CHAT_ID], lines.join('\n')); }
+  catch (err) { logger.warn({ err: err instanceof Error ? err.message : err }, 'SOAR: fallo notificando por Telegram'); }
+}
+
 /** Evalúa todas las reglas habilitadas y crea/ejecuta eventos. */
 export async function runEngine(): Promise<{ evaluated: number; created: number }> {
   const rules = await query<AutomationRule>('SELECT * FROM automation_rules WHERE enabled = TRUE');
   let created = 0;
+  const autoDone: string[] = [];
+  let pending = 0;
   for (const rule of rules) {
     let entities: Agg[];
     try { entities = await matchEntities(rule); }
@@ -242,8 +261,10 @@ export async function runEngine(): Promise<{ evaluated: number; created: number 
         const res = await executeAction(rule.action, e.key, rule);
         status = res.ok ? 'executed' : 'failed';
         detail = { ...detail, ...res.detail };
+        if (res.ok) autoDone.push(`${ACTION_ES[rule.action]}: ${e.key}`);
       } else {
         status = 'pending';
+        pending++;
       }
       await query(
         `INSERT INTO automation_events (rule_id, rule_name, entity, action, status, detail)
@@ -256,5 +277,6 @@ export async function runEngine(): Promise<{ evaluated: number; created: number 
       await query('UPDATE automation_rules SET last_triggered_at = now(), trigger_count = trigger_count + $2 WHERE id = $1', [rule.id, entities.length]).catch(() => undefined);
     }
   }
+  await notifySoarRun(autoDone, pending);
   return { evaluated: rules.length, created };
 }
