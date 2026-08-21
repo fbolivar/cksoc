@@ -39,3 +39,7 @@ backups/
 
 # Integración Velociraptor (api_config con certificado + helper)
 velo/
+
+# Backups locales de .env (contienen secretos) e instaladores
+.env.bak*
+remote-installers/
