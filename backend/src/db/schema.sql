@@ -157,6 +157,12 @@ CREATE TABLE IF NOT EXISTS executive_reports (
     enviado_en    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_exec_reports_mes ON executive_reports(mes);
+-- Informe gerencial: periodo arbitrario + secciones editables
+ALTER TABLE executive_reports ADD COLUMN IF NOT EXISTS desde         DATE;
+ALTER TABLE executive_reports ADD COLUMN IF NOT EXISTS hasta         DATE;
+ALTER TABLE executive_reports ADD COLUMN IF NOT EXISTS periodo_label TEXT;
+ALTER TABLE executive_reports ADD COLUMN IF NOT EXISTS secciones     JSONB NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS idx_exec_reports_rango ON executive_reports(desde DESC, hasta DESC);
 
 -- ---------------------------------------------------------------------
 -- Historico de reportes generados (Fase 4)
@@ -172,6 +178,8 @@ CREATE TABLE IF NOT EXISTS report_history (
     generated_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Informe tecnico: metricas archivadas para la vista previa
+ALTER TABLE report_history ADD COLUMN IF NOT EXISTS datos_json JSONB;
 
 -- ---------------------------------------------------------------------
 -- Suscripciones a notificaciones por usuario (Fase 3)
@@ -521,4 +529,44 @@ CREATE TABLE IF NOT EXISTS license_state (
     id           INTEGER PRIMARY KEY DEFAULT 1,
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT license_state_singleton CHECK (id = 1)
+);
+
+-- ---------------------------------------------------------------------
+-- Monitoreo de exposicion de credenciales (Have I Been Pwned - Domain)
+-- ---------------------------------------------------------------------
+-- Dominios que se vigilan (el propio del cliente y afines).
+CREATE TABLE IF NOT EXISTS credexp_domains (
+    domain      VARCHAR(255) PRIMARY KEY,          -- ej. dga.com
+    habilitado  BOOLEAN NOT NULL DEFAULT true,
+    verificado  BOOLEAN NOT NULL DEFAULT false,    -- propiedad verificada en HIBP
+    ultimo_scan TIMESTAMPTZ,
+    ultimo_error TEXT,
+    creado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Cuentas del dominio encontradas en brechas conocidas.
+CREATE TABLE IF NOT EXISTS credexp_accounts (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain      VARCHAR(255) NOT NULL,
+    alias       VARCHAR(320) NOT NULL,             -- parte local (usuario), sin el @dominio
+    brechas     JSONB NOT NULL DEFAULT '[]'::jsonb, -- nombres de brecha ["Adobe","LinkedIn"]
+    num_brechas INTEGER NOT NULL DEFAULT 0,
+    estado      VARCHAR(16) NOT NULL DEFAULT 'open', -- open | ack | dismissed
+    primera_vez TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ultima_vez  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ack_por     UUID REFERENCES users(id) ON DELETE SET NULL,
+    ack_en      TIMESTAMPTZ,
+    UNIQUE (domain, alias)
+);
+CREATE INDEX IF NOT EXISTS idx_credexp_accounts_dom ON credexp_accounts(domain, estado);
+
+-- Catalogo de brechas (metadatos de HIBP) para enriquecer la vista.
+CREATE TABLE IF NOT EXISTS credexp_breaches (
+    name        VARCHAR(120) PRIMARY KEY,          -- "Adobe"
+    title       VARCHAR(200),
+    breach_date DATE,
+    pwn_count   BIGINT,
+    data_classes JSONB NOT NULL DEFAULT '[]'::jsonb,
+    is_sensitive BOOLEAN NOT NULL DEFAULT false,
+    actualizado TIMESTAMPTZ NOT NULL DEFAULT now()
 );

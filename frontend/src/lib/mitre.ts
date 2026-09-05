@@ -33,7 +33,9 @@ export interface CoverageData {
 }
 
 export const mitreApi = {
-  get: (hours: number) => api.get<MitreData>('/mitre', { params: { hours } }).then((r) => r.data),
+  // signalOnly = "solo señal real": nivel >= 8 y sin los FP conocidos (exfiltración
+  // benigna del DVR/HexDesk/interno, churn de FIM/registro, SCA/vulns).
+  get: (hours: number, signalOnly = false) => api.get<MitreData>('/mitre', { params: { hours, signal: signalOnly ? 1 : undefined } }).then((r) => r.data),
   coverage: (days: number) => api.get<CoverageData>('/mitre/coverage', { params: { days } }).then((r) => r.data),
 };
 

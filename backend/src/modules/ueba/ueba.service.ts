@@ -110,6 +110,20 @@ function cleanUser(u: unknown): string | null {
   return s;
 }
 
+/**
+ * Cuentas de SERVICIO y ADMINISTRACIÓN: no son "usuarios" a vigilar por UEBA.
+ * Un admin inicia sesión a cualquier hora y entra a muchas máquinas por su trabajo;
+ * una cuenta de servicio corre 24/7 y los findes. Marcarlas genera puro falso
+ * positivo. UEBA debe vigilar a los EMPLEADOS reales (nombres de persona), así que
+ * estas se excluyen de las anomalías. Editar aquí para ampliar la lista.
+ */
+const EXCLUDE_ENTITY_RE = /^(?:soporte|fernando[.\s]?bolivar|admin(?:istrator|istrador)?|root|sistema|system|guest|invitado|hexdesk|backup|gvm.*|svc[-_.].*|hp|usuario|user)$/i;
+/** ¿La entidad es una cuenta de servicio/admin/genérica (no un empleado real)?
+ *  Reutilizada por UEBA y por Riesgo por entidad para no priorizar admins/robots. */
+export function isServiceOrAdmin(entity: string): boolean {
+  return EXCLUDE_ENTITY_RE.test(String(entity).trim());
+}
+
 const SUCCESS_GROUP = 'authentication_success';
 const FAIL_GROUPS = ['authentication_failed', 'win_authentication_failed'];
 const USER_FIELDS = ['data.srcuser', 'data.dstuser', 'data.win.eventdata.targetUserName'];
@@ -176,10 +190,18 @@ export async function collectLogins(hours: number): Promise<LoginEvent[]> {
     {
       size: 5000,
       _source: ['@timestamp', 'rule.groups', 'agent.name', 'data.srcuser', 'data.dstuser', 'data.srcip', 'data.win.eventdata.targetUserName', 'data.win.eventdata.ipAddress'],
-      query: { bool: { filter: [
-        { range: { '@timestamp': { gte: `now-${hours}h` } } },
-        { terms: { 'rule.groups': [SUCCESS_GROUP, ...FAIL_GROUPS] } },
-      ] } },
+      query: { bool: {
+        filter: [
+          { range: { '@timestamp': { gte: `now-${hours}h` } } },
+          { terms: { 'rule.groups': [SUCCESS_GROUP, ...FAIL_GROUPS] } },
+        ],
+        // Excluir el FP masivo de SMB en red SIN dominio: 4625 con subStatus
+        // 0xC0000064 = "el usuario no existe" (una estación pide un recurso con su
+        // cuenta local; el servidor no la conoce). No es fuerza bruta. El spraying
+        // REAL usa 0xC000006A (contraseña incorrecta sobre usuario existente) y sí
+        // se conserva. Esto limpia el detector auth_failure_spike de UEBA.
+        must_not: [{ term: { 'data.win.eventdata.subStatus': '0xc0000064' } }],
+      } },
       sort: [{ '@timestamp': { order: 'asc' } }],
     }
   );
@@ -314,12 +336,16 @@ function detect(logins: LoginEvent[], baseline: Map<string, UserBaseline>, s: Ue
           const k = `off_hours|${user}`;
           if (!seenOffHours.has(k + dayKey(e.ts))) {
             seenOffHours.add(k + dayKey(e.ts));
-            const { hour } = localParts(e.ts);
+            const { hour, dow } = localParts(e.ts);
+            const hh = String(hour).padStart(2, '0');
+            const finde = dow === 0 || dow === 6;
+            const diaFinde = dow === 6 ? 'sábado' : 'domingo';
+            const motivo = finde ? `${diaFinde} ${hh}:00 · fin de semana` : `${hh}:00, hora Colombia`;
             anomalies.push({
               detector: 'off_hours', entity: user, severity: 'media', score: 35,
-              title: `${user} inició sesión fuera de horario (${String(hour).padStart(2, '0')}:00, hora Colombia)`,
-              summary: `El usuario ${user} normalmente trabaja en horario laboral (${Math.round(offRatio * 100)}% de su actividad fuera de horario), pero inició sesión a las ${String(hour).padStart(2, '0')}:00 en ${e.host}.`,
-              evidence: { ts: e.ts, host: e.host, hour, srcip: e.srcip, baselineOffRatio: Number(offRatio.toFixed(3)) },
+              title: `${user} inició sesión fuera de horario (${motivo})`,
+              summary: `El usuario ${user} normalmente trabaja en horario laboral, pero inició sesión ${finde ? `un ${diaFinde} a las ${hh}:00` : `a las ${hh}:00`} en ${e.host}. Horario laboral configurado: ${String(s.biz_start_hour).padStart(2, '0')}:00–${String(s.biz_end_hour).padStart(2, '0')}:00, ${s.include_weekend ? 'incluye' : 'sin'} fines de semana.`,
+              evidence: { ts: e.ts, host: e.host, hour, weekend: finde, srcip: e.srcip, baselineOffRatio: Number(offRatio.toFixed(3)) },
               source: e.source, dedupKey: `${k}|${dayKey(e.ts)}`,
             });
           }
@@ -383,7 +409,8 @@ function detect(logins: LoginEvent[], baseline: Map<string, UserBaseline>, s: Ue
     }
   }
 
-  return anomalies;
+  // UEBA vigila EMPLEADOS, no cuentas de servicio/admin: se descartan sus anomalías.
+  return anomalies.filter((a) => !isServiceOrAdmin(a.entity));
 }
 
 // ---------------------------------------------------------------------------

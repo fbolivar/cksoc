@@ -47,14 +47,32 @@ interface Bucket {
   mitre: { buckets: { key: string }[] };
 }
 
-export async function getCorrelations(range: string): Promise<Correlation[]> {
+// FP de exfiltración benigna (regla 100600 sobre tráfico interno/DVR/HexDesk): se
+// excluye de la correlación para que no infle las IPs internas. Mismo patrón que NDR/MITRE.
+const BENIGN_100600 = {
+  bool: {
+    filter: [{ term: { 'rule.id': '100600' } }],
+    minimum_should_match: 1,
+    should: [
+      { prefix: { 'data.dstip': '192.168.' } },
+      { prefix: { 'data.dstip': '10.' } },
+      { match_phrase: { 'data.srcip': '192.168.0.31' } },
+      { terms: { 'data.dstip': ['40.160.225.24', '209.250.254.15'] } },
+    ],
+  },
+};
+
+export async function getCorrelations(range: string, externalOnly = true): Promise<Correlation[]> {
   const gte = /^\d+[hd]$/.test(range) ? `now-${range}` : 'now-24h';
   const client = getIndexerClient();
   const { data } = await client.post<{ aggregations?: { ips: { buckets: Bucket[] } } }>(
     `/${env.WAZUH_ALERTS_INDEX}/_search`,
     {
       size: 0,
-      query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { exists: { field: 'data.srcip' } }] } },
+      query: { bool: {
+        filter: [{ range: { '@timestamp': { gte } } }, { exists: { field: 'data.srcip' } }],
+        must_not: [BENIGN_100600],
+      } },
       aggs: {
         ips: {
           terms: { field: 'data.srcip', size: 400, order: { maxlevel: 'desc' } },
@@ -85,6 +103,11 @@ export async function getCorrelations(range: string): Promise<Correlation[]> {
   for (const b of buckets) {
     // Ignora IPv6 link-local/multicast/loopback: nunca son un origen accionable.
     if (/^(fe80|ff0|::1|fec0)/i.test(b.key)) continue;
+    // "Solo externas": una IP INTERNA correlacionando su propio tráfico no es un
+    // ataque; el valor real está en las IPs EXTERNAS (atacantes) vistas por varias
+    // fuentes. En modo externo se omiten las privadas.
+    const external = isPublicIP(b.key);
+    if (externalOnly && !external) continue;
     const count = b.doc_count;
     const maxLevel = Math.round(b.maxlevel.value ?? 0);
     const fortiCount = b.forti.doc_count;
@@ -97,17 +120,20 @@ export async function getCorrelations(range: string): Promise<Correlation[]> {
     // Filtro de relevancia: descarta ruido (poca actividad y baja severidad).
     if (count < 3 && maxLevel < 8 && !iocSource) continue;
 
+    // Reponderado: prioriza EXTERNO, cross-source e IOC (señales de ataque real)
+    // por encima del volumen crudo, que antes hacía ganar a las IPs internas ruidosas.
     const score =
-      maxLevel * 8 +
+      maxLevel * 7 +
       distinctRules * 3 +
-      agents.length * 4 +
-      (crossSource ? 25 : 0) +
-      (iocSource ? 40 : 0) +
-      Math.min(20, Math.round(Math.log2(count + 1) * 3));
+      agents.length * 5 +
+      (crossSource ? 30 : 0) +
+      (iocSource ? 50 : 0) +
+      (external ? 20 : 0) +
+      Math.min(15, Math.round(Math.log2(count + 1) * 3));
 
     out.push({
       srcip: b.key,
-      external: isPublicIP(b.key),
+      external,
       count,
       maxLevel,
       band: band(maxLevel),

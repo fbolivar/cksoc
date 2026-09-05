@@ -37,6 +37,7 @@ import {
   Inbox,
   Network,
   Cloud,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -73,6 +74,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
       { to: '/ndr', label: 'NDR · Red', icon: Network, roles: ['admin', 'analista'] },
       { to: '/office365', label: 'Office 365', icon: Cloud, roles: ['admin', 'analista'] },
+      { to: '/postura-correo', label: 'Postura de correo', icon: Mail, roles: ['admin', 'analista'] },
     ],
   },
   {
@@ -80,6 +82,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/hunting', label: 'Threat Hunting', icon: Radar, roles: ['admin', 'analista'] },
       { to: '/threat-intel', label: 'Threat Intelligence', icon: Rss, roles: ['admin', 'analista'] },
+      { to: '/exposicion-credenciales', label: 'Exposición de Credenciales', icon: KeyRound, roles: ['admin', 'analista'] },
       { to: '/velociraptor', label: 'Velociraptor (DFIR)', icon: Crosshair, roles: ['admin', 'analista'] },
     ],
   },

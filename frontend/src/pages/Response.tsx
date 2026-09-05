@@ -32,6 +32,7 @@ export default function Response() {
   const [loading, setLoading] = useState(false);
   const [modalIp, setModalIp] = useState<{ ip: string; context?: string } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [threatsOnly, setThreatsOnly] = useState(true);
   const [msg, setMsg] = useState<{ k: 'ok' | 'err'; t: string } | null>(null);
 
   const flash = (k: 'ok' | 'err', t: string) => {
@@ -46,7 +47,7 @@ export default function Response() {
     try {
       const [st, inc, bl, au] = await Promise.all([
         responseApi.status(),
-        responseApi.incidents(168).catch(() => []),
+        responseApi.incidents(168, threatsOnly).catch(() => []),
         responseApi.blocked().catch(() => []),
         responseApi.history().catch(() => []),
       ]);
@@ -55,7 +56,8 @@ export default function Response() {
       setLoading(false);
     }
   }
-  useEffect(() => { reloadAll().catch(() => err('No se pudo cargar')); }, []);
+  // Recarga al montar y cuando cambia el toggle "Solo amenazas".
+  useEffect(() => { reloadAll().catch(() => err('No se pudo cargar')); /* eslint-disable-next-line */ }, [threatsOnly]);
 
   async function confirmBlock(ip: string, motivo: string) {
     await responseApi.block(ip, motivo);
@@ -118,12 +120,27 @@ export default function Response() {
       </div>
 
       {tab === 'incidentes' && (
-        <IncidentsView
-          incidents={incidents} isAdmin={isAdmin} expanded={expanded}
-          onToggle={(ip) => setExpanded(expanded === ip ? null : ip)}
-          onBlock={(ip, ctx) => setModalIp({ ip, context: ctx })}
-          onUnblock={doUnblock}
-        />
+        <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/50 bg-background/40 px-3 py-2">
+            <p className="text-[11px] text-muted-foreground">
+              {threatsOnly
+                ? 'Mostrando solo amenazas reales (IOC · ataque/IPS · nivel alto). Se excluyen usuarios de VPN, conectividad benigna y la lista blanca.'
+                : 'Mostrando todas las IPs públicas con actividad (aún se excluyen VPN/whitelist, que nunca deben bloquearse).'}
+            </p>
+            <button
+              onClick={() => { setThreatsOnly((v) => !v); }}
+              className={`flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs ${threatsOnly ? 'border-brand/50 bg-brand/15 text-brand' : 'border-input bg-background text-muted-foreground'}`}
+            >
+              {threatsOnly ? '◉ Solo amenazas' : '○ Ver todo'}
+            </button>
+          </div>
+          <IncidentsView
+            incidents={incidents} isAdmin={isAdmin} expanded={expanded}
+            onToggle={(ip) => setExpanded(expanded === ip ? null : ip)}
+            onBlock={(ip, ctx) => setModalIp({ ip, context: ctx })}
+            onUnblock={doUnblock}
+          />
+        </>
       )}
       {tab === 'bloqueadas' && <BlockedView blocked={blocked} isAdmin={isAdmin} onUnblock={doUnblock} />}
       {tab === 'auditoria' && <AuditView audit={audit} />}
@@ -189,6 +206,9 @@ function IncidentsView({ incidents, isAdmin, expanded, onToggle, onBlock, onUnbl
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono font-semibold">{i.ip}</span>
                     {i.blocked && <Badge variant="danger"><Ban className="h-3 w-3" /> bloqueada</Badge>}
+                    {i.ioc && <Badge variant="danger">IOC malicioso</Badge>}
+                    {i.attack && <Badge variant="warning">ataque / IPS</Badge>}
+                    {i.threat && !i.ioc && !i.attack && <Badge variant="warning">amenaza</Badge>}
                     <span className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: ac.bg, color: ac.fg }}>
                       AbuseIPDB {rep?.abuseScore ?? 0} · {ac.label}
                     </span>

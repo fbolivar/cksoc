@@ -8,6 +8,9 @@ export interface VeloClient {
   release: string;
   last_seen_at?: number;
   isolated?: boolean;
+  online?: boolean;         // liveness real de Velo (reportó en las últimas 24h)
+  lastSeenH?: number | null; // horas desde el último contacto
+  lastSeen?: string | null;  // ISO
 }
 
 export type EndpointAction = 'isolate' | 'release' | 'triage';
@@ -53,13 +56,14 @@ export interface VeloRec {
   host: string; ip: string; os: string; category: string;
   risk: number; band: string; status: string;
   severity: 'alta' | 'media'; reason: string; hasVelo: boolean; isolated: boolean;
+  veloOnline: boolean; veloLastSeenH: number | null; triageable: boolean;
 }
 
 export const velociraptorApi = {
   recommendations: () =>
     api.get<{ available: boolean; items: VeloRec[]; error?: string }>('/velociraptor/recommendations').then((r) => r.data),
   status: () =>
-    api.get<{ available: boolean; clients?: number; error?: string }>('/velociraptor/status').then((r) => r.data),
+    api.get<{ available: boolean; clients?: number; online?: number; error?: string }>('/velociraptor/status').then((r) => r.data),
   clients: () => api.get<{ clients: VeloClient[] }>('/velociraptor/clients').then((r) => r.data.clients),
   flows: (clientId: string) =>
     api.get<{ flows: VeloFlow[] }>(`/velociraptor/clients/${clientId}/flows`).then((r) => r.data.flows),

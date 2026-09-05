@@ -61,22 +61,26 @@ function sevBorder(level: number): string {
 
 function ActivityView() {
   const [range, setRange] = useState<Range>('7d');
+  // "Solo señal real" ON por defecto: el mapa muestra la verdad (nivel >= 8, sin los FP
+  // conocidos), no el ruido de FIM/registro ni la exfiltración benigna del DVR/HexDesk.
+  const [signalOnly, setSignalOnly] = useState(true);
   const [data, setData] = useState<MitreData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load(r: Range) {
+  async function load(r: Range, signal: boolean) {
     setLoading(true);
     setError(null);
     try {
-      setData(await mitreApi.get(HOURS[r]));
+      setData(await mitreApi.get(HOURS[r], signal));
     } catch (e) {
       setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo cargar MITRE ATT&CK');
     } finally {
       setLoading(false);
     }
   }
-  useEffect(() => { load(range); }, [range]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(range, signalOnly); }, [range, signalOnly]);
 
   const columns = useMemo(() => {
     if (!data) return [];
@@ -99,9 +103,15 @@ function ActivityView() {
 
   return (
     <>
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          variant={signalOnly ? 'default' : 'outline'} size="sm"
+          onClick={() => setSignalOnly((v) => !v)}
+          title="Solo señal real: cuenta solo detecciones de nivel alto (≥8) y excluye los falsos positivos conocidos (churn de FIM/registro, exfiltración benigna del DVR/HexDesk/interno). Apágalo para ver todo el volumen crudo.">
+          {signalOnly ? <ShieldCheck className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />} {signalOnly ? 'Solo señal real' : 'Ver todo (con ruido)'}
+        </Button>
         <RangeTabs value={range} onChange={setRange} options={RANGE_24_7_30} />
-        <Button variant="outline" size="sm" onClick={() => load(range)} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={() => load(range, signalOnly)} disabled={loading}>
           <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
         </Button>
       </div>

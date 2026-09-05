@@ -75,8 +75,9 @@ export async function getHistory(_req: Request, res: Response): Promise<void> {
 export async function getIncidentsCtrl(req: Request, res: Response): Promise<void> {
   const h = Number(req.query.hours);
   const hours = Number.isFinite(h) && h > 0 && h <= 720 ? Math.floor(h) : 24;
+  const threatsOnly = req.query.threats !== '0'; // solo amenazas por defecto; ?threats=0 = ver todo
   try {
-    res.json({ hours, incidents: await getIncidents(hours) });
+    res.json({ hours, threatsOnly, incidents: await getIncidents(hours, 15, threatsOnly) });
   } catch (err) {
     handle(err, res);
   }

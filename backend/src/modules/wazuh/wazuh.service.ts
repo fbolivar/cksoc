@@ -221,11 +221,19 @@ export interface AlertSearchParams {
   q?: string;
   mitre?: string;
   user?: string; // usuario(s) — coma-separado; filtra por cuentas de login
+  triage?: boolean; // "Solo seguridad": excluye ruido no accionable (cumplimiento/parcheo/crashes)
   page: number;
   size: number;
 }
 
 const MAX_WINDOW = 10000; // limite de deep paging de OpenSearch
+
+// Grupos que NO son eventos de seguridad accionables en el feed de alertas: viven
+// en sus propios módulos (SCA→Cumplimiento, vulnerability-detector→Vulnerabilidades)
+// o son telemetría de fallos de software (system_error). En modo "triage" se ocultan
+// para que el analista vea solo lo que un humano debe mirar. Se pueden mostrar
+// desactivando el toggle "Solo seguridad".
+const NOISE_GROUPS = ['sca', 'vulnerability-detector', 'system_error'];
 
 function bandRange(band: string): Record<string, number> | null {
   switch (band) {
@@ -269,6 +277,20 @@ export async function searchAlerts(
     }
   }
   const must = p.q ? [{ match: { 'rule.description': { query: p.q, operator: 'and' } } }] : [];
+  // "Solo seguridad": oculta el ruido no accionable (cumplimiento/parcheo/crashes)
+  // y los falsos positivos benignos ya conocidos de la regla de exfiltración 100600
+  // (destino interno RFC1918 = telemetría de agentes/RDP; el DVR de cámaras Dahua
+  // .31; los relays de HexDesk). La exfiltración REAL —destino externo desconocido—
+  // sigue visible. Esto limpia el histórico previo al afinamiento sin borrar datos.
+  const mustNot = p.triage ? [
+    { terms: { 'rule.groups': NOISE_GROUPS } },
+    { bool: { filter: [{ term: { 'rule.id': '100600' } }], minimum_should_match: 1, should: [
+      { prefix: { 'data.dstip': '192.168.' } },
+      { prefix: { 'data.dstip': '10.' } },
+      { match_phrase: { 'data.srcip': '192.168.0.31' } },
+      { terms: { 'data.dstip': ['40.160.225.24', '209.250.254.15'] } },
+    ] } },
+  ] : [];
 
   const from = Math.min(p.page * p.size, Math.max(0, MAX_WINDOW - p.size));
   try {
@@ -280,7 +302,7 @@ export async function searchAlerts(
       size: p.size,
       sort: [{ timestamp: { order: 'desc' } }],
       _source: ['timestamp', 'rule.id', 'rule.level', 'rule.description', 'rule.groups', 'rule.mitre.id', 'agent.name', 'data.srcip', 'data.remip'],
-      query: { bool: { filter, ...(must.length ? { must } : {}) } },
+      query: { bool: { filter, ...(must.length ? { must } : {}), ...(mustNot.length ? { must_not: mustNot } : {}) } },
     });
     return {
       total: data.hits.total.value,

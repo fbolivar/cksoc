@@ -56,6 +56,7 @@ wazuhRouter.get('/alerts/search', async (req: Request, res: Response) => {
         q: str('q'),
         mitre: str('mitre'),
         user: str('user'),
+        triage: req.query.triage === 'true' || req.query.triage === '1',
         page,
         size,
       })

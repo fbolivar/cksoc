@@ -1,7 +1,8 @@
 /**
- * Pagina de Reportes (Fase 4).
- * Generacion manual de reportes PDF, historial, descarga y borrado.
- * Informa del reporte programado (node-cron diario).
+ * Página de Reportes.
+ *  - Técnico: informe operativo del SOC (hallazgos con evidencia, consultas,
+ *    plan de acción y hoja de ruta por sprints) para un periodo arbitrario.
+ *  - Gerencial: informe de dirección, editable por secciones.
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
@@ -18,16 +19,29 @@ import {
   Timer,
   ShieldCheck,
   ScrollText,
+  Eye,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { reportsApi, type Report } from '@/lib/reports';
-import type { TimeRange } from '@/lib/wazuh';
+import { reportsApi, type Report, type PresetPeriodo } from '@/lib/reports';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ExecutiveReports } from '@/components/reports/ExecutiveReports';
+
+function hoyIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Texto del periodo de un reporte del historial. */
+function periodoDe(r: Report): string {
+  if (r.params?.label) return r.params.label;
+  if (r.params?.desde && r.params?.hasta) return `${r.params.desde} a ${r.params.hasta}`;
+  return r.params?.range ?? '—';
+}
 
 export default function Reports() {
   const { user } = useAuth();
@@ -36,35 +50,59 @@ export default function Reports() {
   const [tab, setTab] = useState<'tecnico' | 'ejecutivo'>('tecnico');
 
   const [reports, setReports] = useState<Report[]>([]);
-  const [title, setTitle] = useState('Reporte de seguridad HexWatch');
-  const [range, setRange] = useState<TimeRange>('24h');
+  const [presets, setPresets] = useState<PresetPeriodo[]>([]);
+  const [title, setTitle] = useState('Informe técnico del SOC');
+  const [preset, setPreset] = useState('ultimas-24h');
+  const [desde, setDesde] = useState(hoyIso().slice(0, 8) + '01');
+  const [hasta, setHasta] = useState(hoyIso());
   const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ html: string; title: string } | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  const personalizado = preset === 'personalizado';
 
   async function reload() {
     setReports(await reportsApi.list());
   }
   useEffect(() => {
     reload().catch(() => setMsg({ kind: 'err', text: 'No se pudo cargar el historial' }));
+    reportsApi.presets().then(setPresets).catch(() => setPresets([]));
   }, []);
 
   const flash = (kind: 'ok' | 'err', text: string) => {
     setMsg({ kind, text });
-    setTimeout(() => setMsg(null), 4000);
+    setTimeout(() => setMsg(null), 5000);
   };
+  const err = (e: unknown, fallback: string) =>
+    flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? fallback);
 
   async function generate() {
     setGenerating(true);
     setMsg(null);
     try {
-      await reportsApi.generate(title, range);
+      const r = await reportsApi.generate(
+        personalizado ? { title, preset, desde, hasta } : { title, preset }
+      );
       await reload();
-      flash('ok', 'Reporte generado correctamente');
-    } catch (err) {
-      flash('err', (err as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar el reporte');
+      flash('ok', `Informe de ${periodoDe(r)} generado`);
+      await openPreview(r.id);
+    } catch (e) {
+      err(e, 'No se pudo generar el informe');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function openPreview(id: string) {
+    setLoadingPreview(id);
+    try {
+      setPreview(await reportsApi.preview(id));
+    } catch (e) {
+      err(e, 'No se pudo abrir la vista previa');
+    } finally {
+      setLoadingPreview(null);
     }
   }
 
@@ -90,18 +128,19 @@ export default function Reports() {
     }
   }
 
-  const pick = (title: string, r: TimeRange, exec?: boolean) => {
+  /** Preselecciona título y periodo desde el catálogo. */
+  const pick = (t: string, p: string, exec?: boolean) => {
     if (exec && isAdmin) { setTab('ejecutivo'); return; }
-    setTab('tecnico'); setTitle(title); setRange(r);
+    setTab('tecnico'); setTitle(t); setPreset(p);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const catalog: { icon: typeof FileText; col: string; title: string; desc: string; fmt: string; cadence: string; onClick: () => void }[] = [
-    { icon: LineChart, col: 'primary', title: 'Resumen ejecutivo', desc: 'KPIs y tendencia de riesgo para dirección, sin tecnicismos.', fmt: 'PDF', cadence: 'Semanal', onClick: () => pick('Resumen ejecutivo HexWatch', '7d', true) },
-    { icon: AlertTriangle, col: 'destructive', title: 'Vulnerabilidades priorizadas', desc: 'CVEs por riesgo real: CISA KEV + EPSS + CVSS.', fmt: 'PDF·CSV', cadence: 'Bajo demanda', onClick: () => pick('Vulnerabilidades priorizadas (KEV/EPSS)', '7d') },
-    { icon: ClipboardCheck, col: 'cyan', title: 'Cumplimiento', desc: 'Estado frente a ISO 27001 / PCI. Brechas y evidencia.', fmt: 'PDF', cadence: 'Mensual', onClick: () => pick('Reporte de cumplimiento', '30d') },
-    { icon: Timer, col: 'warn-orange', title: 'SLA & desempeño', desc: 'MTTA, MTTR y carga por analista del equipo.', fmt: 'PDF', cadence: 'Quincenal', onClick: () => pick('SLA y desempeño del SOC', '30d') },
-    { icon: ShieldCheck, col: 'primary', title: 'Cobertura MITRE ATT&CK', desc: 'Técnicas detectadas vs. el marco. Puntos ciegos.', fmt: 'PDF', cadence: 'Mensual', onClick: () => pick('Cobertura MITRE ATT&CK', '30d') },
-    { icon: ScrollText, col: 'success', title: 'Actividad & auditoría', desc: 'Bloqueos, aislamientos y accesos con trazabilidad.', fmt: 'PDF·CSV', cadence: 'Bajo demanda', onClick: () => pick('Actividad y auditoría del SOC', '7d') },
+    { icon: LineChart, col: 'primary', title: 'Informe gerencial', desc: 'Documento para dirección: análisis, plan de acción y hoja de ruta.', fmt: 'PDF', cadence: 'Por periodo', onClick: () => pick('Informe gerencial', 'mes-anterior', true) },
+    { icon: ShieldCheck, col: 'cyan', title: 'Informe técnico del turno', desc: 'Hallazgos con evidencia y consultas reproducibles de las últimas 24 h.', fmt: 'PDF', cadence: 'Diario', onClick: () => pick('Informe técnico del SOC · turno', 'ultimas-24h') },
+    { icon: AlertTriangle, col: 'destructive', title: 'Revisión semanal', desc: 'Panorama de detecciones, vulnerabilidades priorizadas y tuning de reglas.', fmt: 'PDF', cadence: 'Semanal', onClick: () => pick('Revisión técnica semanal del SOC', 'ultimos-7d') },
+    { icon: ClipboardCheck, col: 'warn-orange', title: 'Cierre de mes técnico', desc: 'Cobertura ATT&CK, higiene de detección y deuda de seguridad del mes.', fmt: 'PDF', cadence: 'Mensual', onClick: () => pick('Cierre técnico mensual del SOC', 'mes-anterior') },
+    { icon: Timer, col: 'primary', title: 'Ventana de incidente', desc: 'Informe acotado a un rango exacto para soportar una investigación.', fmt: 'PDF', cadence: 'Bajo demanda', onClick: () => pick('Informe técnico · ventana de incidente', 'personalizado') },
+    { icon: ScrollText, col: 'success', title: 'Últimos 30 días', desc: 'Tendencia, picos de volumen y evolución de la postura técnica.', fmt: 'PDF', cadence: 'Bajo demanda', onClick: () => pick('Informe técnico · últimos 30 días', 'ultimos-30d') },
   ];
 
   return (
@@ -110,10 +149,10 @@ export default function Reports() {
         <h1 className="hw-mono flex items-center gap-2 text-2xl font-bold tracking-tight">
           <FileBarChart className="h-6 w-6 text-primary" /> REPORTES
         </h1>
-        <p className="hw-mono text-[11px] tracking-wide text-muted-foreground">GENERA // PROGRAMA // DESCARGA</p>
+        <p className="hw-mono text-[11px] tracking-wide text-muted-foreground">GENERA // ANALIZA // DESCARGA</p>
       </div>
 
-      {/* Catálogo de reportes */}
+      {/* Catálogo */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {catalog.map((c) => (
           <button key={c.title} onClick={c.onClick} className="hud text-left transition-transform hover:-translate-y-0.5">
@@ -141,12 +180,12 @@ export default function Reports() {
       <div className="flex gap-1 border-b border-border/60">
         <button onClick={() => setTab('tecnico')}
           className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'tecnico' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-          Técnico
+          Técnico (SOC)
         </button>
         {isAdmin && (
           <button onClick={() => setTab('ejecutivo')}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'ejecutivo' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-            Ejecutivo (Comité SGSI)
+            Gerencial (Dirección)
           </button>
         )}
       </div>
@@ -158,9 +197,9 @@ export default function Reports() {
       {canManage && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-muted-foreground">Generar reporte</CardTitle>
+            <CardTitle className="text-muted-foreground">Generar informe técnico</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <div className="flex flex-wrap items-end gap-3">
               <div className="flex-1 space-y-2" style={{ minWidth: 240 }}>
                 <Label htmlFor="rtitle">Título</Label>
@@ -169,19 +208,41 @@ export default function Reports() {
               <div className="space-y-2">
                 <Label>Periodo</Label>
                 <select
-                  value={range}
-                  onChange={(e) => setRange(e.target.value as TimeRange)}
-                  className="h-10 rounded-md border border-input bg-background/60 px-3 text-sm"
+                  value={preset}
+                  onChange={(e) => setPreset(e.target.value)}
+                  className="h-10 w-52 rounded-md border border-input bg-background/60 px-3 text-sm"
                 >
-                  <option value="24h">Últimas 24 horas</option>
-                  <option value="7d">Últimos 7 días</option>
-                  <option value="30d">Últimos 30 días</option>
+                  {presets.length === 0 && <option value="ultimas-24h">Últimas 24 horas</option>}
+                  {presets.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
                 </select>
               </div>
+              {personalizado && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Desde</Label>
+                    <Input type="date" value={desde} max={hasta} onChange={(e) => setDesde(e.target.value)} className="w-40" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Hasta</Label>
+                    <Input type="date" value={hasta} min={desde} max={hoyIso()} onChange={(e) => setHasta(e.target.value)} className="w-40" />
+                  </div>
+                </>
+              )}
               <Button onClick={generate} disabled={generating || !title}>
                 {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                {generating ? 'Generando…' : 'Generar PDF'}
+                {generating ? 'Analizando…' : 'Generar informe'}
               </Button>
+            </div>
+            <div className="flex items-start gap-2 rounded-md border border-border/50 bg-card/40 px-3 py-2 text-[11px] text-muted-foreground">
+              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+              <span>
+                Documento operativo: alcance y salud de la telemetría, panorama de detecciones con picos,
+                análisis por dominio (accesos, perímetro, ATT&CK, integridad, vulnerabilidades, hardening,
+                inteligencia), hallazgos priorizados con evidencia y la consulta para reproducirlos,
+                plan de acción con responsable y criterio de cierre, y hoja de ruta por sprints.
+              </span>
             </div>
           </CardContent>
         </Card>
@@ -192,10 +253,10 @@ export default function Reports() {
         <CardContent className="flex items-center gap-3 p-4">
           <CalendarClock className="h-5 w-5 text-neon" />
           <div className="text-sm">
-            <p className="font-medium">Reporte programado</p>
+            <p className="font-medium">Informe programado</p>
             <p className="text-muted-foreground">
-              Se genera automáticamente cada día a las 07:00 (últimas 24 h). Si hay SMTP configurado,
-              se envía por correo a los destinatarios definidos.
+              Se genera automáticamente según la programación configurada. Si hay SMTP definido,
+              se envía por correo a los destinatarios del equipo técnico.
             </p>
           </div>
         </CardContent>
@@ -204,12 +265,12 @@ export default function Reports() {
       {/* Historial */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-muted-foreground">Historial de reportes ({reports.length})</CardTitle>
+          <CardTitle className="text-muted-foreground">Historial de informes ({reports.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {reports.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              No hay reportes todavía.
+              No hay informes todavía.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -237,9 +298,18 @@ export default function Reports() {
                           <Badge variant="muted">manual</Badge>
                         )}
                       </td>
-                      <td className="py-2.5 pr-4 text-muted-foreground">{r.params?.range ?? '—'}</td>
+                      <td className="py-2.5 pr-4 text-muted-foreground">{periodoDe(r)}</td>
                       <td className="py-2.5">
                         <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openPreview(r.id)}
+                            disabled={loadingPreview === r.id}
+                            title="Ver informe"
+                          >
+                            {loadingPreview === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -269,6 +339,31 @@ export default function Reports() {
         </CardContent>
       </Card>
       </>)}
+
+      {/* Vista previa a pantalla completa */}
+      {preview && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/70 p-4" onClick={() => setPreview(null)}>
+          <div
+            className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-border/70 bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+              <h3 className="truncate text-sm font-semibold">{preview.title}</h3>
+              <Button variant="ghost" size="icon" onClick={() => setPreview(null)} title="Cerrar">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <iframe
+              title="preview-tecnico"
+              srcDoc={preview.html}
+              // sandbox="" (sin allow-scripts/allow-same-origin): el informe es solo
+              // presentacion; bloquear JS evita XSS si algun dato del SOC arrastra markup.
+              sandbox=""
+              className="h-full w-full flex-1 bg-white"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

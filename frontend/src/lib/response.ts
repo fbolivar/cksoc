@@ -23,6 +23,11 @@ export interface Incident {
   lon: number | null;
   reputation: Reputation | null;
   blocked: boolean;
+  ioc: boolean;
+  attack: boolean;
+  threat: boolean;
+  whitelisted: boolean;
+  threatScore: number;
 }
 
 export interface ResponseStatus {
@@ -53,8 +58,8 @@ export interface AuditRow {
 
 export const responseApi = {
   status: () => api.get<ResponseStatus>('/response/status').then((r) => r.data),
-  incidents: (hours: number) =>
-    api.get<{ incidents: Incident[] }>('/response/incidents', { params: { hours } }).then((r) => r.data.incidents),
+  incidents: (hours: number, threatsOnly = true) =>
+    api.get<{ incidents: Incident[] }>('/response/incidents', { params: { hours, threats: threatsOnly ? 1 : 0 } }).then((r) => r.data.incidents),
   blocked: () => api.get<{ blocked: BlockedItem[] }>('/response/blocked').then((r) => r.data.blocked),
   history: () => api.get<{ history: AuditRow[] }>('/response/history').then((r) => r.data.history),
   block: (ip: string, motivo: string, alertaOrigenId?: string) =>

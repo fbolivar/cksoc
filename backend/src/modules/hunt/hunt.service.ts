@@ -18,6 +18,7 @@ export interface HuntParams {
   mitre?: string;
   size?: number;
   page?: number;
+  signalOnly?: boolean; // lente "señal de caza": excluye la telemetría benigna de alto volumen
 }
 
 export interface HuntHit {
@@ -36,11 +37,25 @@ export interface Bucket { key: string; count: number; label?: string }
 export interface HuntResult {
   total: number;
   capped: boolean;
+  signalOnly: boolean;
   items: HuntHit[];
   aggs: { rules: Bucket[]; agents: Bucket[]; srcips: Bucket[]; mitre: Bucket[] };
 }
 
-const MAX_WINDOW = 10000;
+const MAX_WINDOW = 10000; // límite de la ventana from+size de OpenSearch (paginación)
+
+// Lente "señal de caza": telemetría benigna de alto volumen que ahoga la caza.
+// (medido en vivo: estas 5 reglas = ~1.0M de 1.24M eventos/7d). El texto libre y
+// los filtros por técnica siguen abiertos; el toggle "ver todo" las trae de vuelta.
+const NOISE_RULE_IDS = ['81633', '80792', '550', '752', '91578'];
+//  81633 Forti "App passed" · 80792 audit systemd · 550 FIM checksum · 752 registry value · 91578 O365 MailItemsAccessed
+const NOISE_GROUPS = ['sca', 'vulnerability-detector'];
+
+/** Convierte texto libre en wildcards case-insensitive sobre rule.description (que es keyword). */
+function textClauses(q: string): unknown[] {
+  return q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    .map((tok) => ({ wildcard: { 'rule.description': { value: `*${tok}*`, case_insensitive: true } } }));
+}
 
 function timeFilter(p: HuntParams): unknown {
   if (p.from || p.to) {
@@ -65,7 +80,13 @@ export async function hunt(p: HuntParams): Promise<HuntResult> {
       bool: { should: [{ term: { 'data.srcip': p.srcip } }, { term: { 'data.remip': p.srcip } }], minimum_should_match: 1 },
     });
   }
-  const must = p.q ? [{ match: { 'rule.description': { query: p.q, operator: 'and' } } }] : [];
+  // Texto libre → wildcard case-insensitive (rule.description es keyword; `match` no matchea parcial).
+  const must = p.q ? textClauses(p.q) : [];
+
+  // Lente señal: quita la telemetría benigna de alto volumen (sin cegar la búsqueda cruda).
+  const mustNot: unknown[] = p.signalOnly
+    ? [{ terms: { 'rule.id': NOISE_RULE_IDS } }, { terms: { 'rule.groups': NOISE_GROUPS } }]
+    : [];
 
   const size = Math.min(Math.max(p.size ?? 50, 1), 200);
   const page = Math.max(p.page ?? 0, 0);
@@ -75,12 +96,12 @@ export async function hunt(p: HuntParams): Promise<HuntResult> {
     hits: { total: { value: number; relation: string }; hits: { _id: string; _source: Record<string, unknown> }[] };
     aggregations: Record<string, { buckets: { key: string | number; doc_count: number }[] }>;
   }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
-    track_total_hits: MAX_WINDOW,
+    track_total_hits: true, // total exacto (antes se capaba en 10.000 y el conteo mentía)
     from,
     size,
     sort: [{ timestamp: { order: 'desc' } }],
     _source: ['timestamp', 'rule.id', 'rule.level', 'rule.description', 'rule.mitre.id', 'agent.name', 'data.srcip', 'data.remip'],
-    query: { bool: { filter, ...(must.length ? { must } : {}) } },
+    query: { bool: { filter, ...(must.length ? { must } : {}), ...(mustNot.length ? { must_not: mustNot } : {}) } },
     aggs: {
       rules: { terms: { field: 'rule.id', size: 10 } },
       agents: { terms: { field: 'agent.name', size: 10 } },
@@ -120,7 +141,10 @@ export async function hunt(p: HuntParams): Promise<HuntResult> {
 
   return {
     total: data.hits.total.value,
-    capped: data.hits.total.relation === 'gte',
+    // Con track_total_hits:true el total es exacto; "capped" avisa que solo se pueden
+    // paginar los primeros MAX_WINDOW resultados (límite de OpenSearch), no que el conteo sea parcial.
+    capped: data.hits.total.value > MAX_WINDOW,
+    signalOnly: Boolean(p.signalOnly),
     items,
     aggs: {
       rules: buckets('rules', true),

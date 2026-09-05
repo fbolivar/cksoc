@@ -16,7 +16,7 @@ import { getIndexerClient } from '../wazuh/wazuh.client';
 import { env } from '../../config/env';
 import { getAssetList } from '../assets/assets.service';
 import { getVulnerabilities } from '../vulnerabilities/vuln.service';
-import { collectLogins, listAnomalies, type AnomalyRow } from '../ueba/ueba.service';
+import { collectLogins, listAnomalies, isServiceOrAdmin, type AnomalyRow } from '../ueba/ueba.service';
 
 export type RiskBand = 'critico' | 'alto' | 'medio' | 'bajo';
 
@@ -102,8 +102,13 @@ async function computeHostRisk(hours: number): Promise<EntityRisk[]> {
     const pCrit = clamp(Math.round(log2(al.crit) * 8), 0, 35);
     const pHigh = clamp(Math.round(log2(al.high) * 3), 0, 18);
     const pSev = clamp(Math.round((al.max / 16) * 8), 0, 8);
-    const pVc = clamp(Math.round(v.critical * 1.3), 0, 20);
-    const pVh = clamp(Math.round(v.high * 0.3), 0, 8);
+    // Vulnerabilidades = deuda de parches, NO amenaza activa. Se ponderan bajo
+    // a proposito: mientras ninguna este en explotacion activa (KEV), un host
+    // solo con muchas vulns no debe marcarse "alto riesgo" — eso corresponde a
+    // la actividad de alertas. Antes 1.3/0.3 (tope 20/8) inflaba a los hosts
+    // con backports de Ubuntu (FP) hasta banda alta sin alertas reales.
+    const pVc = clamp(Math.round(v.critical * 0.4), 0, 10);
+    const pVh = clamp(Math.round(v.high * 0.1), 0, 5);
     const pBlind = disconnected ? 8 : 0;
     if (pCrit) c.push({ source: 'alertas', label: `${al.crit} alertas críticas`, points: pCrit });
     if (pHigh) c.push({ source: 'alertas', label: `${al.high} alertas altas`, points: pHigh });
@@ -170,7 +175,9 @@ async function computeUserRisk(hours: number): Promise<EntityRisk[]> {
       extra: { fallos: a.fails, exitos: a.ok, hosts: a.hosts.size },
     });
   }
-  return out.sort((a, b) => b.score - a.score);
+  // El RBA prioriza EMPLEADOS: se excluyen cuentas de servicio/admin/genéricas
+  // (soporte, admin, HP, USUARIO, gvm*, etc.) para que el termómetro apunte a personas.
+  return out.filter((e) => !isServiceOrAdmin(e.entity)).sort((a, b) => b.score - a.score);
 }
 
 export async function getEntityRisk(rangeIn: string): Promise<EntityRiskReport> {

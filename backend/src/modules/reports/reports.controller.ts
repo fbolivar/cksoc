@@ -1,18 +1,29 @@
-/** Controladores del modulo de reportes. */
+/** Controladores del informe tecnico del SOC. */
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import {
   generateReport,
   listReports,
   getReportFile,
+  getReportHtml,
   deleteReport,
+  periodoDeEntrada,
 } from './reports.service';
 import { HttpError } from '../auth/auth.service';
+import { PRESETS_TECNICO } from './executive/periodo';
 
 const genSchema = z.object({
   title: z.string().min(2).max(200),
-  range: z.enum(['24h', '7d', '30d']).default('24h'),
+  preset: z.string().max(40).optional(),
+  desde: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  hasta: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // Compatibilidad con el flujo anterior
+  range: z.enum(['24h', '7d', '30d']).optional(),
 });
+
+export function getPresets(_req: Request, res: Response): void {
+  res.json({ presets: PRESETS_TECNICO });
+}
 
 export async function postGenerate(req: Request, res: Response): Promise<void> {
   const parsed = genSchema.safeParse(req.body);
@@ -21,9 +32,10 @@ export async function postGenerate(req: Request, res: Response): Promise<void> {
     return;
   }
   try {
+    const periodo = periodoDeEntrada(parsed.data);
     const report = await generateReport({
       title: parsed.data.title,
-      range: parsed.data.range,
+      periodo,
       type: 'manual',
       userId: req.user!.id,
     });
@@ -36,6 +48,14 @@ export async function postGenerate(req: Request, res: Response): Promise<void> {
 export async function getList(_req: Request, res: Response): Promise<void> {
   try {
     res.json({ reports: await listReports() });
+  } catch (err) {
+    handle(err, res);
+  }
+}
+
+export async function getPreview(req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await getReportHtml(req.params.id));
   } catch (err) {
     handle(err, res);
   }

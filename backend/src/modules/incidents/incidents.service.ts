@@ -124,18 +124,51 @@ async function addSystemNote(incidentId: string, userId: string, note: string): 
   );
 }
 
+// Ventana para deduplicar creación automática: un mismo evento (mismo alertId o
+// firma regla+host) no debe abrir un caso nuevo si ya hay uno abierto o reciente.
+const DEDUP_WINDOW_H = 24;
+
+/** Busca un incidente vivo (abierto/en curso) o reciente (<24h) con la misma firma. */
+async function findDuplicateIncident(dedupKey: string): Promise<string | null> {
+  const rows = await query<{ id: string }>(
+    `SELECT id FROM incidents
+      WHERE source->>'dedupKey' = $1
+        AND (status IN ('abierto','en_curso') OR created_at > now() - interval '${DEDUP_WINDOW_H} hours')
+      ORDER BY created_at ASC LIMIT 1`,
+    [dedupKey]
+  );
+  return rows[0]?.id ?? null;
+}
+
 export async function createIncident(
-  data: { title: string; description?: string; severity: Severity; source?: IncidentSource },
+  data: { title: string; description?: string; severity: Severity; source?: IncidentSource; dedupKey?: string },
   userId: string
 ): Promise<IncidentDetail> {
+  // Dedup solo en creación automática (SOAR/playbooks pasan dedupKey). Manual siempre crea.
+  if (data.dedupKey) {
+    const dupId = await findDuplicateIncident(data.dedupKey);
+    if (dupId) {
+      // Cuenta recurrencias previas para numerar (original = ×1).
+      const [{ n } = { n: 0 }] = await query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM incident_notes WHERE incident_id = $1 AND kind = 'system' AND note LIKE 'Recurrencia%'`,
+        [dupId]
+      );
+      await addSystemNote(dupId, userId, `Recurrencia (×${n + 2}): se recibió de nuevo el mismo evento (${data.title}). No se creó un incidente duplicado ni se re-escaló.`);
+      await query('UPDATE incidents SET updated_at = now() WHERE id = $1', [dupId]);
+      return (await getIncident(dupId))!;
+    }
+  }
+
+  // Guarda la firma dentro de source para deduplicar recurrencias futuras.
+  const source: IncidentSource & { dedupKey?: string } = { ...(data.source ?? {}), ...(data.dedupKey ? { dedupKey: data.dedupKey } : {}) };
   const rows = await query<{ id: string }>(
     `INSERT INTO incidents (title, description, severity, created_by, source)
      VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id`,
-    [data.title, data.description ?? null, data.severity, userId, JSON.stringify(data.source ?? {})]
+    [data.title, data.description ?? null, data.severity, userId, JSON.stringify(source)]
   );
   const id = rows[0].id;
   await addSystemNote(id, userId, 'Incidente creado.');
-  // Escala al analista de guardia si nace crítico/alto.
+  // Escala al analista de guardia si nace crítico/alto (solo la PRIMERA vez, no en recurrencias).
   if (data.severity === 'critica' || data.severity === 'alta') {
     escalate(`Nuevo incidente ${data.severity}: ${data.title}`,
       `Se creó un incidente de severidad ${data.severity.toUpperCase()}.\n\nTítulo: ${data.title}${data.description ? `\n\n${data.description}` : ''}\n\nAtiéndelo en HexWatch → Incidentes.`);

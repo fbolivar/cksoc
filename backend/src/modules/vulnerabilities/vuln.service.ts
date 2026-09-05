@@ -83,6 +83,10 @@ export async function getVulnerabilities(): Promise<VulnData> {
 
   const body = {
     size: 100,
+    // Sin esto, hits.total.value topa en 10.000 y el "total" del resumen queda
+    // artificialmente truncado. Los conteos por severidad vienen de aggs (ya
+    // exactos); esto corrige solo el gran total.
+    track_total_hits: true,
     sort: [{ 'vulnerability.score.base': { order: 'desc', missing: '_last' } }],
     _source: [
       'vulnerability.id', 'vulnerability.severity', 'vulnerability.score.base', 'vulnerability.description',

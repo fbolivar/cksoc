@@ -22,9 +22,11 @@ attacksRouter.get('/geo', async (req: Request, res: Response) => {
   }
   const h = Number(req.query.hours);
   const hours = Number.isFinite(h) && h > 0 && h <= 720 ? Math.floor(h) : 24;
+  // Por defecto "Solo amenazas" (IOC/ataque/IPS/nivel alto/reputación mala); ?all=1 muestra todo el tráfico.
+  const threatsOnly = !(req.query.all === '1' || req.query.all === 'true');
   try {
-    const origins = await getAttackGeo(hours);
-    res.json({ hours, destination: PNNC_DESTINATION, origins, threatIntel: isThreatIntelConfigured() });
+    const origins = await getAttackGeo(hours, threatsOnly);
+    res.json({ hours, threatsOnly, destination: PNNC_DESTINATION, origins, threatIntel: isThreatIntelConfigured() });
   } catch (err) {
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });

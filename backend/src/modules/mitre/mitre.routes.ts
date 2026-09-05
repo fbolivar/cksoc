@@ -25,8 +25,9 @@ mitreRouter.get('/coverage', async (req: Request, res: Response) => {
 mitreRouter.get('/', async (req: Request, res: Response) => {
   const h = Number(req.query.hours);
   const hours = Number.isFinite(h) && h > 0 && h <= 720 ? Math.floor(h) : 168;
+  const signalOnly = req.query.signal === 'true' || req.query.signal === '1';
   try {
-    res.json(await getMitre(hours));
+    res.json(await getMitre(hours, signalOnly));
   } catch (err) {
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });

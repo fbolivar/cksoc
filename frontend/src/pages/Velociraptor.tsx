@@ -161,7 +161,10 @@ export default function Velociraptor() {
                     <div className="flex items-center gap-2">
                       <span className="hw-mono rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: col, background: `${col}22` }}>{r.band.toUpperCase()} · {r.risk}</span>
                       <span className="truncate text-xs font-semibold">{r.host}</span>
-                      {r.status !== 'active' && <span className="text-[10px] text-rose-600">desconectado</span>}
+                      {r.hasVelo && (r.veloOnline
+                        ? <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600" title="Agente Velociraptor activo en las últimas 24h"><Wifi className="h-3 w-3" /> Velo activo</span>
+                        : <span className="inline-flex items-center gap-0.5 text-[10px] text-rose-600"><WifiOff className="h-3 w-3" /> Velo sin señal{r.veloLastSeenH != null ? ` ${r.veloLastSeenH}h` : ''}</span>)}
+                      {r.status !== 'active' && <span className="text-[10px] text-muted-foreground/70">Wazuh off</span>}
                       {r.isolated && <span className="text-[10px] text-amber-600">aislado</span>}
                     </div>
                     <p className="mt-1 text-[11px] text-muted-foreground">{r.reason}</p>
@@ -169,11 +172,13 @@ export default function Velociraptor() {
                   </div>
                   {recMsg?.host === r.host && recMsg.url ? (
                     <a href={recMsg.url} target="_blank" rel="noreferrer" className="flex shrink-0 items-center gap-1 text-[11px] text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> Colección lanzada <ExternalLink className="h-3 w-3" /></a>
-                  ) : r.hasVelo ? (
+                  ) : r.triageable ? (
                     <button disabled={recBusy === r.host} onClick={() => collectRec(r.host)}
                       className="flex shrink-0 items-center gap-1 rounded px-2.5 py-1 text-[11px] text-white disabled:opacity-50" style={{ background: 'hsl(var(--primary))' }}>
                       {recBusy === r.host ? '…' : <><Stethoscope className="h-3 w-3" /> Investigar</>}
                     </button>
+                  ) : r.hasVelo ? (
+                    <span className="shrink-0 text-right text-[10px] text-rose-600/80">Velo desconectado{r.veloLastSeenH != null ? ` (${r.veloLastSeenH}h)` : ''}<br />no responderá al triage</span>
                   ) : (
                     <span className="shrink-0 text-[10px] text-muted-foreground/70">sin cliente Velociraptor</span>
                   )}

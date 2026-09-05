@@ -32,6 +32,7 @@ export interface AlertFilters {
   q?: string;
   mitre?: string;
   user?: string;
+  triage?: boolean; // "Solo seguridad": oculta ruido no accionable (SCA/vulns/crashes)
   page: number;
   size: number;
 }

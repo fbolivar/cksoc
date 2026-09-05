@@ -45,6 +45,7 @@ import { oncallRouter } from './modules/oncall/oncall.routes';
 import { phishingRouter } from './modules/phishing/phishing.routes';
 import { ndrRouter } from './modules/ndr/ndr.routes';
 import { office365Router } from './modules/office365/o365.routes';
+import { emailPostureRouter } from './modules/email-posture/email-posture.routes';
 import { startOverviewWarmup } from './modules/overview/overview.warmup';
 import { assetsRouter } from './modules/assets/assets.routes';
 import { incidentsRouter } from './modules/incidents/incidents.routes';
@@ -60,6 +61,7 @@ import { riskRouter } from './modules/risk/risk.routes';
 import { velociraptorRouter } from './modules/velociraptor/velociraptor.routes';
 import { detectionRouter } from './modules/detection/detection.routes';
 import { threatIntelRouter, startThreatIntelScheduler } from './modules/threatintel/threatintel.routes';
+import { credExpRouter, startCredExpScheduler } from './modules/credexp/credexp.routes';
 import { correlationRouter } from './modules/correlation/correlation.routes';
 import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
 import { uebaRouter, startUebaScheduler } from './modules/ueba/ueba.routes';
@@ -129,6 +131,7 @@ app.use('/api/oncall', oncallRouter);
 app.use('/api/phishing', phishingRouter);
 app.use('/api/ndr', ndrRouter);
 app.use('/api/office365', office365Router);
+app.use('/api/email-posture', emailPostureRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/incidents', incidentsRouter);
 app.use('/api/backups', backupsRouter);
@@ -141,6 +144,7 @@ app.use('/api/risk', riskRouter);
 app.use('/api/velociraptor', velociraptorRouter);
 app.use('/api/detection', detectionRouter);
 app.use('/api/threatintel', threatIntelRouter);
+app.use('/api/credential-exposure', credExpRouter);
 app.use('/api/correlation', correlationRouter);
 app.use('/api/soar', soarRouter);
 app.use('/api/ueba', uebaRouter);
@@ -229,6 +233,7 @@ startHealthMonitor();
 
 // Threat Intelligence: refresco diario de feeds de IOCs (03:15)
 startThreatIntelScheduler();
+startCredExpScheduler();
 
 // SOAR: motor de respuesta automatizada (evalúa reglas cada 3 min)
 startSoarScheduler();

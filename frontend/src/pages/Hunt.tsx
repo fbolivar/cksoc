@@ -4,7 +4,7 @@
  * / MITRE) clicables para refinar la caza.
  */
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Crosshair, Search, X, Loader2, Filter, Bookmark, Bell, BellOff, Play, Trash2 } from 'lucide-react';
+import { Crosshair, Search, X, Loader2, Filter, Bookmark, Bell, BellOff, Play, Trash2, Sparkles, Layers } from 'lucide-react';
 import { huntApi, type HuntResult, type HuntQuery, type Bucket } from '@/lib/hunt';
 import { savedHuntsApi, type SavedHunt } from '@/lib/savedHunts';
 
@@ -50,13 +50,14 @@ export default function Hunt() {
   const [range, setRange] = useState('24h');
   const [q, setQ] = useState('');
   const [minLevel, setMinLevel] = useState<number>(0);
+  const [signal, setSignal] = useState(true); // lente "señal de caza" (quita telemetría benigna)
   const [filters, setFilters] = useState<{ agent?: string; ruleId?: string; srcip?: string; mitre?: string }>({});
   const [res, setRes] = useState<HuntResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedHunt[]>([]);
 
-  const currentQuery = (): HuntQuery => ({ range, q: q || undefined, minLevel: minLevel || undefined, ...filters });
+  const currentQuery = (): HuntQuery => ({ range, q: q || undefined, minLevel: minLevel || undefined, signal: signal ? '1' : '0', ...filters });
   const loadSaved = () => savedHuntsApi.list().then(setSaved).catch(() => {});
   useEffect(() => { void loadSaved(); }, []);
 
@@ -83,7 +84,7 @@ export default function Hunt() {
     setLoading(true);
     setErr(null);
     try {
-      const query: HuntQuery = { range, q: q || undefined, minLevel: minLevel || undefined, size: 100, ...filters };
+      const query: HuntQuery = { range, q: q || undefined, minLevel: minLevel || undefined, signal: signal ? '1' : '0', size: 100, ...filters };
       const result = await huntApi.search(query);
       if (my === runSeq.current) setRes(result);
     } catch {
@@ -94,12 +95,12 @@ export default function Hunt() {
     } finally {
       if (my === runSeq.current) setLoading(false);
     }
-  }, [range, q, minLevel, filters]);
+  }, [range, q, minLevel, signal, filters]);
 
   useEffect(() => {
     void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, minLevel, filters]);
+  }, [range, minLevel, signal, filters]);
 
   const activeChips = Object.entries(filters).filter(([, v]) => v);
 
@@ -134,6 +135,13 @@ export default function Hunt() {
             <option value={8}>Nivel ≥ 8 (alta)</option>
             <option value={12}>Nivel ≥ 12 (crítica)</option>
           </select>
+          <button
+            onClick={() => setSignal((s) => !s)}
+            title={signal ? 'Lente señal activo: oculta telemetría benigna de alto volumen (Forti app-passed, FIM, registry, auditoría O365). Clic para ver TODO.' : 'Viendo todo (búsqueda cruda). Clic para volver al lente señal.'}
+            className={`flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm ${signal ? 'border-brand/50 bg-brand/15 text-brand' : 'border-input bg-background text-muted-foreground'}`}
+          >
+            {signal ? <Sparkles className="h-4 w-4" /> : <Layers className="h-4 w-4" />} {signal ? 'Solo señal' : 'Ver todo'}
+          </button>
           <button onClick={() => void run()} className="flex h-9 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Buscar
           </button>
@@ -179,7 +187,11 @@ export default function Hunt() {
         <div className="glass overflow-hidden rounded-lg">
           <div className="border-b border-border/60 px-4 py-2.5 text-sm">
             {res ? (
-              <span><span className="font-semibold">{res.total.toLocaleString('es-CO')}</span>{res.capped ? '+' : ''} alertas · mostrando {res.items.length}</span>
+              <span>
+                <span className="font-semibold">{res.total.toLocaleString('es-CO')}</span> alertas · mostrando {res.items.length}
+                {res.capped && <span className="text-muted-foreground"> · paginable hasta 10.000</span>}
+                {res.signalOnly && <span className="ml-1 rounded bg-brand/15 px-1.5 py-0.5 text-[10px] text-brand">lente señal</span>}
+              </span>
             ) : loading ? 'Buscando…' : '—'}
           </div>
           <div className="max-h-[70vh] overflow-auto">

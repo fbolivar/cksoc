@@ -126,7 +126,7 @@ export default function Ndr() {
             <Kpi label="Dominios distintos" value={fmt(d.distinctDomains)} />
             <Kpi label="IPs destino" value={fmt(d.distinctDstIps)} />
             <Kpi label="Alertas IPS" value={fmt(d.ipsCount)} danger={d.ipsCount > 0} />
-            <Kpi label="Transferencias grandes" value={fmt(d.largeTransferCount)} danger={d.largeTransferCount > 0} />
+            <Kpi label="Transferencias sospechosas" value={fmt(d.largeTransferCount)} danger={d.largeTransferCount > 0} />
           </div>
 
           {/* IOC hits (si hay) */}

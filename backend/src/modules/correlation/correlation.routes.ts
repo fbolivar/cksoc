@@ -15,8 +15,10 @@ correlationRouter.use(authenticate);
 
 correlationRouter.get('/', requireRole('admin', 'analista'), async (req, res) => {
   const range = typeof req.query.range === 'string' ? req.query.range : '24h';
+  // Por defecto solo IPs externas (atacantes); ?internal=1 incluye también las internas.
+  const externalOnly = !(req.query.internal === '1' || req.query.internal === 'true');
   try {
-    res.json({ range, correlations: await getCorrelations(range) });
+    res.json({ range, externalOnly, correlations: await getCorrelations(range, externalOnly) });
   } catch (err) {
     if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
     logger.error({ err }, 'Error en correlación');

@@ -6,8 +6,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Cloud, RefreshCw, Loader2, Users, Globe2, LogIn, Download, FileText, UserCog, UserCheck, ShieldOff, UserPlus, Lightbulb, Ban, Trash2, AlertTriangle } from 'lucide-react';
-import { office365Api, type O365Overview, type NamedCount, type M365Directory, type IdentityRecs, type IdentityRec } from '@/lib/office365';
+import { Cloud, RefreshCw, Loader2, Users, Globe2, LogIn, Download, FileText, UserCog, UserCheck, ShieldOff, UserPlus, Lightbulb, Ban, Trash2, AlertTriangle, ShieldCheck, MailWarning, Plane, KeyRound, FolderDown, Share2, ShieldAlert } from 'lucide-react';
+import { office365Api, type O365Overview, type NamedCount, type M365Directory, type IdentityRecs, type IdentityRec, type O365Risk } from '@/lib/office365';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
@@ -56,6 +56,76 @@ function BarList({ title, icon: Icon, items, max, mono, onClick, suffix, footer 
         </div>
       )}
       {footer}
+    </CardContent></Card>
+  );
+}
+
+// --- Panel "Riesgos M365": indicadores de amenaza del tenant ---
+const RISK_ICON: Record<string, typeof Users> = {
+  forwarding: MailWarning, foreign_login: Plane, login_failed_spike: KeyRound,
+  mass_download: FolderDown, external_share: Share2, admin_action: ShieldAlert,
+};
+const RISK_SEV: Record<string, { c: string; label: string }> = {
+  critica: { c: 'destructive', label: 'CRÍTICA' }, alta: { c: 'destructive', label: 'ALTA' }, media: { c: 'warn-orange', label: 'MEDIA' },
+};
+const DETAIL_UNIT: Record<string, string> = {
+  foreign_login: 'logins', login_failed_spike: 'fallos', mass_download: 'descargas',
+};
+
+function RiskPanel({ risks }: { risks?: O365Overview['risks'] }) {
+  // Blindaje: si el backend aún no expone `risks` (versión previa), no rompas la página.
+  if (!risks || !Array.isArray(risks.items)) return null;
+  const active = risks.items.filter((r) => r.active);
+  return (
+    <Card><CardContent className="p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <ShieldAlert className="h-4 w-4" style={{ color: `hsl(var(--${active.length ? 'destructive' : 'success'}))` }} /> Riesgos M365
+        </p>
+        <span className="hw-mono text-[10px] uppercase tracking-widest text-muted-foreground">detección de amenazas</span>
+      </div>
+
+      {risks.clean ? (
+        <div className="flex items-center gap-3 rounded-md border p-4" style={{ borderColor: 'hsl(var(--success) / .3)', background: 'hsl(var(--success) / .06)' }}>
+          <ShieldCheck className="h-8 w-8 shrink-0" style={{ color: 'hsl(var(--success))' }} />
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'hsl(var(--success))' }}>Tenant sano</p>
+            <p className="text-xs text-muted-foreground">Ningún indicador de amenaza activo: sin reenvíos sospechosos, sin logins del exterior, sin ráfagas de fallos, sin descargas masivas, sin compartir a externos ni acciones de admin anómalas.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {active.map((r: O365Risk) => {
+            const sev = RISK_SEV[r.severity]; const Icon = RISK_ICON[r.key] ?? ShieldAlert;
+            const unit = DETAIL_UNIT[r.key] ?? '';
+            return (
+              <div key={r.key} className="hw-clip border border-border p-3" style={{ borderLeft: `3px solid hsl(var(--${sev.c}))` }}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-start gap-2">
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: `hsl(var(--${sev.c}))` }} />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="hw-mono rounded px-1.5 py-0.5 text-[9px] font-bold" style={{ color: `hsl(var(--${sev.c}))`, background: `hsl(var(--${sev.c}) / .12)` }}>{sev.label}</span>
+                        <span className="text-xs font-semibold">{r.label}</span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{r.hint}</p>
+                    </div>
+                  </div>
+                  <span className="hw-tabular shrink-0 text-lg font-bold" style={{ color: `hsl(var(--${sev.c}))` }}>{fmt(r.count)}</span>
+                </div>
+                {r.detail.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5 pl-6">
+                    {r.detail.slice(0, 8).map((x, i) => (
+                      <span key={i} className="hw-mono rounded bg-secondary px-2 py-0.5 text-[10px]">{cleanUser(x.label)} <span className="text-muted-foreground">· {fmt(x.count)}{unit ? ` ${unit}` : ''}</span></span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <p className="text-[10px] text-muted-foreground/60">Indicadores computados sobre la auditoría O365 de la ventana. Los que dan 0 se ocultan; al activarse saltan aquí arriba.</p>
+        </div>
+      )}
     </CardContent></Card>
   );
 }
@@ -157,6 +227,9 @@ export default function Office365() {
             <Kpi label="Sign-ins fallidos" value={fmt(d.signInsFailed)} icon={LogIn} danger={d.signInsFailed > 0} />
             <Kpi label="Descargas" value={fmt(d.downloads)} icon={Download} danger={d.downloads > 0} />
           </div>
+
+          {/* Riesgos M365 — detección de amenazas del tenant */}
+          <RiskPanel risks={d.risks} />
 
           {/* Timeline */}
           <Card><CardContent className="p-4">

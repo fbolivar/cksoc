@@ -21,6 +21,7 @@ export interface Correlation {
 }
 
 export const correlationApi = {
-  list: (range: string) =>
-    api.get<{ range: string; correlations: Correlation[] }>('/correlation', { params: { range } }).then((r) => r.data.correlations),
+  // externalOnly (por defecto true): solo IPs externas (atacantes). false = incluye internas.
+  list: (range: string, externalOnly = true) =>
+    api.get<{ range: string; correlations: Correlation[] }>('/correlation', { params: { range, internal: externalOnly ? undefined : 1 } }).then((r) => r.data.correlations),
 };

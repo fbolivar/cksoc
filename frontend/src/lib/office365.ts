@@ -5,7 +5,20 @@ export interface NamedCount { key: string; count: number; country?: string; syst
 export interface RuleCount { desc: string; count: number; level: number }
 export interface TimePoint { ts: number; count: number }
 
+export interface O365RiskDetail { label: string; count: number }
+export interface O365Risk {
+  key: string;
+  label: string;
+  severity: 'critica' | 'alta' | 'media';
+  hint: string;
+  count: number;
+  detail: O365RiskDetail[];
+  active: boolean;
+}
+export interface O365Risks { clean: boolean; items: O365Risk[] }
+
 export interface O365Overview {
+  risks: O365Risks;
   range: string;
   total: number;
   users: number;

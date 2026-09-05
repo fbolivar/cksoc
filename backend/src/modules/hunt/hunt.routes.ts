@@ -27,6 +27,8 @@ huntRouter.get('/', async (req: Request, res: Response) => {
       mitre: s(req, 'mitre'),
       size: req.query.size ? Number(req.query.size) : undefined,
       page: req.query.page ? Number(req.query.page) : undefined,
+      // Lente "señal de caza" ON por defecto; ?signal=0 lo apaga (búsqueda cruda, ver todo).
+      signalOnly: s(req, 'signal') !== '0',
     });
     res.json(result);
   } catch {

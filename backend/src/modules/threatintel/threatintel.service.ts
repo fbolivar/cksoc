@@ -38,6 +38,12 @@ const EFF_CONF_SQL =
   `CASE WHEN last_seen_feed IS NULL THEN confidence
         ELSE GREATEST(0, confidence - ${AGE_DAYS_SQL} * ${DECAY_PER_DAY}) END`;
 
+// Plataformas de hosting compartido legítimas: los feeds de URL (URLhaus/ThreatFox)
+// listan estos dominios por una URL maliciosa puntual alojada ahí, pero el dominio en
+// sí es benigno y no accionable. Se filtran SOLO en el cruce de dominios (los IOC de IP
+// se conservan siempre). Mismo criterio que el módulo NDR.
+const LEGIT_HOSTING_RE = /(^|\.)(github|githubusercontent|google|googleapis|googleusercontent|gstatic|youtube|discord|discordapp|cloudinary|imgur|ibb|firebasestorage|licdn|linkedin|microsoft|office365?|windows|live|amazonaws|cloudfront|dropbox|apple|icloud|cloudflare|akamai|fastly|bitbucket|gitlab|wetransfer|whatsapp|facebook|fbcdn)\.[a-z]{2,}(\.[a-z]{2,})?$/i;
+
 export interface IocMatch {
   value: string;
   type: IocType;
@@ -158,28 +164,50 @@ export async function refreshFeeds(): Promise<{ name: string; count: number; sta
   return results;
 }
 
-/** Cruza los IOCs de IP habilitados contra las IPs vistas en alertas (24h). */
+/** Cruza los IOCs de IP habilitados contra las IPs vistas en alertas (7d). */
 interface AggBucket { key: string; doc_count: number; last: { value_as_string?: string }; rule: { hits: { hits: { _source: { rule?: { description?: string }; agent?: { name?: string } } }[] } } }
 
-/** Agrega los valores más vistos de un campo de alerta en 24h (o [] si el campo no existe). */
-async function aggField(field: string, size = 1500): Promise<AggBucket[]> {
+/** Agrega los valores más vistos de un campo de alerta en 7d (o [] si el campo no existe).
+ *  Ventana de 7d (no 24h): las coincidencias de IOC son raras y valiosas; una ventana corta
+ *  se pierde los hits de días anteriores (p.ej. una IP atacante vista una sola vez). */
+async function aggField(field: string, size = 1500, lean = false): Promise<AggBucket[]> {
   try {
     const client = getIndexerClient();
+    // Modo lean (para el agg de IPs, de alta cardinalidad): omite el top_hits por bucket
+    // —que es lo costoso sobre ~10.7k buckets— y se enriquecen luego solo los coincidentes.
+    const sub = lean ? {} : { aggs: { last: { max: { field: '@timestamp' } }, rule: { top_hits: { size: 1, _source: ['rule.description', 'agent.name'] } } } };
     const { data } = await client.post<{ aggregations?: { v: { buckets: AggBucket[] } } }>(
       `/${env.WAZUH_ALERTS_INDEX}/_search`,
       {
         size: 0,
-        query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }, { exists: { field } }] } },
-        aggs: { v: { terms: { field, size }, aggs: { last: { max: { field: '@timestamp' } }, rule: { top_hits: { size: 1, _source: ['rule.description', 'agent.name'] } } } } },
+        query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-7d' } } }, { exists: { field } }] } },
+        aggs: { v: { terms: { field, size }, ...sub } },
       }
     );
     return data.aggregations?.v?.buckets ?? [];
   } catch { return []; }
 }
 
+/** Enriquece una IP coincidente con su última alerta (regla, agente, hora) — barato: 1 hit. */
+async function ipSample(ip: string): Promise<{ lastSeen: string; rule: string; agent: string }> {
+  try {
+    const { data } = await getIndexerClient().post<{ hits: { hits: { _source: { '@timestamp'?: string; rule?: { description?: string }; agent?: { name?: string } } }[] } }>(
+      `/${env.WAZUH_ALERTS_INDEX}/_search`,
+      {
+        size: 1,
+        sort: [{ '@timestamp': { order: 'desc' } }],
+        _source: ['@timestamp', 'rule.description', 'agent.name'],
+        query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-7d' } } }], should: [{ term: { 'data.srcip': ip } }, { term: { 'data.dstip': ip } }, { term: { 'data.remip': ip } }], minimum_should_match: 1 } },
+      }
+    );
+    const h = data.hits.hits[0]?._source;
+    return { lastSeen: h?.['@timestamp'] ?? '', rule: h?.rule?.description ?? '', agent: h?.agent?.name ?? '' };
+  } catch { return { lastSeen: '', rule: '', agent: '' }; }
+}
+
 /**
- * Cruza los IOCs habilitados contra los valores vistos en alertas (24h):
- *   - IP     → data.srcip
+ * Cruza los IOCs habilitados contra los valores vistos en alertas (7d):
+ *   - IP     → data.srcip, data.dstip, data.remip (origen y destino del tráfico)
  *   - dominio→ data.dns.question.name, data.win.eventdata.queryName, data.dstname
  *   - URL    → data.url
  *   - hash   → syscheck.{sha256,sha1,md5}_after (FIM), data.win.eventdata.hashes
@@ -209,13 +237,38 @@ export async function getMatches(): Promise<IocMatch[]> {
     matches.push({ value: b.key, type, source, alertCount: b.doc_count, lastSeen: b.last.value_as_string ?? '', sampleRule: hit?.rule?.description ?? '', agent: hit?.agent?.name ?? '' });
   };
 
-  // IPs (campo principal, muchos valores).
-  if (ipMap.size) for (const b of await aggField('data.srcip', 3000)) { const s = ipMap.get(b.key); if (s) push(b, 'ip', s); }
+  // IPs: cruza ORIGEN y DESTINO (+remip). Las IPs maliciosas suelen ser el DESTINO
+  // al que la red se conecta (egress a infraestructura del atacante); antes solo se
+  // miraba data.srcip y por eso se perdían las conexiones "hacia lo malo".
+  if (ipMap.size) {
+    // size 12.000 + lean: cubre la cardinalidad de dstip (~10.7k/7d) sin perder destinos
+    // maliciosos de baja frecuencia (1 conexión = egress a C2), y sin el top_hits caro.
+    const ipHit = new Map<string, { count: number; source: string }>();
+    for (const field of ['data.srcip', 'data.dstip', 'data.remip']) {
+      for (const b of await aggField(field, 12000, true)) {
+        const key = String(b.key);
+        const s = ipMap.get(key);
+        if (s && !ipHit.has(key)) ipHit.set(key, { count: b.doc_count, source: s });
+      }
+    }
+    // Enriquece solo los coincidentes (pocos) con regla/agente/última vez.
+    for (const [ip, info] of ipHit) {
+      const meta = await ipSample(ip);
+      matches.push({ value: ip, type: 'ip', source: info.source, alertCount: info.count, lastSeen: meta.lastSeen, sampleRule: meta.rule, agent: meta.agent });
+    }
+  }
 
   // Dominios (incluye el SNI/hostname del FortiGate — Application Control).
+  // Se descartan IOCs de dominio sobre plataformas de hosting compartido legítimas
+  // (github/google/etc.): los feeds URLhaus/ThreatFox las listan por una URL puntual,
+  // pero el dominio en sí es benigno y no accionable (mismo criterio que NDR).
   if (domainMap.size) {
     for (const field of ['data.dns.question.name', 'data.win.eventdata.queryName', 'data.dstname', 'data.hostname']) {
-      for (const b of await aggField(field)) { const s = domainMap.get(String(b.key).toLowerCase()); if (s) push(b, 'domain', s); }
+      for (const b of await aggField(field)) {
+        const host = String(b.key).toLowerCase();
+        if (LEGIT_HOSTING_RE.test(host)) continue;
+        const s = domainMap.get(host); if (s) push(b, 'domain', s);
+      }
     }
   }
   // URLs.

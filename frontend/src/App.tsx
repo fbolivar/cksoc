@@ -39,12 +39,14 @@ const Hunt = lazy(() => import('@/pages/Hunt'));
 const Velociraptor = lazy(() => import('@/pages/Velociraptor'));
 const Detection = lazy(() => import('@/pages/Detection'));
 const ThreatIntel = lazy(() => import('@/pages/ThreatIntel'));
+const CredentialExposure = lazy(() => import('@/pages/CredentialExposure'));
 const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 const Soar = lazy(() => import('@/pages/Soar'));
 const Ueba = lazy(() => import('@/pages/Ueba'));
 const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
 const Ndr = lazy(() => import('@/pages/Ndr'));
 const Office365 = lazy(() => import('@/pages/Office365'));
+const EmailPosture = lazy(() => import('@/pages/EmailPosture'));
 const Copilot = lazy(() => import('@/pages/Copilot'));
 const OnCall = lazy(() => import('@/pages/OnCall'));
 const HumanFactor = lazy(() => import('@/pages/HumanFactor'));
@@ -121,6 +123,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Office365 />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/postura-correo"
+        element={
+          <Protected>
+            <AppLayout>
+              <EmailPosture />
             </AppLayout>
           </Protected>
         }
@@ -351,6 +363,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <ThreatIntel />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/exposicion-credenciales"
+        element={
+          <Protected>
+            <AppLayout>
+              <CredentialExposure />
             </AppLayout>
           </Protected>
         }

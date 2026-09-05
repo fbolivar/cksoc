@@ -17,6 +17,7 @@ export interface Bucket { key: string; count: number; label?: string }
 export interface HuntResult {
   total: number;
   capped: boolean;
+  signalOnly: boolean;
   items: HuntHit[];
   aggs: { rules: Bucket[]; agents: Bucket[]; srcips: Bucket[]; mitre: Bucket[] };
 }
@@ -31,6 +32,7 @@ export interface HuntQuery {
   mitre?: string;
   size?: number;
   page?: number;
+  signal?: string; // '1' lente señal (default) · '0' ver todo (búsqueda cruda)
 }
 
 export const huntApi = {

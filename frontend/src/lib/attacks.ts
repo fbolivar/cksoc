@@ -18,6 +18,8 @@ export interface AttackOrigin {
   abuseScore: number;
   clasificacion: Clasificacion;
   esExterno: boolean;
+  ioc: string | null;
+  threat: boolean;
 }
 
 export interface Destination {
@@ -28,6 +30,7 @@ export interface Destination {
 
 export interface AttackGeoResponse {
   hours: number;
+  threatsOnly?: boolean;
   destination: Destination;
   origins: AttackOrigin[];
   threatIntel: boolean;
@@ -54,8 +57,9 @@ export interface NewAttack {
 }
 
 export const attacksApi = {
-  geo: (hours: number) =>
-    api.get<AttackGeoResponse>('/attacks/geo', { params: { hours } }).then((r) => r.data),
+  // threatsOnly (por defecto true): solo orígenes-amenaza (IOC/ataque/IPS/nivel alto/rep mala).
+  geo: (hours: number, threatsOnly = true) =>
+    api.get<AttackGeoResponse>('/attacks/geo', { params: { hours, all: threatsOnly ? undefined : 1 } }).then((r) => r.data),
 };
 
 /** Color segun severidad maxima (verde -> amarillo -> naranja -> rojo). */

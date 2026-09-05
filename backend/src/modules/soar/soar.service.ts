@@ -11,6 +11,7 @@ import { isPublicIP } from '../geo/geoip.service';
 import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
 import { block } from '../response/response.service';
+import { isWhitelisted } from '../response/whitelist';
 import { createIncident } from '../incidents/incidents.service';
 import { runHelper } from '../velociraptor/velociraptor.helper';
 import { disableAdUser, disableM365User } from '../identity/identity.service';
@@ -26,7 +27,7 @@ export interface AutomationRule {
   name: string;
   enabled: boolean;
   trigger_type: TriggerType;
-  trigger_config: { minLevel?: number; group?: string; ruleId?: string };
+  trigger_config: { minLevel?: number; group?: string; ruleId?: string; excludeGroups?: string[] };
   action: ActionType;
   mode: Mode;
   dry_run: boolean;
@@ -93,7 +94,16 @@ export async function removeRule(id: string): Promise<void> {
 }
 
 function sanitizeConfig(type: TriggerType, cfg: Record<string, unknown>): AutomationRule['trigger_config'] {
-  if (type === 'rule_level') return { minLevel: Math.min(Math.max(Number(cfg.minLevel ?? 8), 1), 16), group: cfg.group ? String(cfg.group).slice(0, 60) : undefined };
+  if (type === 'rule_level') return {
+    minLevel: Math.min(Math.max(Number(cfg.minLevel ?? 8), 1), 16),
+    group: cfg.group ? String(cfg.group).slice(0, 60) : undefined,
+    // Grupos de regla a EXCLUIR del disparo (p.ej. 'vulnerability-detector':
+    // las deteccion de CVE llegan a nivel 13 pero NO son un ataque, no deben
+    // proponer aislamiento). Hasta 10 grupos.
+    excludeGroups: Array.isArray(cfg.excludeGroups)
+      ? cfg.excludeGroups.map((g) => String(g).slice(0, 60)).filter(Boolean).slice(0, 10)
+      : undefined,
+  };
   if (type === 'rule_id') {
     const ruleId = String(cfg.ruleId ?? '').trim();
     if (!/^\d{3,7}$/.test(ruleId)) throw new HttpError(400, 'ruleId inválido');
@@ -161,6 +171,8 @@ async function executeAction(action: ActionType, entity: string, rule?: Automati
         description: `Incidente creado automáticamente por la regla SOAR "${rule?.name}" sobre ${entity}.`,
         severity: 'alta',
         source: { ip: entity },
+        // Firma para deduplicar: misma regla SOAR sobre la misma entidad = un solo caso.
+        dedupKey: `soar:${rule?.id ?? rule?.name ?? 'rule'}:${entity}`,
       }, actorId);
       return { ok: true, detail: { executed: 'create_incident', incident_id: inc.id } };
     }
@@ -182,6 +194,13 @@ async function executeAction(action: ActionType, entity: string, rule?: Automati
 
 interface Agg { key: string; doc_count: number }
 
+// Ruido de alto nivel que NUNCA debe disparar una acción automática (base, además
+// del excludeGroups configurable por regla). vulnerability-detector = CVEs (no accionables
+// por bloqueo/aislamiento); sca = auditoría CIS.
+const SOAR_NOISE_GROUPS = ['sca', 'vulnerability-detector'];
+// Infraestructura de seguridad/SOC que jamás debe aislarse (cortarla es catastrófico).
+const CRITICAL_HOSTS_RE = /(soc-app|soc-wazuh|soc-velo|velociraptor|wazuh|pmx-soc|-soc-)/i;
+
 async function matchEntities(rule: AutomationRule): Promise<Agg[]> {
   const client = getIndexerClient();
   const field = entityField(rule.action);
@@ -192,6 +211,15 @@ async function matchEntities(rule: AutomationRule): Promise<Agg[]> {
   if (rule.trigger_type === 'rule_level') {
     filter.push({ range: { 'rule.level': { gte: rule.trigger_config.minLevel ?? 8 } } });
     if (rule.trigger_config.group) filter.push({ match: { 'rule.groups': rule.trigger_config.group } });
+    // Excluir grupos de ruido conocido (CVE de vulnerability-detector, etc.)
+    for (const g of rule.trigger_config.excludeGroups ?? []) {
+      filter.push({ bool: { must_not: [{ match: { 'rule.groups': g } }] } });
+    }
+    // Exclusión BASE de ruido (además del excludeGroups por regla): que el motor
+    // nunca dispare una acción sobre falsos positivos conocidos.
+    for (const g of SOAR_NOISE_GROUPS) filter.push({ bool: { must_not: [{ match: { 'rule.groups': g } }] } });
+    // Conectividad benigna (VPN/login de usuarios) nunca es base para bloquear/aislar.
+    filter.push({ bool: { must_not: [{ wildcard: { 'rule.description': { value: '*vpn user*', case_insensitive: true } } }] } });
   } else if (rule.trigger_type === 'rule_id') {
     filter.push({ term: { 'rule.id': rule.trigger_config.ruleId } });
   }
@@ -209,8 +237,12 @@ async function matchEntities(rule: AutomationRule): Promise<Agg[]> {
   }
   // Descarta IPv6 link-local/multicast/loopback como entidad IP (ruido).
   if (field === 'data.srcip') buckets = buckets.filter((b) => !/^(fe80|ff0|::1|fec0)/i.test(b.key));
-  // block_ip solo sobre IPs públicas (la lista blanca hará el resto).
-  if (rule.action === 'block_ip') buckets = buckets.filter((b) => isPublicIP(b.key));
+  // block_ip: solo IPs públicas y NUNCA la lista blanca (infra crítica de GVM).
+  // Se excluye aquí para no generar siquiera un evento (defensa en profundidad
+  // sobre la guarda canBlock, que también lo rechazaría al ejecutar).
+  if (rule.action === 'block_ip') buckets = buckets.filter((b) => isPublicIP(b.key) && !isWhitelisted(b.key));
+  // isolate_host: nunca aislar la infraestructura de seguridad/SOC (sería catastrófico).
+  if (rule.action === 'isolate_host') buckets = buckets.filter((b) => !CRITICAL_HOSTS_RE.test(b.key));
   return buckets;
 }
 

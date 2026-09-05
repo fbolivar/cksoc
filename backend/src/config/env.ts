@@ -91,6 +91,11 @@ const schema = z.object({
 
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
+
+  // Monitoreo de exposicion de credenciales (Have I Been Pwned)
+  HIBP_API_KEY: z.string().optional(),
+  HIBP_SCAN_CRON: z.string().default('0 6 * * *'), // diario 06:00
+
   // Tope diario de consultas a AbuseIPDB (free tier ~1000/dia); deja margen.
   ABUSEIPDB_DAILY_CAP: z.coerce.number().default(900),
   // Score de AbuseIPDB a partir del cual una IP se considera "ataque externo".

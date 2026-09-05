@@ -22,23 +22,47 @@ export interface MitreData {
   techniques: MitreTechnique[];
 }
 
-const cache = new Map<number, { at: number; data: MitreData }>();
+const cache = new Map<string, { at: number; data: MitreData }>();
 const TTL = 30_000;
 
-export async function getMitre(hours: number): Promise<MitreData> {
-  const cached = cache.get(hours);
+// "Solo señal real": lo que ensucia el mapa MITRE son los mismos falsos positivos
+// que en el resto del SOC — churn de FIM/registro (nivel medio) y la regla de
+// exfiltración 100600 sobre tráfico benigno (DVR de cámaras .31, relays HexDesk,
+// telemetría interna al SOC). En modo señal se cuenta solo nivel >= 8 y se excluye
+// ese 100600 benigno y los grupos que viven en otros módulos (SCA, vulns, crashes).
+const SIGNAL_MIN_LEVEL = 8;
+const NOISE_GROUPS = ['sca', 'vulnerability-detector', 'system_error'];
+const BENIGN_100600 = {
+  bool: {
+    filter: [{ term: { 'rule.id': '100600' } }],
+    minimum_should_match: 1,
+    should: [
+      { prefix: { 'data.dstip': '192.168.' } },
+      { prefix: { 'data.dstip': '10.' } },
+      { match_phrase: { 'data.srcip': '192.168.0.31' } },
+      { terms: { 'data.dstip': ['40.160.225.24', '209.250.254.15'] } },
+    ],
+  },
+};
+
+export async function getMitre(hours: number, signalOnly = false): Promise<MitreData> {
+  const key = `${hours}:${signalOnly ? 'signal' : 'all'}`;
+  const cached = cache.get(key);
   if (cached && Date.now() - cached.at < TTL) return cached.data;
 
   const client = getIndexerClient();
+  const filter: unknown[] = [
+    { range: { timestamp: { gte: `now-${hours}h`, lte: 'now' } } },
+    { exists: { field: 'rule.mitre.id' } },
+  ];
+  if (signalOnly) filter.push({ range: { 'rule.level': { gte: SIGNAL_MIN_LEVEL } } });
   const body = {
     size: 0,
     track_total_hits: true,
     query: {
       bool: {
-        filter: [
-          { range: { timestamp: { gte: `now-${hours}h`, lte: 'now' } } },
-          { exists: { field: 'rule.mitre.id' } },
-        ],
+        filter,
+        ...(signalOnly ? { must_not: [{ terms: { 'rule.groups': NOISE_GROUPS } }, BENIGN_100600] } : {}),
       },
     },
     aggs: {
@@ -98,7 +122,7 @@ export async function getMitre(hours: number): Promise<MitreData> {
     }),
   };
 
-  cache.set(hours, { at: Date.now(), data: result });
+  cache.set(key, { at: Date.now(), data: result });
   return result;
 }
 

@@ -92,7 +92,51 @@ async function due(): Promise<SavedHunt[]> {
   return rows.map(toHunt);
 }
 
+// -------------------- Biblioteca de hipótesis de caza (semilla) --------------------
+// Cacerías curadas para un entorno Windows + M365 + FortiGate, mapeadas a ATT&CK.
+// Se siembran una sola vez (idempotente por nombre); arrancan con alerta apagada
+// para no generar ruido — el analista activa las que quiera como detección permanente.
+// Las que usan `mitre`/`q` de una técnica concreta corren en crudo (sin lente señal).
+const HUNT_LIBRARY: { name: string; query: HuntParams }[] = [
+  { name: 'Malware / antivirus detectó amenaza', query: { range: '7d', q: 'malware' } },
+  { name: 'Manipulación de cuentas privilegiadas', query: { range: '7d', mitre: 'T1098' } },
+  { name: 'Fuerza bruta / password spray', query: { range: '7d', mitre: 'T1110' } },
+  { name: 'Acceso remoto entrante (RDP)', query: { range: '7d', mitre: 'T1021.001' } },
+  { name: 'Cambio de política de dominio (GPO)', query: { range: '7d', mitre: 'T1484' } },
+  { name: 'Ejecución de comandos / PowerShell', query: { range: '7d', mitre: 'T1059.001' } },
+  { name: 'Borrado de logs de eventos', query: { range: '30d', q: 'cleared' } },
+  { name: 'Reenvío de correo / regla de buzón (O365)', query: { range: '30d', q: 'forward' } },
+  { name: 'Enlaces anónimos / compartir a externos (O365)', query: { range: '7d', q: 'anonymous' } },
+  { name: 'Antivirus/Defender deshabilitado', query: { range: '7d', q: 'disabled', minLevel: 5 } },
+];
+
+export async function seedHuntLibrary(): Promise<void> {
+  try {
+    const existing = await query<{ name: string }>('SELECT name FROM saved_hunts');
+    const have = new Set(existing.map((r) => r.name));
+    let added = 0;
+    for (const h of HUNT_LIBRARY) {
+      if (have.has(h.name)) continue;
+      const rows = await query<Row>(
+        `INSERT INTO saved_hunts (name, query, alert_enabled, threshold, interval_min, created_by)
+         VALUES ($1,$2::jsonb,FALSE,1,60,NULL) RETURNING *`,
+        [h.name, JSON.stringify(h.query)]
+      );
+      // Corre una vez para poblar last_count (valor inmediato en la UI).
+      try {
+        const res = await hunt(h.query);
+        await query('UPDATE saved_hunts SET last_run = now(), last_count = $2 WHERE id = $1', [rows[0].id, res.total]);
+      } catch { /* índice aún no disponible; el scheduler lo poblará luego */ }
+      added++;
+    }
+    if (added) logger.info({ added }, 'Biblioteca de cacerías sembrada');
+  } catch (err) {
+    logger.error({ err }, 'No se pudo sembrar la biblioteca de cacerías');
+  }
+}
+
 export function startSavedHuntScheduler(): void {
+  void seedHuntLibrary();
   const tick = async (): Promise<void> => {
     let hunts: SavedHunt[];
     try {

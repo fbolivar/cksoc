@@ -38,6 +38,9 @@ export default function AttackMap() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [range, setRange] = useState<Range>('7d');
+  // "Solo amenazas" ON por defecto: el mapa muestra atacantes (IOC/ataque/IPS/nivel
+  // alto/reputación mala), no el tráfico benigno de teletrabajo y navegación normal.
+  const [threatsOnly, setThreatsOnly] = useState(true);
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [threatIntel, setThreatIntel] = useState(true);
   const [origins, setOrigins] = useState<AttackOrigin[]>([]);
@@ -87,11 +90,11 @@ export default function AttackMap() {
   const [loading, setLoading] = useState(true);
   const liveId = useRef(0);
 
-  async function load(r: Range) {
+  async function load(r: Range, threats: boolean) {
     setLoading(true);
     setError(null);
     try {
-      const data = await attacksApi.geo(HOURS[r]);
+      const data = await attacksApi.geo(HOURS[r], threats);
       setOrigins(data.origins);
       setDestination(data.destination);
       setThreatIntel(data.threatIntel);
@@ -103,8 +106,9 @@ export default function AttackMap() {
   }
 
   useEffect(() => {
-    load(range);
-  }, [range]);
+    load(range, threatsOnly);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range, threatsOnly]);
 
   // Estado del modulo de Respuesta (para habilitar el bloqueo desde el mapa)
   useEffect(() => {
@@ -145,6 +149,7 @@ export default function AttackMap() {
             last_seen: a.ts, ips: [a.ip],
             isp: null, usageType: null, abuseScore: 0,
             clasificacion: 'desconocido' as const, esExterno: false,
+            ioc: null, threat: true,
           },
         ];
       });
@@ -199,9 +204,15 @@ export default function AttackMap() {
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={threatsOnly ? 'default' : 'outline'} size="sm"
+            onClick={() => setThreatsOnly((v) => !v)}
+            title="Solo amenazas: muestra únicamente orígenes maliciosos (IOC, ataques/IPS, nivel alto o mala reputación). Apágalo para ver todo el tráfico externo, incluido el benigno.">
+            <ShieldCheck className="h-4 w-4" /> {threatsOnly ? 'Solo amenazas' : 'Todo el tráfico'}
+          </Button>
           <RangeTabs value={range} onChange={setRange} options={RANGE_24_7_30} />
-          <Button variant="outline" size="sm" onClick={() => load(range)} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => load(range, threatsOnly)} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
             Actualizar
           </Button>

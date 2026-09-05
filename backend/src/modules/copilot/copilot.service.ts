@@ -262,7 +262,10 @@ export async function triageAlert(text: string): Promise<{ reply: string }> {
   const t = String(text ?? '').trim().slice(0, MAX_INPUT);
   if (!t) throw new HttpError(400, 'Falta la alerta a triar.');
   const system = `${SYSTEM_BASE}\n\nTarea: haz el TRIAJE de esta alerta como un analista de nivel 1. Responde SOLO con esta estructura breve:\n**Veredicto**: (Verdadero positivo probable / Falso positivo probable / Requiere investigación)\n**Por qué**: 1-2 frases.\n**Severidad real**: (crítica/alta/media/baja) y si difiere del nivel de la regla, dilo.\n**Acción recomendada**: el siguiente paso concreto en HexWatch.`;
-  const reply = await callClaude(system, [{ role: 'user', content: t }], 500);
+  // 1500, no 500: claude-sonnet-5 emite bloques de "thinking" por defecto que
+  // consumen presupuesto antes del texto visible; con 500 + el system prompt largo
+  // el razonamiento se comía todo y la respuesta salía vacía. El triaje real usa ~450.
+  const reply = await callClaude(system, [{ role: 'user', content: t }], 1500);
   return { reply };
 }
 

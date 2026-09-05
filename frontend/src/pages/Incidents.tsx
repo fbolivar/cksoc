@@ -4,10 +4,12 @@
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink, Ban, CheckCircle2, Timer, Gauge, AlertTriangle } from 'lucide-react';
+import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink, Ban, CheckCircle2, Timer, Gauge, AlertTriangle, Sparkles, FileSearch, Cpu, Network } from 'lucide-react';
 import { incidentsApi, SEV, ST, SLA_STATE, fmtDuration, type IncidentListItem, type IncidentDetail, type Severity, type Status, type CaseMetrics, type SlaState, type BreachRec } from '@/lib/incidents';
 import { responseApi } from '@/lib/response';
-import { velociraptorApi } from '@/lib/velociraptor';
+import { velociraptorApi, type VeloResultSource } from '@/lib/velociraptor';
+import { copilotApi } from '@/lib/copilot';
+import { Markdownish } from '@/components/shared/Markdownish';
 import { useAuth } from '@/lib/auth';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,6 +43,48 @@ function SlaChip({ state }: { state: SlaState }) {
   return <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold ${s.cls}`}>{s.label}</span>;
 }
 
+// Sondas de recolección: artefactos de Velociraptor de bajo impacto para traer
+// evidencia del endpoint sin conectarse al PC. Solo Windows por ahora.
+const PROBES: { label: string; artifact: string; icon: typeof FileSearch }[] = [
+  { label: 'Leer archivo HOSTS', artifact: 'Generic.System.HostsFile', icon: FileSearch },
+  { label: 'Procesos', artifact: 'Windows.System.Pslist', icon: Cpu },
+  { label: 'Conexiones de red', artifact: 'Windows.Network.Netstat', icon: Network },
+];
+
+/** Muestra las filas devueltas por una colección de Velociraptor, como tabla. */
+function ResultsTable({ sources }: { sources: VeloResultSource[] }) {
+  const withRows = sources.filter((s) => (s.rows?.length ?? 0) > 0);
+  if (!withRows.length) return <p className="mt-2 text-[11px] text-muted-foreground">La colección no devolvió filas (el equipo puede estar offline o el archivo vacío).</p>;
+  return (
+    <div className="mt-2 space-y-3">
+      {withRows.map((s) => (
+        <div key={s.artifact} className="overflow-hidden rounded-md border border-border/60">
+          <div className="bg-secondary/40 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{s.artifact.split('/').pop()} · {s.rows.length} fila(s)</div>
+          <div className="max-h-56 overflow-auto">
+            <table className="w-full text-[11px]">
+              <thead className="sticky top-0 bg-background/95">
+                <tr>{s.columns.map((c) => <th key={c} className="px-2 py-1 text-left font-medium text-muted-foreground">{c}</th>)}</tr>
+              </thead>
+              <tbody>
+                {s.rows.slice(0, 50).map((row, ri) => (
+                  <tr key={ri} className="border-t border-border/30">
+                    {s.columns.map((c) => <td key={c} className="px-2 py-1 align-top font-mono">{fmtCell(row[c])}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+function fmtCell(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
 export default function Incidents() {
   const { user } = useAuth();
   const canManage = user?.role === 'admin' || user?.role === 'analista';
@@ -55,8 +99,15 @@ export default function Incidents() {
   const [showCreate, setShowCreate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
-  const [veloBusy, setVeloBusy] = useState(false);
-  const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
+  // Investigación con IA (Copiloto)
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+  // Recolección de evidencia del endpoint (Velociraptor)
+  const [collectBusy, setCollectBusy] = useState<string | null>(null);
+  const [collectRows, setCollectRows] = useState<VeloResultSource[] | null>(null);
+  const [collectUrl, setCollectUrl] = useState<string | null>(null);
+  const [collectErr, setCollectErr] = useState<string | null>(null);
   const [blockBusy, setBlockBusy] = useState(false);
   const [blockResult, setBlockResult] = useState<{ ok?: boolean; error?: string } | null>(null);
   const [recs, setRecs] = useState<BreachRec[]>([]);
@@ -91,17 +142,35 @@ export default function Incidents() {
     }
   }
 
-  async function investigar(host: string) {
-    setVeloBusy(true);
-    setVeloResult(null);
+  // Pide a la IA el análisis del caso (veredicto, severidad real, siguiente paso).
+  async function analizarIA() {
+    if (!sel) return;
+    setAiBusy(true); setAiErr(null);
     try {
-      const r = await velociraptorApi.collect(host);
-      setVeloResult({ url: r.url });
+      const r = await copilotApi.incidentSummary(sel);
+      setAiText(r.reply);
     } catch (e) {
-      setVeloResult({ error: (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo lanzar la colección' });
-    } finally {
-      setVeloBusy(false);
-    }
+      setAiErr((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar el análisis de IA');
+    } finally { setAiBusy(false); }
+  }
+
+  // Recolecta evidencia del endpoint con Velociraptor y trae las filas a HexWatch
+  // (sin conectarse al PC). Lanza la colección y sondea el resultado hasta ~30 s.
+  async function recolectar(host: string, artifact: string) {
+    setCollectBusy(artifact); setCollectErr(null); setCollectRows(null); setCollectUrl(null);
+    try {
+      const c = await velociraptorApi.collect(host, artifact);
+      setCollectUrl(c.url ?? null);
+      let sources: VeloResultSource[] = [];
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        sources = await velociraptorApi.flowResults(c.client_id, c.flow_id).catch(() => []);
+        if (sources.some((s) => (s.rows?.length ?? 0) > 0)) break;
+      }
+      setCollectRows(sources);
+    } catch (e) {
+      setCollectErr((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo recolectar del equipo');
+    } finally { setCollectBusy(null); }
   }
 
   async function loadList() {
@@ -115,7 +184,8 @@ export default function Incidents() {
   useEffect(() => { loadList(); /* eslint-disable-next-line */ }, [statusF]);
   useEffect(() => { if (canManage) incidentsApi.users().then(setUsers).catch(() => undefined); }, [canManage]);
   useEffect(() => {
-    setVeloResult(null);
+    setAiText(null); setAiErr(null);
+    setCollectRows(null); setCollectErr(null); setCollectUrl(null);
     setBlockResult(null);
     if (!sel) { setDetail(null); return; }
     incidentsApi.get(sel).then(setDetail).catch(() => setDetail(null));
@@ -291,6 +361,50 @@ export default function Incidents() {
               </CardContent>
             </Card>
 
+            {/* Investigación: análisis de IA + recolección del endpoint (sin entrar al PC) */}
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-muted-foreground"><Crosshair className="h-4 w-4" /> Investigación</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Análisis del Copiloto (IA)</span>
+                    {canManage && (
+                      <Button size="sm" variant="outline" onClick={() => void analizarIA()} disabled={aiBusy}>
+                        {aiBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {aiText ? 'Re-analizar' : 'Analizar con IA'}
+                      </Button>
+                    )}
+                  </div>
+                  {aiErr && <p className="mt-2 text-[11px] text-destructive">{aiErr}</p>}
+                  {aiText ? (
+                    <div className="mt-2 rounded-md border border-border/50 bg-secondary/20 p-3"><Markdownish text={aiText} /></div>
+                  ) : !aiBusy && !aiErr ? (
+                    <p className="mt-1 text-xs text-muted-foreground/70">La IA lee el caso completo y da veredicto, severidad real y el siguiente paso.</p>
+                  ) : null}
+                </div>
+
+                {detail.source?.agent && (
+                  <div className="border-t border-border/40 pt-3">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recolectar del equipo · {detail.source.agent}</span>
+                    <p className="mb-2 mt-0.5 text-xs text-muted-foreground/70">Trae evidencia del endpoint sin conectarte al PC.</p>
+                    {canManage && (
+                      <div className="flex flex-wrap gap-2">
+                        {PROBES.map((p) => { const Icon = p.icon; return (
+                          <Button key={p.artifact} size="sm" variant="outline" disabled={!!collectBusy}
+                            onClick={() => { const h = detail.source?.agent; if (h) void recolectar(String(h), p.artifact); }}>
+                            {collectBusy === p.artifact ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Icon className="h-3.5 w-3.5" />} {p.label}
+                          </Button>
+                        ); })}
+                      </div>
+                    )}
+                    {collectBusy && <p className="mt-2 text-[11px] text-muted-foreground"><Loader2 className="mr-1 inline h-3 w-3 animate-spin" />Recolectando del equipo… (puede tardar unos segundos)</p>}
+                    {collectErr && <p className="mt-2 text-[11px] text-destructive">{collectErr}</p>}
+                    {collectRows && <ResultsTable sources={collectRows} />}
+                    {collectUrl && !collectBusy && <a href={collectUrl} target="_blank" rel="noreferrer" className="mt-2 block text-[11px] text-neon hover:underline"><ExternalLink className="mr-1 inline h-3 w-3" />Ver evidencia completa en Velociraptor</a>}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Timeline */}
             <Card>
               <CardHeader><CardTitle className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4" /> Bitácora</CardTitle></CardHeader>
@@ -342,21 +456,6 @@ export default function Incidents() {
                   {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
-              {canManage && detail.source?.agent && (
-                <div className="space-y-1.5 border-t border-border/40 pt-3">
-                  <label className="text-xs text-muted-foreground">DFIR · Velociraptor</label>
-                  <Button size="sm" variant="outline" className="w-full justify-center" disabled={veloBusy}
-                    onClick={() => { const h = detail.source?.agent; if (h) void investigar(String(h)); }}
-                    title="Lanza una colección forense en el host afectado">
-                    {veloBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />} Investigar con Velociraptor
-                  </Button>
-                  {veloResult && (veloResult.error ? (
-                    <span className="block text-[11px] text-destructive">{veloResult.error}</span>
-                  ) : veloResult.url ? (
-                    <a href={veloResult.url} target="_blank" rel="noreferrer" className="block text-[11px] text-neon hover:underline"><ExternalLink className="mr-1 inline h-3 w-3" />Colección lanzada · ver evidencia</a>
-                  ) : null)}
-                </div>
-              )}
               {canManage && detail.source?.ip && (
                 <div className="space-y-1.5 border-t border-border/40 pt-3">
                   <label className="text-xs text-muted-foreground">Contención · FortiGate</label>

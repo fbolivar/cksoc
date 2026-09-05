@@ -71,6 +71,8 @@ export default function Alerts() {
   const [ruleId, setRuleId] = useState(searchParams.get('ruleId') ?? '');
   const [q, setQ] = useState(searchParams.get('q') ?? '');
   const [userF, setUserF] = useState(searchParams.get('user') ?? '');
+  // "Solo seguridad" (triage): oculta ruido no accionable (SCA/vulns/crashes). ON por defecto.
+  const [triage, setTriage] = useState(searchParams.get('todo') !== '1');
   const [page, setPage] = useState(0);
 
   const [data, setData] = useState<{ total: number; capped: boolean; items: AlertHit[] } | null>(null);
@@ -148,20 +150,21 @@ export default function Alerts() {
     const my = ++reqSeq.current;
     setLoading(true); setError(null);
     try {
-      const res = await alertsApi.search(f);
+      // "Solo seguridad" (triage) se inyecta aquí para todas las búsquedas del feed.
+      const res = await alertsApi.search({ ...f, triage });
       if (my === reqSeq.current) setData(res);
     } catch (e) {
       if (my === reqSeq.current) setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo buscar alertas');
     } finally {
       if (my === reqSeq.current) setLoading(false);
     }
-  }, []);
+  }, [triage]);
 
   // Recarga al cambiar rango o pagina; los filtros de texto se aplican con "Buscar".
   useEffect(() => {
     load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, user: userF || undefined, page, size: SIZE });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, page, band]);
+  }, [range, page, band, triage]);
 
   function applyFilters() {
     if (page !== 0) setPage(0);
@@ -222,7 +225,7 @@ export default function Alerts() {
   async function exportCsv() {
     setExporting(true);
     try {
-      const base = { range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined };
+      const base = { range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, user: userF || undefined, triage };
       const PSIZE = 100;
       const all: AlertHit[] = [];
       for (let p = 0; p * PSIZE < EXPORT_MAX; p++) {
@@ -252,6 +255,13 @@ export default function Alerts() {
         </div>
         <div className="flex items-center gap-2">
           <RangeTabs value={range} onChange={(v) => { setPage(0); setRange(v); }} options={RANGE_24_7_30} />
+          <Button
+            variant={triage ? 'default' : 'outline'} size="sm"
+            onClick={() => { setPage(0); setTriage((v) => !v); }}
+            title="Solo seguridad: oculta ruido no accionable (cumplimiento SCA, vulnerabilidades y errores de aplicación). Estos viven en sus propios módulos."
+          >
+            <ShieldAlert className="h-4 w-4" /> {triage ? 'Solo seguridad' : 'Ver todo'}
+          </Button>
           <ExportButton onExport={exportCsv} busy={exporting} disabled={loading || total === 0} />
           <Button variant="outline" size="sm" onClick={() => load({ range, band: band || undefined, agent: agent || undefined, srcip: srcip || undefined, ruleId: ruleId || undefined, q: q || undefined, user: userF || undefined, page, size: SIZE })} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />

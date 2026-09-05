@@ -131,7 +131,26 @@ async function largeTransfers(gte: string): Promise<{ count: number; list: NdrTr
       `/${env.WAZUH_ALERTS_INDEX}/_search`,
       {
         size: 25,
-        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { term: { 'rule.id': '100600' } }] } },
+        query: {
+          bool: {
+            filter: [{ range: { '@timestamp': { gte } } }, { term: { 'rule.id': '100600' } }],
+            // La exfiltración es hacia Internet: un destino PRIVADO (RFC1918) no es
+            // exfiltración por definición (telemetría de agentes al SOC, RDP interno,
+            // sincronización LAN…). Se excluye del panel para que solo muestre egress
+            // externo real. (172.16/12 no se usa en esta red; se cubren 10/8 y 192.168/16.)
+            must_not: [
+              { prefix: { 'data.dstip': '192.168.' } },
+              { prefix: { 'data.dstip': '10.' } },
+              // Infraestructura propia conocida-benigna (además suprimida en el SIEM
+              // por las reglas 100602/100603/100604): el DVR de cámaras Dahua
+              // (192.168.0.31, sync de video) y los relays de HexDesk / soporte remoto
+              // (OVH y Vultr). Se ocultan del panel para que solo muestre egress
+              // externo DESCONOCIDO — que es lo único investigable como exfiltración.
+              { match_phrase: { 'data.srcip': '192.168.0.31' } },
+              { terms: { 'data.dstip': ['40.160.225.24', '209.250.254.15'] } },
+            ],
+          },
+        },
         sort: [{ 'data.sentbyte': { order: 'desc', unmapped_type: 'long' } }],
         _source: ['@timestamp', 'data.srcip', 'data.dstip', 'data.sentbyte', 'data.rcvdbyte', 'data.dstport', 'data.service', 'data.duration', 'data.appcat', 'data.dstcountry', 'data.sessionid'],
       },
@@ -209,19 +228,61 @@ async function enrichTransfers(list: NdrTransfer[], gte: string): Promise<NdrTra
 // Destinos de nube corporativa esperada (no exfiltración): se separan del panel.
 const TRUSTED_RE = /microsoft|office365|onedrive|sharepoint|windows|google|gmail|youtube|amazon|\baws\b|apple|icloud|dropbox|cloudflare|akamai|fastly|meta|whatsapp|facebook/i;
 
-/** Cruza los dominios/IPs más vistos con los IOCs habilitados. */
-async function iocHits(domains: string[], ips: string[]): Promise<NdrIoc[]> {
-  if (!domains.length && !ips.length) return [];
+/**
+ * Cruza TODO el tráfico de red (IPs origen+destino y dominios) contra el feed de
+ * IOCs habilitados — no solo los de más volumen. Así un contacto con una IP/dominio
+ * malicioso se detecta aunque sea UNA sola conexión (antes se perdía porque solo se
+ * revisaban los ~10 destinos más frecuentes). Se carga el feed en memoria y se
+ * intersecta con las IPs/dominios vistos en la ventana.
+ */
+async function iocHits(gte: string): Promise<NdrIoc[]> {
+  let iocRows: { ioc_type: string; value: string; source: string; confidence: number }[] = [];
   try {
-    const rows = await query<{ ioc_type: string; value: string; source: string; confidence: number }>(
-      `SELECT ioc_type, value, source, confidence FROM iocs
-        WHERE enabled = TRUE AND (
-          (ioc_type = 'domain' AND value = ANY($1::text[])) OR
-          (ioc_type = 'ip' AND value = ANY($2::text[])))
-        LIMIT 100`,
-      [domains.map((d) => d.toLowerCase()), ips],
+    iocRows = await query<{ ioc_type: string; value: string; source: string; confidence: number }>(
+      "SELECT ioc_type, value, source, confidence FROM iocs WHERE enabled = TRUE AND ioc_type IN ('ip','domain')"
     );
-    return rows.map((r) => ({ type: r.ioc_type, value: r.value, source: r.source, confidence: r.confidence, seen: r.ioc_type === 'domain' ? 'domain' : 'ip' }));
+  } catch { return []; }
+  if (!iocRows.length) return [];
+  // Plataformas de hosting COMPARTIDO legítimas que aparecen en feeds de URL
+  // (URLhaus/ThreatFox) porque alojan malware en URLs puntuales — pero el dominio en
+  // sí es legítimo y NO accionable (no vas a "bloquear github.com"). Se excluyen de
+  // los IOC de DOMINIO. Los IOC de IP se conservan siempre (una IP en blocklist.de es
+  // mala a nivel host).
+  const LEGIT_HOSTING_RE = /(^|\.)(github|githubusercontent|google|googleapis|googleusercontent|gstatic|youtube|discord|discordapp|cloudinary|imgur|ibb|firebasestorage|licdn|linkedin|microsoft|office365?|windows|live|amazonaws|cloudfront|dropbox|apple|icloud|cloudflare|akamai|fastly|bitbucket|gitlab|wetransfer|whatsapp|facebook|fbcdn)\.[a-z]{2,}(\.[a-z]{2,})?$/i;
+  const ipMap = new Map<string, { source: string; confidence: number }>();
+  const domMap = new Map<string, { source: string; confidence: number }>();
+  for (const r of iocRows) {
+    (r.ioc_type === 'ip' ? ipMap : domMap).set(String(r.value).toLowerCase(), { source: r.source, confidence: r.confidence });
+  }
+  try {
+    const { data } = await client().post<{ aggregations?: {
+      dst: { buckets: TermBucket[] }; src: { buckets: TermBucket[] }; dom: { buckets: TermBucket[] };
+    } }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+      size: 0,
+      query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'fortigate' } }] } },
+      aggs: {
+        dst: { terms: { field: 'data.dstip', size: 4000 } },
+        src: { terms: { field: 'data.srcip', size: 4000 } },
+        dom: { terms: { field: 'data.hostname', size: 4000 } },
+      },
+    });
+    const a = data.aggregations;
+    const hits: NdrIoc[] = [];
+    const seenVal = new Set<string>();
+    const push = (value: string, isIp: boolean): void => {
+      const key = String(value).toLowerCase();
+      // Los IOC de dominio sobre plataformas legítimas de hosting compartido no son
+      // accionables (no bloqueas github/google); se descartan. Los de IP se conservan.
+      if (!isIp && LEGIT_HOSTING_RE.test(key)) return;
+      const m = isIp ? ipMap.get(key) : domMap.get(key);
+      if (!m || seenVal.has(key)) return;
+      seenVal.add(key);
+      hits.push({ type: isIp ? 'ip' : 'domain', value, source: m.source, confidence: m.confidence, seen: isIp ? 'ip' : 'domain' });
+    };
+    for (const b of a?.dst.buckets ?? []) push(b.key, true);
+    for (const b of a?.src.buckets ?? []) push(b.key, true);
+    for (const b of a?.dom.buckets ?? []) push(b.key, false);
+    return hits.slice(0, 100);
   } catch { return []; }
 }
 
@@ -230,7 +291,7 @@ export async function getNdrOverview(rangeIn: string): Promise<NdrOverview> {
   const gte = RANGE[range];
   const [agg, ips, xfer] = await Promise.all([overviewAggs(gte), ipsAlerts(gte), largeTransfers(gte)]);
   const [hits, enrichedXfer] = await Promise.all([
-    iocHits(agg.topDomains.map((d) => d.domain), agg.topDstIps.map((d) => d.ip)),
+    iocHits(gte),
     enrichTransfers(xfer.list, gte),
   ]);
   return {
@@ -246,7 +307,11 @@ export async function getNdrOverview(rangeIn: string): Promise<NdrOverview> {
     ipsAlerts: ips.list,
     iocHits: hits,
     largeTransfers: enrichedXfer,
-    largeTransferCount: xfer.count,
+    // El KPI cuenta solo las SOSPECHOSAS (no confiables): egress externo a destinos
+    // que no son nube corporativa conocida ni con reputación limpia. Así el número
+    // refleja lo investigable y no se dispara por tráfico benigno a AWS/Google/O365.
+    // (El detalle sigue mostrando las confiables, colapsadas.)
+    largeTransferCount: enrichedXfer.filter((t) => !t.trusted).length,
     generatedAt: new Date().toISOString(),
   };
 }

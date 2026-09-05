@@ -197,6 +197,8 @@ async function runAction(pb: Playbook, act: PlaybookAction, a: AlertContext): Pr
           severity: severityFromLevel(a.level),
           description: `Incidente creado automaticamente por el playbook "${pb.name}".`,
           source: { alertId: a.alertId, ip: a.ip ?? undefined, agent: a.agent, ruleId: a.ruleId, description: a.description, alertTime: a.timestamp },
+          // Idempotencia: la misma alerta (alertId) no debe abrir 2 casos. Fallback: regla+host.
+          dedupKey: a.alertId ? `alert:${a.alertId}` : `rule:${a.ruleId}:${a.agent ?? ''}`,
         },
         pb.createdBy ?? (null as unknown as string)
       );

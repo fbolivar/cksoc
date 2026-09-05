@@ -25,17 +25,20 @@ export default function CorrelationPage() {
   const navigate = useNavigate();
 
   const [range, setRange] = useState('24h');
+  // "Solo externas" ON por defecto: una IP interna correlacionando su propio tráfico
+  // no es un ataque; el valor está en las IPs externas (atacantes).
+  const [externalOnly, setExternalOnly] = useState(true);
   const [items, setItems] = useState<Correlation[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [act, setAct] = useState<Record<string, { blockBusy?: boolean; blocked?: boolean; incBusy?: boolean; err?: string }>>({});
 
   const seq = useRef(0);
-  const load = useCallback(async (r: string) => {
+  const load = useCallback(async (r: string, ext: boolean) => {
     const my = ++seq.current;
     setLoading(true); setError(null);
     try {
-      const list = await correlationApi.list(r);
+      const list = await correlationApi.list(r, ext);
       if (my === seq.current) setItems(list);
     } catch (e) {
       if (my === seq.current) { setItems(null); setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo cargar la correlación'); }
@@ -44,7 +47,7 @@ export default function CorrelationPage() {
     }
   }, []);
 
-  useEffect(() => { void load(range); }, [range, load]);
+  useEffect(() => { void load(range, externalOnly); }, [range, externalOnly, load]);
 
   async function block(ip: string) {
     setAct((a) => ({ ...a, [ip]: { ...a[ip], blockBusy: true, err: undefined } }));
@@ -89,8 +92,14 @@ export default function CorrelationPage() {
           <p className="text-sm text-muted-foreground">Casos agrupados por IP de origen — un caso, no N alertas sueltas</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant={externalOnly ? 'default' : 'outline'} size="sm"
+            onClick={() => setExternalOnly((v) => !v)}
+            title="Solo externas: muestra únicamente IPs de origen públicas (posibles atacantes vistos por varias fuentes). Apágalo para incluir también las IPs internas.">
+            <Globe className="h-4 w-4" /> {externalOnly ? 'Solo externas' : 'Externas + internas'}
+          </Button>
           <RangeTabs value={range} onChange={setRange} options={RANGE_24_7_30} />
-          <Button variant="outline" size="sm" onClick={() => void load(range)} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => void load(range, externalOnly)} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
           </Button>
         </div>
