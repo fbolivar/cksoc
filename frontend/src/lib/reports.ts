@@ -130,3 +130,34 @@ export const reportsApi = {
     URL.revokeObjectURL(url);
   },
 };
+
+// ----------------- Parte de Estado (shift report AM/PM) -----------------
+
+export type Turno = 'am' | 'pm';
+
+export interface ShiftStatus {
+  telegramReady: boolean;
+  internal: boolean; // true = envío al chat interno de revisión (no al cliente)
+  destinatarios: number;
+}
+
+export interface ShiftSendResult {
+  ok: boolean;
+  sentTo: string[];
+  internal: boolean;
+  filename: string;
+}
+
+export const shiftApi = {
+  status: () => api.get<ShiftStatus>('/shift-report/status').then((r) => r.data),
+
+  /** Genera y envía el parte por Telegram (interno o cliente, según config). */
+  send: (turno?: Turno) =>
+    api.post<ShiftSendResult>('/shift-report/send', turno ? { turno } : {}).then((r) => r.data),
+
+  /** HTML de vista previa del parte, para verlo sin enviarlo. */
+  preview: (turno?: Turno) =>
+    api
+      .get<string>('/shift-report/preview', { params: turno ? { turno } : {}, responseType: 'text' })
+      .then((r) => r.data),
+};

@@ -25,6 +25,7 @@ import { licenseRouter } from './modules/license/license.routes';
 import { wazuhRouter } from './modules/wazuh/wazuh.routes';
 import { notificationsRouter } from './modules/notifications/notifications.routes';
 import { reportsRouter } from './modules/reports/reports.routes';
+import { shiftReportRouter } from './modules/shift-report/shift-report.routes';
 import { executiveRouter } from './modules/reports/executive/exec.routes';
 import { usersRouter } from './modules/users/users.routes';
 import { systemRouter } from './modules/system/system.routes';
@@ -74,6 +75,7 @@ import { startScheduler } from './modules/notifications/scheduler';
 import { startAlertWatcher } from './modules/notifications/alertwatcher';
 import { startDigestScheduler } from './modules/notifications/digest.service';
 import { startReportScheduler } from './modules/reports/report.scheduler';
+import { startShiftReportScheduler } from './modules/shift-report/shift-report.scheduler';
 import { closePdfEngine } from './modules/reports/pdf.service';
 import { initGeoIp } from './modules/geo/geoip.service';
 import { startAttacksBroadcast } from './modules/attacks/attacks.broadcast';
@@ -113,6 +115,7 @@ app.use('/api/wazuh', wazuhRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/reports/executive', executiveRouter); // antes de /api/reports
 app.use('/api/reports', reportsRouter);
+app.use('/api/shift-report', shiftReportRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/system', systemRouter);
 app.use('/api/attacks', attacksRouter);
@@ -221,6 +224,7 @@ startDigestScheduler();
 
 // Scheduler de reporte programado (diario)
 startReportScheduler();
+startShiftReportScheduler();
 
 // Respaldo automatico diario de la base de datos (.pnnc) + retencion
 startBackupScheduler();

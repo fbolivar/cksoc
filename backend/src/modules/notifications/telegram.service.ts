@@ -26,6 +26,34 @@ export async function sendTelegram(chatIds: string[], text: string): Promise<voi
   }
 }
 
+/**
+ * Envia un documento (p.ej. un PDF) a uno o varios chats con un pie opcional.
+ * Usa multipart/form-data (sendDocument) con el buffer en memoria.
+ */
+export async function sendTelegramDocument(
+  chatIds: string[],
+  file: Buffer,
+  filename: string,
+  caption?: string
+): Promise<void> {
+  if (!isTelegramConfigured()) {
+    throw new Error('Telegram no configurado (define TELEGRAM_BOT_TOKEN en el .env)');
+  }
+  for (const chatId of chatIds) {
+    const form = new FormData();
+    form.append('chat_id', chatId);
+    if (caption) {
+      form.append('caption', caption.slice(0, 1024));
+      form.append('parse_mode', 'Markdown');
+    }
+    form.append('document', new Blob([file], { type: 'application/pdf' }), filename);
+    await axios.post(`${apiUrl()}/sendDocument`, form, {
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+  }
+}
+
 /** Verifica el token del bot (getMe) para el boton de prueba. */
 export async function verifyTelegram(): Promise<{ username: string }> {
   if (!isTelegramConfigured()) throw new Error('Telegram no configurado');

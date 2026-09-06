@@ -22,9 +22,12 @@ import {
   Eye,
   Sparkles,
   X,
+  Send,
+  Sunrise,
+  Sunset,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { reportsApi, type Report, type PresetPeriodo } from '@/lib/reports';
+import { reportsApi, shiftApi, type Report, type PresetPeriodo, type Turno, type ShiftStatus } from '@/lib/reports';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,6 +63,11 @@ export default function Reports() {
   const [preview, setPreview] = useState<{ html: string; title: string } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
+  // Parte de Estado (shift report AM/PM)
+  const [shiftStatus, setShiftStatus] = useState<ShiftStatus | null>(null);
+  const [shiftTurno, setShiftTurno] = useState<Turno>(new Date().getHours() < 12 ? 'am' : 'pm');
+  const [shiftBusy, setShiftBusy] = useState<'send' | 'preview' | null>(null);
 
   const personalizado = preset === 'personalizado';
 
@@ -128,6 +136,41 @@ export default function Reports() {
     }
   }
 
+  useEffect(() => {
+    if (canManage) shiftApi.status().then(setShiftStatus).catch(() => undefined);
+  }, [canManage]);
+
+  async function shiftPreview() {
+    setShiftBusy('preview');
+    try {
+      const html = await shiftApi.preview(shiftTurno);
+      const w = window.open('', '_blank');
+      if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+    } catch {
+      flash('err', 'No se pudo generar la vista previa del parte');
+    } finally {
+      setShiftBusy(null);
+    }
+  }
+
+  async function shiftSend() {
+    const label = shiftTurno === 'am' ? 'Mañana' : 'Tarde';
+    const dest = shiftStatus?.internal ? 'al chat INTERNO de revisión' : 'al cliente';
+    if (!confirm(`¿Generar y enviar el Parte de Estado (${label}) ${dest}?`)) return;
+    setShiftBusy('send');
+    try {
+      const r = await shiftApi.send(shiftTurno);
+      flash('ok', r.internal
+        ? `Parte enviado al chat interno de revisión (${r.filename}). Cuando lo apruebes, configuramos el envío al cliente.`
+        : `Parte enviado al cliente · ${r.sentTo.length} destinatario(s) (${r.filename}).`);
+    } catch (e) {
+      const err = e as AxiosError<{ error?: string }>;
+      flash('err', err.response?.data?.error ?? 'No se pudo enviar el parte');
+    } finally {
+      setShiftBusy(null);
+    }
+  }
+
   /** Preselecciona título y periodo desde el catálogo. */
   const pick = (t: string, p: string, exec?: boolean) => {
     if (exec && isAdmin) { setTab('ejecutivo'); return; }
@@ -163,6 +206,66 @@ export default function Reports() {
           </button>
         ))}
       </div>
+
+      {/* Parte de Estado (dos veces al día, para el cliente) */}
+      {canManage && (
+        <div className="hud">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-[240px] flex-1">
+              <h3 className="flex items-center gap-2 text-[14px] font-bold">
+                <Send className="h-[18px] w-[18px] text-primary" /> Parte de Estado del Servicio
+              </h3>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                Resumen de una página con el estado real de las estaciones para enviar al cliente
+                por Telegram (mañana y tarde). Muestra cobertura, eventos procesados, incidentes y
+                las estaciones en atención.
+              </p>
+              <div className="hw-mono mt-2 flex flex-wrap items-center gap-2 text-[10px]">
+                {shiftStatus == null ? (
+                  <span className="text-muted-foreground">cargando estado…</span>
+                ) : !shiftStatus.telegramReady ? (
+                  <span className="px-1.5 py-0.5" style={{ background: 'hsl(var(--destructive) / .12)', color: 'hsl(var(--destructive))' }}>Telegram no configurado</span>
+                ) : shiftStatus.internal ? (
+                  <span className="px-1.5 py-0.5" style={{ background: 'hsl(var(--warn-orange) / .14)', color: 'hsl(var(--warn-orange))' }}>
+                    ENVÍO INTERNO DE REVISIÓN · aún no va al cliente
+                  </span>
+                ) : (
+                  <span className="px-1.5 py-0.5" style={{ background: 'hsl(var(--success) / .14)', color: 'hsl(var(--success))' }}>
+                    ENVÍO AL CLIENTE · {shiftStatus.destinatarios} destinatario(s)
+                  </span>
+                )}
+                <span className="bg-foreground/8 px-1.5 py-0.5">Programación 09:00 / 15:00 (apagada)</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-stretch gap-2">
+              {/* Selector de turno */}
+              <div className="inline-flex rounded-md border border-border/60 p-0.5">
+                <button
+                  onClick={() => setShiftTurno('am')}
+                  className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-[12px] font-medium transition-colors ${shiftTurno === 'am' ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                  <Sunrise className="h-3.5 w-3.5" /> Mañana
+                </button>
+                <button
+                  onClick={() => setShiftTurno('pm')}
+                  className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-[12px] font-medium transition-colors ${shiftTurno === 'pm' ? 'bg-foreground/10 text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                  <Sunset className="h-3.5 w-3.5" /> Tarde
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={shiftPreview} disabled={shiftBusy != null}>
+                  {shiftBusy === 'preview' ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Eye className="mr-1.5 h-4 w-4" />}
+                  Vista previa
+                </Button>
+                <Button size="sm" onClick={shiftSend} disabled={shiftBusy != null || shiftStatus?.telegramReady === false}>
+                  {shiftBusy === 'send' ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
+                  Enviar parte ahora
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {msg && (
         <div
