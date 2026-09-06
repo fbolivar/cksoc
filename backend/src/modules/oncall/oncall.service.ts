@@ -4,7 +4,9 @@
  * vence el SLA, se notifica al analista de guardia por correo.
  */
 import { query } from '../../config/db';
+import { env } from '../../config/env';
 import { sendEmail, isEmailConfigured } from '../notifications/email.service';
+import { sendTelegram, isTelegramConfigured } from '../notifications/telegram.service';
 
 export interface Shift {
   id: string;
@@ -73,21 +75,38 @@ async function activeAdminEmails(): Promise<string[]> {
 export interface EscalationResult { delivered: boolean; to: string[]; onCall: string | null; reason: string }
 
 /**
- * Notifica por correo al analista de guardia (o a los admins como respaldo).
+ * Escala al analista de guardia (o a los admins como respaldo). Envía por TODOS los
+ * canales vivos: Telegram (grupo del equipo) y correo. Antes iba solo por email y,
+ * con SMTP apagado, los escalamientos de incidentes fallaban en silencio.
  * Lo usa el escalamiento de incidentes (#4).
  */
 export async function notifyOnCall(subject: string, bodyText: string): Promise<EscalationResult> {
   const shift = await currentOnCall();
   const to = shift ? [shift.userEmail] : await activeAdminEmails();
   const reason = shift ? `guardia: ${shift.userName}` : 'sin guardia asignada → admins';
-  if (!isEmailConfigured() || to.length === 0) {
-    return { delivered: false, to, onCall: shift?.userName ?? null, reason: isEmailConfigured() ? 'sin destinatarios' : 'SMTP no configurado' };
+  const canales: string[] = [];
+
+  // 1) Telegram (grupo del equipo) — canal vivo; evita el fallo silencioso.
+  if (isTelegramConfigured() && env.TELEGRAM_CHAT_ID) {
+    const quien = shift ? `👤 Guardia: *${shift.userName}*` : '⚠️ Sin guardia asignada → admins';
+    try {
+      await sendTelegram([env.TELEGRAM_CHAT_ID], `🚨 *HexWatch · Escalamiento*\n${quien}\n\n*${subject}*\n${bodyText}`);
+      canales.push('telegram');
+    } catch { /* intentamos email igual */ }
   }
-  const html = `<p>${bodyText.replace(/\n/g, '<br>')}</p><hr><p style="color:#888;font-size:12px">HexWatch · escalamiento on-call (${reason})</p>`;
-  try {
-    await sendEmail(to, `[HexWatch] ${subject}`, html, bodyText);
-    return { delivered: true, to, onCall: shift?.userName ?? null, reason };
-  } catch {
-    return { delivered: false, to, onCall: shift?.userName ?? null, reason: 'fallo al enviar correo' };
+
+  // 2) Correo al analista de guardia (o admins), si SMTP está configurado.
+  if (isEmailConfigured() && to.length > 0) {
+    const html = `<p>${bodyText.replace(/\n/g, '<br>')}</p><hr><p style="color:#888;font-size:12px">HexWatch · escalamiento on-call (${reason})</p>`;
+    try {
+      await sendEmail(to, `[HexWatch] ${subject}`, html, bodyText);
+      canales.push('email');
+    } catch { /* ya pudo haber salido por telegram */ }
   }
+
+  const delivered = canales.length > 0;
+  const detalle = delivered
+    ? `${reason} · vía ${canales.join('+')}`
+    : `${reason} · sin canal de entrega activo (configura Telegram o SMTP)`;
+  return { delivered, to, onCall: shift?.userName ?? null, reason: detalle };
 }

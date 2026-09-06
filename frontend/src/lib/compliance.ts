@@ -3,7 +3,8 @@ import { api } from './api';
 
 export interface FrameworkResult {
   total: number;
-  controles: { id: string; count: number }[];
+  controlesCubiertos: number;
+  controles: { id: string; count: number; level: number }[];
 }
 export interface ComplianceData {
   hours: number;

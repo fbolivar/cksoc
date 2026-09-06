@@ -44,7 +44,7 @@ export interface PrioritizedCve {
 }
 
 export interface VulnData {
-  resumen: { total: number; critical: number; high: number; medium: number; low: number; agentes: number; cves: number; kev: number };
+  resumen: { total: number; critical: number; high: number; medium: number; low: number; agentes: number; cves: number; kev: number; exploitable: number };
   porSeveridad: { severity: Severity; count: number }[];
   topCve: { cve: string; count: number; severity: Severity; score: number | null; description: string; inKev: boolean; epss: number | null; priority: number }[];
   porAgente: { agent: string; total: number; critical: number; high: number }[];
@@ -108,6 +108,16 @@ export async function getVulnerabilities(): Promise<VulnData> {
           },
         },
       },
+      // TODOS los CVEs del entorno (liviano: sin top_hits) para priorizar sin el
+      // sesgo del corte por CVSS. Aquí sí entran los KEV/EPSS de CVSS moderado.
+      allcve: {
+        terms: { field: 'vulnerability.id', size: 4000 },
+        aggs: {
+          sev: { terms: { field: 'vulnerability.severity', size: 1 } },
+          sco: { max: { field: 'vulnerability.score.base' } },
+          ag: { cardinality: { field: 'agent.name' } },
+        },
+      },
       porAgente: {
         terms: { field: 'agent.name', size: 12 },
         aggs: {
@@ -126,6 +136,7 @@ export async function getVulnerabilities(): Promise<VulnData> {
       cves: { value: number };
       agentes: { value: number };
       cve: { buckets: (Bucket & { info: { hits: { hits: { _source: Record<string, unknown> }[] } } })[] };
+      allcve: { buckets: (Bucket & { sev: { buckets: Bucket[] }; sco: { value: number | null }; ag: { value: number } })[] };
       porAgente: { buckets: (Bucket & { critical: { doc_count: number }; high: { doc_count: number } })[] };
       paquetes: { buckets: Bucket[] };
     };
@@ -155,6 +166,7 @@ export async function getVulnerabilities(): Promise<VulnData> {
       agentes: a.agentes.value,
       cves: a.cves.value,
       kev: 0,
+      exploitable: 0,
     },
     porSeveridad: a.sev.buckets.map((b) => ({ severity: b.key as Severity, count: b.doc_count })),
     topCve: a.cve.buckets.map((b) => {
@@ -183,7 +195,16 @@ export async function getVulnerabilities(): Promise<VulnData> {
     items: data.hits.hits.map((h) => flatten(h._source)),
   };
 
-  await enrichWithIntel(result);
+  // Fuente de priorización: TODOS los CVEs (no solo el top-100 por CVSS).
+  const prioSource = a.allcve.buckets.map((b) => ({
+    cve: b.key,
+    severity: (b.sev.buckets[0]?.key ?? '-') as Severity,
+    score: b.sco.value ?? null,
+    instancias: b.doc_count,
+    agentes: b.ag.value,
+  }));
+
+  await enrichWithIntel(result, prioSource);
 
   cache = { at: Date.now(), data: result };
   return result;
@@ -194,8 +215,10 @@ export async function getVulnerabilities(): Promise<VulnData> {
  * "priorizadas" (peor instancia por CVE). Si la intel aún no está cargada, todo
  * queda con inKev=false/epss=null y la prioridad se basa solo en CVSS.
  */
-async function enrichWithIntel(result: VulnData): Promise<void> {
-  const cves = [...new Set([...result.items.map((i) => i.cve), ...result.topCve.map((c) => c.cve)].filter(Boolean))];
+interface PrioSource { cve: string; severity: Severity; score: number | null; instancias: number; agentes: number }
+
+async function enrichWithIntel(result: VulnData, prioSource: PrioSource[]): Promise<void> {
+  const cves = [...new Set([...prioSource.map((p) => p.cve), ...result.items.map((i) => i.cve), ...result.topCve.map((c) => c.cve)].filter(Boolean))];
   if (!cves.length) return;
   const intel = await getIntelMap(cves);
 
@@ -211,31 +234,58 @@ async function enrichWithIntel(result: VulnData): Promise<void> {
     c.epss = info?.epss ?? null;
     c.priority = priorityOf(c.severity, c.score, info);
   }
+  // "Top CVE": ordenar por prioridad (no por conteo) y sacar los que no tienen datos
+  // (severidad/CVSS nulos y sin intel) — dejaban prioridad negativa en el tope.
+  result.topCve = result.topCve
+    .filter((c) => c.inKev || c.epss != null || (c.score != null && c.severity !== '-'))
+    .sort((x, y) => y.priority - x.priority);
 
-  // Agrupa por CVE tomando la peor prioridad y contando instancias/agentes.
-  const byCve = new Map<string, PrioritizedCve & { _agents: Set<string> }>();
-  for (const it of result.items) {
-    const info = intel.get(it.cve.toUpperCase());
-    const cur = byCve.get(it.cve);
-    if (!cur) {
-      byCve.set(it.cve, {
-        cve: it.cve, severity: it.severity, score: it.score,
-        inKev: info?.inKev ?? false, kevDue: info?.kevDue ?? null,
-        epss: info?.epss ?? null, epssPct: info?.epssPct ?? null,
-        priority: it.priority, instancias: 1, agentes: 0, description: it.description,
-        _agents: new Set(it.agent ? [it.agent] : []),
-      });
-    } else {
-      cur.instancias++;
-      if (it.agent) cur._agents.add(it.agent);
-      if (it.priority > cur.priority) cur.priority = it.priority;
+  // Priorización REAL: sobre TODOS los CVEs del entorno (prioSource), no el top-100 por CVSS.
+  const descMap = new Map<string, string>();
+  for (const it of result.items) if (it.description && !descMap.has(it.cve)) descMap.set(it.cve, it.description);
+  for (const c of result.topCve) if (c.description && !descMap.has(c.cve)) descMap.set(c.cve, c.description);
+
+  const prio: PrioritizedCve[] = prioSource.map((p) => {
+    const info = intel.get(p.cve.toUpperCase());
+    return {
+      cve: p.cve, severity: p.severity, score: p.score,
+      inKev: info?.inKev ?? false, kevDue: info?.kevDue ?? null,
+      epss: info?.epss ?? null, epssPct: info?.epssPct ?? null,
+      priority: priorityOf(p.severity, p.score, info),
+      instancias: p.instancias, agentes: p.agentes,
+      description: descMap.get(p.cve) ?? '',
+    };
+  });
+  prio.sort((x, y) => y.priority - x.priority);
+  result.priorizadas = prio.slice(0, 30);
+
+  // Contadores honestos sobre TODO el entorno (no solo el top 30).
+  result.resumen.kev = prio.filter((p) => p.inKev).length;
+  result.resumen.exploitable = prio.filter((p) => p.inKev || (p.epss ?? 0) >= 0.5).length;
+
+  // Descripciones faltantes para el top 30 (una consulta pequeña).
+  await fillDescriptions(result.priorizadas);
+}
+
+/** Rellena la descripción de los CVEs priorizados que no la traían (1 consulta acotada). */
+async function fillDescriptions(list: PrioritizedCve[]): Promise<void> {
+  const missing = list.filter((p) => !p.description).map((p) => p.cve);
+  if (!missing.length) return;
+  try {
+    const { data } = await getStatesClient().post<{
+      aggregations: { c: { buckets: { key: string; d: { hits: { hits: { _source: Record<string, unknown> }[] } } }[] } };
+    }>(`/${INDEX}/_search`, {
+      size: 0,
+      query: { terms: { 'vulnerability.id': missing } },
+      aggs: { c: { terms: { field: 'vulnerability.id', size: missing.length }, aggs: { d: { top_hits: { size: 1, _source: ['vulnerability.description'] } } } } },
+    });
+    const dmap = new Map<string, string>();
+    for (const b of data.aggregations.c.buckets) {
+      const v = (b.d.hits.hits[0]?._source?.vulnerability ?? {}) as Record<string, unknown>;
+      if (v.description) dmap.set(b.key, v.description as string);
     }
-  }
-  result.priorizadas = [...byCve.values()]
-    .map(({ _agents, ...rest }) => ({ ...rest, agentes: _agents.size }))
-    .sort((x, y) => y.priority - x.priority)
-    .slice(0, 30);
-  result.resumen.kev = result.priorizadas.filter((p) => p.inKev).length;
+    for (const p of list) if (!p.description) p.description = dmap.get(p.cve) ?? '';
+  } catch { /* descripción es cosmética; si falla, se deja vacía */ }
 }
 
 function flatten(src: Record<string, unknown>): VulnItem {
@@ -265,7 +315,7 @@ function flatten(src: Record<string, unknown>): VulnItem {
 
 function emptyData(): VulnData {
   return {
-    resumen: { total: 0, critical: 0, high: 0, medium: 0, low: 0, agentes: 0, cves: 0, kev: 0 },
+    resumen: { total: 0, critical: 0, high: 0, medium: 0, low: 0, agentes: 0, cves: 0, kev: 0, exploitable: 0 },
     porSeveridad: [],
     topCve: [],
     porAgente: [],

@@ -133,11 +133,12 @@ export default function Vulnerabilities() {
       ) : r && (
         <>
           {/* KPIs */}
-          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-7">
             <KpiCard label="Total" value={r.total} icon={Bug} />
             <KpiCard label="Críticas" value={r.critical} color={SEV_COLOR.Critical} icon={ShieldAlert} />
             <KpiCard label="Altas" value={r.high} color={SEV_COLOR.High} icon={ShieldAlert} />
             <KpiCard label="Explotadas (KEV)" value={r.kev} color="#dc2626" icon={Flame} />
+            <KpiCard label="Explotables (EPSS↑)" value={r.exploitable} color="#ea580c" icon={Target} />
             <KpiCard label="CVEs únicas" value={r.cves} icon={Bug} />
             <KpiCard label="Activos afectados" value={r.agentes} icon={Server} />
           </div>

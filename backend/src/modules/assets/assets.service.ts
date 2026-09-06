@@ -10,6 +10,12 @@ import { getVulnerabilities } from '../vulnerabilities/vuln.service';
 import { getSca } from '../sca/sca.service';
 import { getSummary as getHygieneSummary } from '../hygiene/hygiene.service';
 
+export type AssetKind = 'servidor' | 'estacion';
+// Salud operativa REAL (no solo el estado crudo del agente):
+//  ok = reportando · apagado = estación offline reciente (normal, horario de oficina)
+//  investigar = offline demasiado tiempo · alerta = un servidor caído · fantasma = registrado y nunca conectó
+export type AssetHealth = 'ok' | 'apagado' | 'investigar' | 'alerta' | 'fantasma';
+
 export interface AssetListItem {
   id: string;
   name: string;
@@ -18,6 +24,34 @@ export interface AssetListItem {
   os: string;
   version: string;
   lastKeepAlive: string | null;
+  kind: AssetKind;
+  staleDays: number | null;   // días desde el último keepalive (null si nunca)
+  health: AssetHealth;
+  reason: string;             // explicación en lenguaje llano
+  needsAttention: boolean;    // punto ciego real (fantasma/investigar/alerta)
+}
+
+// Una estación puede estar apagada varios días (fin de semana); más de esto ya es raro.
+const STALE_DAYS = 7;
+
+/** Servidor vs estación: por SO (Linux/Windows Server) y nombre de infraestructura. */
+function classifyKind(os: string, name: string): AssetKind {
+  const o = (os || '').toLowerCase();
+  if (/ubuntu|debian|linux|centos|red\s?hat|windows server|server\b/.test(o)) return 'servidor';
+  if (/(^|[-_])(gvm-soc|pmx|srv|soc)([-_]|$)/i.test(name)) return 'servidor';
+  return 'estacion'; // Windows 10/11 Pro y demás = estación de trabajo
+}
+
+/** Clasifica la salud operativa a partir del estado + antigüedad + tipo. */
+function classifyHealth(status: string, staleDays: number | null, kind: AssetKind): { health: AssetHealth; reason: string } {
+  if (status === 'active') return { health: 'ok', reason: 'Reportando normalmente.' };
+  if (status === 'never_connected' || staleDays === null)
+    return { health: 'fantasma', reason: 'Registrado pero NUNCA reportó: instalación fallida o equipo inexistente. Limpiar el registro o reinstalar el agente.' };
+  if (staleDays >= STALE_DAYS)
+    return { health: 'investigar', reason: `Sin reportar hace ${staleDays} días: probablemente dado de baja, dañado o con el agente detenido. Revisar.` };
+  if (kind === 'servidor')
+    return { health: 'alerta', reason: `Servidor caído (sin reportar hace ${staleDays} día(s)): un servidor no debería estar desconectado.` };
+  return { health: 'apagado', reason: `Estación apagada hace ${staleDays} día(s): normal fuera de horario/fin de semana.` };
 }
 
 interface AgentApi {
@@ -29,13 +63,46 @@ export async function getAssetList(): Promise<AssetListItem[]> {
   const d = await wazuhApiGet<{ affected_items: AgentApi[] }>('/agents', {
     select: 'id,name,status,ip,os.name,version,lastKeepAlive', limit: 500, sort: 'name',
   });
+  const now = Date.now();
   return d.affected_items
     .filter((a) => a.id !== '000')
-    .map((a) => ({
-      id: a.id, name: a.name, status: a.status, ip: a.ip ?? '',
-      os: a.os?.name ?? '', version: a.version ?? '',
-      lastKeepAlive: a.lastKeepAlive && !a.lastKeepAlive.startsWith('9999') ? a.lastKeepAlive : null,
-    }));
+    .map((a) => {
+      const os = a.os?.name ?? '';
+      const lastKeepAlive = a.lastKeepAlive && !a.lastKeepAlive.startsWith('9999') ? a.lastKeepAlive : null;
+      const staleDays = lastKeepAlive ? Math.floor((now - Date.parse(lastKeepAlive)) / 86400000) : null;
+      const kind = classifyKind(os, a.name);
+      const { health, reason } = classifyHealth(a.status, staleDays, kind);
+      return {
+        id: a.id, name: a.name, status: a.status, ip: a.ip ?? '', os, version: a.version ?? '',
+        lastKeepAlive, kind, staleDays, health, reason,
+        needsAttention: health === 'fantasma' || health === 'investigar' || health === 'alerta',
+      };
+    });
+}
+
+export interface AssetCoverage {
+  total: number;
+  reporting: number;            // activos
+  servers: { total: number; reporting: number };
+  workstations: { total: number; reporting: number };
+  needsAttention: AssetListItem[];  // puntos ciegos reales (no estaciones apagadas)
+  offNormal: number;            // estaciones apagadas (normal)
+}
+
+/** Resumen de cobertura honesto: separa servidores de estaciones y aísla los puntos ciegos reales. */
+export async function getAssetCoverage(): Promise<{ coverage: AssetCoverage; assets: AssetListItem[] }> {
+  const assets = await getAssetList();
+  const servers = assets.filter((a) => a.kind === 'servidor');
+  const workstations = assets.filter((a) => a.kind === 'estacion');
+  const coverage: AssetCoverage = {
+    total: assets.length,
+    reporting: assets.filter((a) => a.status === 'active').length,
+    servers: { total: servers.length, reporting: servers.filter((a) => a.status === 'active').length },
+    workstations: { total: workstations.length, reporting: workstations.filter((a) => a.status === 'active').length },
+    needsAttention: assets.filter((a) => a.needsAttention).sort((x, y) => (y.staleDays ?? 99999) - (x.staleDays ?? 99999)),
+    offNormal: assets.filter((a) => a.health === 'apagado').length,
+  };
+  return { coverage, assets };
 }
 
 export interface AssetDetail {

@@ -20,6 +20,7 @@ export interface HealthComponent {
   detalle?: string;
 }
 
+export type AgentKind = 'servidor' | 'estacion';
 export interface AgentHealth {
   id: string;
   name: string;
@@ -27,6 +28,17 @@ export interface AgentHealth {
   lastKeepAlive: string | null;
   minutosSinReportar: number | null;
   estado: Estado;
+  kind: AgentKind;
+  motivo?: string;
+}
+
+// Una estación puede estar apagada varios días (fin de semana) sin que sea un problema.
+const AGENT_STALE_FAIL_MIN = 7 * 24 * 60; // 7 días
+function agentKind(os: string, name: string): AgentKind {
+  const o = (os || '').toLowerCase();
+  if (/ubuntu|debian|linux|centos|red\s?hat|windows server|server\b/.test(o)) return 'servidor';
+  if (/(^|[-_])(gvm-soc|pmx|srv|soc)([-_]|$)/i.test(name)) return 'servidor';
+  return 'estacion';
 }
 
 export interface SiemHealth {
@@ -55,8 +67,8 @@ const worse = (a: Estado, b: Estado): Estado =>
 // ----------------- Agentes -----------------
 export async function checkAgents(): Promise<{ comp: HealthComponent; agentes: AgentHealth[] }> {
   try {
-    const data = await wazuhApiGet<{ affected_items: Array<{ id: string; name: string; status: string; lastKeepAlive?: string }> }>(
-      '/agents', { select: 'id,name,status,lastKeepAlive', limit: 500, sort: 'id' }
+    const data = await wazuhApiGet<{ affected_items: Array<{ id: string; name: string; status: string; lastKeepAlive?: string; os?: { name?: string } }> }>(
+      '/agents', { select: 'id,name,status,lastKeepAlive,os.name', limit: 500, sort: 'id' }
     );
     const now = Date.now();
     const agentes: AgentHealth[] = data.affected_items
@@ -64,19 +76,36 @@ export async function checkAgents(): Promise<{ comp: HealthComponent; agentes: A
       .map((a) => {
         const lka = a.lastKeepAlive && !a.lastKeepAlive.startsWith('9999') ? a.lastKeepAlive : null;
         const mins = lka ? Math.round((now - new Date(lka).getTime()) / 60000) : null;
+        const kind = agentKind(a.os?.name ?? '', a.name);
+        // Salud del SIEM: distinguir lo normal (estación apagada) de lo real. Los
+        // problemas de agente son WARN (atención), no FAIL rojo — el rojo se reserva
+        // para caída de capacidad (activos por debajo del mínimo) o platform down.
         let estado: Estado = 'ok';
-        if (a.status !== 'active') estado = 'fail';
-        else if (mins != null && mins > env.HEALTH_AGENT_STALE_MIN) estado = 'warn';
-        return { id: a.id, name: a.name, status: a.status, lastKeepAlive: lka, minutosSinReportar: mins, estado };
+        let motivo: string | undefined;
+        if (a.status === 'active') {
+          if (mins != null && mins > env.HEALTH_AGENT_STALE_MIN) { estado = 'warn'; motivo = `activo pero reportó hace ${mins} min`; }
+        } else if (a.status === 'never_connected' || mins == null) {
+          estado = 'warn'; motivo = 'registrado pero nunca reportó (registro fantasma)';
+        } else if (mins >= AGENT_STALE_FAIL_MIN) {
+          estado = 'warn'; motivo = `sin reportar hace ${Math.round(mins / 1440)} días`;
+        } else if (kind === 'servidor') {
+          estado = 'warn'; motivo = 'servidor desconectado';
+        } else {
+          estado = 'ok'; motivo = 'estación apagada (normal fuera de horario)';
+        }
+        return { id: a.id, name: a.name, status: a.status, lastKeepAlive: lka, minutosSinReportar: mins, estado, kind, motivo };
       });
     const activos = agentes.filter((a) => a.status === 'active').length;
+    const apagadasNormal = agentes.filter((a) => a.status !== 'active' && a.estado === 'ok').length;
+    const atencion = agentes.filter((a) => a.estado !== 'ok');
+    // Rojo SOLO si la capacidad cae por debajo del mínimo esperado; si no, refleja lo peor real.
     const estado = agentes.reduce<Estado>((acc, a) => worse(acc, a.estado), 'ok');
     const finalEstado = activos < env.HEALTH_EXPECTED_AGENTS ? 'fail' : estado;
     return {
       comp: {
         id: 'agentes', nombre: 'Agentes Wazuh', estado: finalEstado,
-        resumen: `${activos}/${env.HEALTH_EXPECTED_AGENTS} activos`,
-        detalle: agentes.filter((a) => a.estado !== 'ok').map((a) => `${a.name}: ${a.status}${a.minutosSinReportar != null ? ` (${a.minutosSinReportar} min)` : ''}`).join('; ') || undefined,
+        resumen: `${activos}/${agentes.length} reportando${apagadasNormal ? ` · ${apagadasNormal} apagadas (normal)` : ''}${atencion.length ? ` · ${atencion.length} requieren atención` : ''}`,
+        detalle: atencion.map((a) => `${a.name}: ${a.motivo}`).join('; ') || undefined,
       },
       agentes,
     };

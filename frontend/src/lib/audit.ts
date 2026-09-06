@@ -1,6 +1,8 @@
 /** Cliente del registro de auditoria (solo admin). */
 import { api } from './api';
 
+export type AuditSensitivity = 'sensible' | 'rutina';
+
 export interface AuditItem {
   id: string;
   createdAt: string;
@@ -10,6 +12,7 @@ export interface AuditItem {
   result: 'ok' | 'fail';
   ip: string | null;
   detail: unknown;
+  sensitivity: AuditSensitivity;
 }
 
 export interface AuditQuery {
@@ -19,13 +22,14 @@ export interface AuditQuery {
   from?: string;
   to?: string;
   q?: string;
+  sensitive?: string; // '1' = solo acciones sensibles
   limit?: number;
   offset?: number;
 }
 
 export const auditApi = {
   list: (params: AuditQuery) =>
-    api.get<{ items: AuditItem[]; total: number }>('/audit', { params }).then((r) => r.data),
+    api.get<{ items: AuditItem[]; total: number; resumen: { sensibles: number; rutina: number } }>('/audit', { params }).then((r) => r.data),
   actions: () => api.get<{ actions: string[] }>('/audit/actions').then((r) => r.data.actions),
 };
 

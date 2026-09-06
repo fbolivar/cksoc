@@ -29,6 +29,8 @@ export interface AgentsSummary {
   pending: number;
 }
 
+export type AgentKind = 'servidor' | 'estacion';
+export type AgentHealth = 'ok' | 'apagado' | 'investigar' | 'alerta' | 'fantasma';
 export interface AgentItem {
   id: string;
   name: string;
@@ -37,7 +39,20 @@ export interface AgentItem {
   os: string;
   version: string;
   lastKeepAlive: string;
+  kind: AgentKind;
+  staleDays: number | null;
+  health: AgentHealth;
+  motivo: string;
+  needsAttention: boolean;
 }
+
+export const AGENT_HEALTH_META: Record<AgentHealth, { label: string; color: string }> = {
+  ok: { label: 'Reportando', color: '#22c55e' },
+  apagado: { label: 'Apagada (normal)', color: '#94a3b8' },
+  investigar: { label: 'Investigar', color: '#f59e0b' },
+  alerta: { label: 'Servidor caído', color: '#ef4444' },
+  fantasma: { label: 'Nunca conectó', color: '#d946ef' },
+};
 
 export interface SedeBucket {
   sede: string;
@@ -85,6 +100,8 @@ export const wazuhApi = {
 
   agents: (limit = 50) =>
     api.get<{ data: AgentItem[] }>('/wazuh/agents', { params: { limit } }).then((r) => r.data.data),
+  removeAgent: (id: string) =>
+    api.delete<{ ok: boolean }>(`/wazuh/agents/${encodeURIComponent(id)}`).then((r) => r.data),
 
   agentsBySede: () =>
     api.get<{ data: SedeBucket[] }>('/wazuh/agents/by-sede').then((r) => r.data.data),

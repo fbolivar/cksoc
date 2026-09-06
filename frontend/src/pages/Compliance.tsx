@@ -3,6 +3,7 @@
  * HIPAA ejercidos por las alertas, priorizados segun el contexto de PNNC.
  */
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { Scale, RefreshCw, Loader2, ExternalLink, Info } from 'lucide-react';
 import {
@@ -43,7 +44,7 @@ export default function Compliance() {
             <Scale className="h-6 w-6 text-neon" /> Cumplimiento normativo
           </h1>
           <p className="text-sm text-muted-foreground">
-            Controles de los marcos regulatorios ejercidos por el monitoreo, priorizados para HexWatch
+            Evidencia de monitoreo: controles de cada marco cubiertos por las alertas de seguridad (no es un score de cumplimiento)
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -98,9 +99,18 @@ export default function Compliance() {
               <p className="mt-1 text-muted-foreground">{meta.contexto}</p>
             </div>
             <div className="flex gap-6 text-right">
-              <div><p className="text-2xl font-semibold tabular-nums">{fw.total.toLocaleString('es-CO')}</p><p className="text-[11px] text-muted-foreground">eventos</p></div>
-              <div><p className="text-2xl font-semibold tabular-nums">{fw.controles.length}</p><p className="text-[11px] text-muted-foreground">controles</p></div>
+              <div><p className="text-2xl font-semibold tabular-nums">{fw.controlesCubiertos}</p><p className="text-[11px] text-muted-foreground">controles cubiertos</p></div>
+              <div><p className="text-2xl font-semibold tabular-nums">{fw.total.toLocaleString('es-CO')}</p><p className="text-[11px] text-muted-foreground">alertas de seguridad</p></div>
             </div>
+          </div>
+
+          {/* Reencuadre honesto: qué es y qué NO es este panel */}
+          <div className="flex items-start gap-2.5 rounded-md border border-border/60 bg-secondary/20 p-3 text-[11px] leading-relaxed text-muted-foreground">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <p>
+              Esto mide <b>cobertura de monitoreo</b>: cuántos controles del marco están siendo vigilados por alertas de seguridad reales (se excluye el ruido benigno del SO/red). <b>No es un puntaje de cumplimiento</b> — un conteo alto significa "hay actividad monitoreada en ese control", no "cumple" o "incumple". La <b>postura de configuración real</b> (¿estás configurado al estándar?) se mide en{' '}
+              <Link to="/sca" className="text-neon hover:underline">Hardening CIS (SCA)</Link>, con aprobado/fallido por control.
+            </p>
           </div>
 
           {/* Controles ejercidos */}
@@ -115,7 +125,10 @@ export default function Compliance() {
                       <span className="w-24 shrink-0 font-mono text-xs text-neon">{c.id}</span>
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="truncate text-sm">{CONTROL_DESC[c.id] ?? 'Control del marco'}</span>
+                          <span className="flex min-w-0 items-center gap-1.5 truncate text-sm">
+                            {c.level >= 8 && <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold text-white" style={{ background: c.level >= 12 ? '#dc2626' : '#f59e0b' }} title={`Máx. severidad nivel ${c.level}`}>N{c.level}</span>}
+                            <span className="truncate">{CONTROL_DESC[c.id] ?? 'Control del marco'}</span>
+                          </span>
                           <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{c.count.toLocaleString('es-CO')}</span>
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">

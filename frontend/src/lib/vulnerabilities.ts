@@ -35,7 +35,7 @@ export interface PrioritizedCve {
 }
 
 export interface VulnData {
-  resumen: { total: number; critical: number; high: number; medium: number; low: number; agentes: number; cves: number; kev: number };
+  resumen: { total: number; critical: number; high: number; medium: number; low: number; agentes: number; cves: number; kev: number; exploitable: number };
   porSeveridad: { severity: Severity; count: number }[];
   topCve: { cve: string; count: number; severity: Severity; score: number | null; description: string; inKev: boolean; epss: number | null; priority: number }[];
   porAgente: { agent: string; total: number; critical: number; high: number }[];

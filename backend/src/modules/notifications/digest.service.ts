@@ -23,16 +23,40 @@ interface DigestData {
   blocked: { ip: string; usuario: string }[];
 }
 
+// Ruido benigno consistente con los dashboards: sin esto el digest diario a Telegram
+// lo encabeza "Integrity checksum changed ×17.423" (FIM 550) y sepulta la señal real.
+const DIGEST_NOISE: unknown[] = [
+  { terms: { 'rule.id': ['81633', '80792', '550', '752', '91578'] } }, // Forti app-passed, audit systemd, FIM checksum, registry, O365 MailItemsAccessed
+  { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
+  // 100600 benigno (exfil interna/DVR/relays HexDesk). El externo real se conserva.
+  {
+    bool: {
+      filter: [
+        { term: { 'rule.id': '100600' } },
+        {
+          bool: {
+            should: [
+              { prefix: { 'data.dstip': '192.168.' } }, { prefix: { 'data.dstip': '10.' } }, { prefix: { 'data.dstip': '172.' } },
+              { terms: { 'data.dstip': ['40.160.225.24', '209.250.254.15'] } }, { term: { 'data.srcip': '192.168.0.31' } },
+            ],
+            minimum_should_match: 1,
+          },
+        },
+      ],
+    },
+  },
+];
+
 async function collect(): Promise<DigestData> {
   const client = getIndexerClient();
   const summary = await getSummary('24h');
 
-  // Altas (7-11) agrupadas por regla + agente principal
+  // Altas (7-11) agrupadas por regla + agente principal (excluyendo el ruido benigno).
   const { data } = await client.post<{
     aggregations: { r: { buckets: { key: string; doc_count: number; lvl: { value: number }; ag: { buckets: { key: string }[] } }[] } };
   }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
     size: 0,
-    query: { bool: { filter: [{ range: { timestamp: { gte: 'now-24h' } } }, { range: { 'rule.level': { gte: 7, lte: 11 } } }] } },
+    query: { bool: { filter: [{ range: { timestamp: { gte: 'now-24h' } } }, { range: { 'rule.level': { gte: 7, lte: 11 } } }], must_not: DIGEST_NOISE } },
     aggs: { r: { terms: { field: 'rule.description', size: 12 }, aggs: { lvl: { max: { field: 'rule.level' } }, ag: { terms: { field: 'agent.name', size: 1 } } } } },
   });
   const topRules = data.aggregations.r.buckets.map((b) => ({

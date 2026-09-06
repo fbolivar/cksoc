@@ -80,7 +80,7 @@ export default function OnCall() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight"><CalendarClock className="h-6 w-6 text-neon" /> On-call · Turnos</h1>
-          <p className="text-sm text-muted-foreground">Analista de guardia y escalamiento de incidentes por correo</p>
+          <p className="text-sm text-muted-foreground">Analista de guardia y escalamiento de incidentes por Telegram y correo</p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}><RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar</Button>
       </div>
@@ -99,7 +99,10 @@ export default function OnCall() {
                 <p className="text-xs text-muted-foreground">{current.userEmail} · hasta {fmt(current.endsAt)}{current.note ? ` · ${current.note}` : ''}</p>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">Sin guardia asignada — el escalamiento irá a los administradores.</p>
+              <>
+                <p className="text-sm font-medium text-amber-600">Sin guardia asignada</p>
+                <p className="text-xs text-muted-foreground">El escalamiento de incidentes críticos va a los <b>administradores</b>, por <b>Telegram</b> (grupo del equipo) y correo si está configurado. Define turnos abajo para dirigirlo a un analista responsable por franja.</p>
+              </>
             )}
           </div>
           {isAdmin && (

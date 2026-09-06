@@ -17,7 +17,8 @@ MCowBQYDK2VwAyEA0yCxygPqLEYEhy0OJFSVbxp0M6F+4t64u0B7G97A6yA=
 -----END PUBLIC KEY-----`;
 
 export interface LicensePayload { v: number; customer: string; licenseId: string; issuedAt: string; expiresAt: string }
-export type LicenseState = 'active' | 'expired' | 'none' | 'invalid';
+export type LicenseState = 'active' | 'grace' | 'expired' | 'none' | 'invalid';
+export type LicenseUrgency = 'none' | 'info' | 'warn' | 'urgent';
 export interface LicenseStatus {
   state: LicenseState;
   message: string;
@@ -26,6 +27,22 @@ export interface LicenseStatus {
   expiresAt?: string;
   daysLeft?: number;
   clockWarning?: boolean;
+  renewalWarning?: boolean; // activa pero por vencer (daysLeft <= 30)
+  urgency?: LicenseUrgency; // escala del aviso según días restantes
+  graceDaysLeft?: number; // días de gracia restantes tras el vencimiento (state='grace')
+}
+
+// Umbral de aviso proactivo: renovar antes de que el gate bloquee todo el SOC.
+const RENEWAL_WARN_DAYS = 30;
+// Periodo de gracia: tras vencer, el SOC sigue operando N días (con banner rojo)
+// para no quedar ciego por un trámite; al agotarse, el gate bloquea (402).
+const GRACE_DAYS = 7;
+const GRACE_MS = GRACE_DAYS * 86400_000;
+function renewalUrgency(daysLeft: number): LicenseUrgency {
+  if (daysLeft > RENEWAL_WARN_DAYS) return 'none';
+  if (daysLeft <= 7) return 'urgent';
+  if (daysLeft <= 14) return 'warn';
+  return 'info';
 }
 
 function b64u(s: string): Buffer { return Buffer.from(s, 'base64url'); }
@@ -84,9 +101,26 @@ async function computeStatus(): Promise<LicenseStatus> {
   const daysLeft = Math.max(0, Math.ceil((exp - trusted) / 86400_000));
   const base = { customer: v.payload.customer, issuedAt: v.payload.issuedAt, expiresAt: v.payload.expiresAt, daysLeft, clockWarning };
   if (trusted > exp) {
-    return { state: 'expired', message: `Licencia vencida el ${v.payload.expiresAt.slice(0, 10)}.`, ...base };
+    // Vencida: si aún está dentro del periodo de gracia, el SOC sigue operando.
+    if (trusted <= exp + GRACE_MS) {
+      const graceDaysLeft = Math.max(0, Math.ceil((exp + GRACE_MS - trusted) / 86400_000));
+      return {
+        state: 'grace',
+        message: `Licencia VENCIDA el ${v.payload.expiresAt.slice(0, 10)}. Periodo de gracia: ${graceDaysLeft} día(s) para renovar antes del corte del servicio.`,
+        renewalWarning: true,
+        urgency: 'urgent',
+        graceDaysLeft,
+        ...base,
+      };
+    }
+    return { state: 'expired', message: `Licencia vencida el ${v.payload.expiresAt.slice(0, 10)}. El servicio quedó bloqueado; carga un código nuevo.`, ...base };
   }
-  return { state: 'active', message: `Licencia activa · ${daysLeft} día(s) restantes.`, ...base };
+  const urgency = renewalUrgency(daysLeft);
+  const renewalWarning = urgency !== 'none';
+  const message = renewalWarning
+    ? `Licencia por vencer: ${daysLeft} día(s) restantes. Renueva antes del ${v.payload.expiresAt.slice(0, 10)} para no interrumpir el servicio.`
+    : `Licencia activa · ${daysLeft} día(s) restantes.`;
+  return { state: 'active', message, renewalWarning, urgency, ...base };
 }
 
 /** Activa un código (solo si firma válida y no vencido). Reinicia la línea de tiempo confiable. */

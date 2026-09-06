@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { Activity, RefreshCw, Loader2, Server, Network, Package, Users, ShieldCheck } from 'lucide-react';
+import { Activity, RefreshCw, Loader2, Server, Network, Package, Users, ShieldCheck, AlertTriangle } from 'lucide-react';
 import {
   hygieneApi, type Summary, type PortRow, type SoftwareRow, type UsersData, type HotfixRow,
 } from '@/lib/hygiene';
@@ -22,10 +22,10 @@ const TABS: { id: Tab; label: string }[] = [
 
 const KPI_DEFS: { key: string; label: string }[] = [
   { key: 'hosts', label: 'Activos' },
-  { key: 'packages', label: 'Software' },
+  { key: 'atencion', label: 'Necesitan atención' },
   { key: 'listening', label: 'Puertos a la escucha' },
-  { key: 'processes', label: 'Procesos' },
   { key: 'users', label: 'Usuarios' },
+  { key: 'packages', label: 'Software' },
   { key: 'hotfixes', label: 'Parches' },
 ];
 
@@ -106,30 +106,59 @@ export default function Hygiene() {
 
           {/* Sistema */}
           {tab === 'sistema' && (
-            <Card><CardContent className="overflow-x-auto p-0">
-              <table className="w-full text-sm">
-                <thead><tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
-                  <th className="p-3 font-medium">Activo</th><th className="p-3 font-medium">Sistema operativo</th>
-                  <th className="p-3 font-medium">CPU</th><th className="p-3 font-medium">RAM</th>
-                  <th className="p-3 font-medium text-right">Software</th><th className="p-3 font-medium text-right">Puertos</th>
-                  <th className="p-3 font-medium text-right">Usuarios</th><th className="p-3 font-medium text-right">Parches</th>
-                </tr></thead>
-                <tbody>
-                  {summary.hosts.map((h) => (
-                    <tr key={h.agent} className="border-b border-border/30 last:border-0">
-                      <td className="p-3 font-mono text-xs"><span className="flex items-center gap-1.5"><Server className="h-3.5 w-3.5 text-muted-foreground" />{h.hostname}</span></td>
-                      <td className="p-3 text-xs text-muted-foreground">{h.os} <span className="text-muted-foreground/50">({h.arch})</span></td>
-                      <td className="p-3 text-xs text-muted-foreground">{h.cores} núcleos<span className="block text-[10px] text-muted-foreground/50">{h.cpu}</span></td>
-                      <td className="p-3 text-xs text-muted-foreground tabular-nums">{h.ramGB} GB</td>
-                      <td className="p-3 text-right tabular-nums">{h.packages}</td>
-                      <td className="p-3 text-right tabular-nums">{h.ports}</td>
-                      <td className="p-3 text-right tabular-nums">{h.users.toLocaleString('es-CO')}</td>
-                      <td className="p-3 text-right tabular-nums">{h.hotfixes}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent></Card>
+            <>
+              {/* Necesitan atención: peor higiene, con el motivo */}
+              {summary.outliers && summary.outliers.length > 0 && (
+                <Card className="border-amber-500/40"><CardContent className="p-4">
+                  <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><AlertTriangle className="h-4 w-4 text-amber-500" /> Necesitan atención · higiene ({summary.outliers.length})</p>
+                  <div className="space-y-2">
+                    {summary.outliers.map((h) => (
+                      <div key={h.agent} className="hw-clip border border-border p-2.5" style={{ borderLeft: `3px solid ${h.hygieneScore >= 60 ? '#ef4444' : '#f59e0b'}` }}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold">{h.hostname}</span>
+                          <span className="rounded bg-secondary px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{h.kind}</span>
+                          <span className="ml-auto text-[11px] text-muted-foreground">riesgo {h.hygieneScore}</span>
+                        </div>
+                        <ul className="mt-1 space-y-0.5">
+                          {h.flags.map((f, i) => <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-muted-foreground"><span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-amber-500" />{f}</li>)}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent></Card>
+              )}
+
+              <Card><CardContent className="overflow-x-auto p-0">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
+                    <th className="p-3 font-medium">Activo</th><th className="p-3 font-medium">Sistema operativo</th>
+                    <th className="p-3 font-medium">CPU</th><th className="p-3 font-medium">RAM</th>
+                    <th className="p-3 font-medium text-right">Software</th><th className="p-3 font-medium text-right">Puertos</th>
+                    <th className="p-3 font-medium text-right">Usuarios</th><th className="p-3 font-medium text-right">Parches</th>
+                  </tr></thead>
+                  <tbody>
+                    {summary.hosts.map((h) => (
+                      <tr key={h.agent} className="border-b border-border/30 last:border-0" style={h.needsAttention ? { background: '#f59e0b0d' } : undefined}>
+                        <td className="p-3 font-mono text-xs">
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: h.hygieneScore >= 60 ? '#ef4444' : h.hygieneScore >= 25 ? '#f59e0b' : h.hygieneScore > 0 ? '#eab308' : '#22c55e' }} title={`Riesgo higiene: ${h.hygieneScore}`} />
+                            {h.hostname}
+                            {h.needsAttention && <AlertTriangle className="h-3 w-3 text-amber-500" />}
+                          </span>
+                        </td>
+                        <td className="p-3 text-xs text-muted-foreground">{h.os} <span className="text-muted-foreground/50">({h.arch})</span></td>
+                        <td className="p-3 text-xs text-muted-foreground">{h.cores} núcleos<span className="block text-[10px] text-muted-foreground/50">{h.cpu}</span></td>
+                        <td className="p-3 text-xs text-muted-foreground tabular-nums">{h.ramGB} GB</td>
+                        <td className="p-3 text-right tabular-nums">{h.packages}</td>
+                        <td className="p-3 text-right tabular-nums" style={h.ports >= 40 ? { color: '#f59e0b', fontWeight: 600 } : undefined}>{h.ports}</td>
+                        <td className="p-3 text-right tabular-nums" style={/windows/i.test(h.os) && h.users >= 15 ? { color: '#f59e0b', fontWeight: 600 } : undefined}>{h.users.toLocaleString('es-CO')}</td>
+                        <td className="p-3 text-right tabular-nums">{h.hotfixes}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent></Card>
+            </>
           )}
 
           {/* Puertos */}

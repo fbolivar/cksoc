@@ -10,13 +10,14 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
 import {
-  getBackups, postBackup, downloadBackup, getBackupIntegrity, removeBackup,
+  getBackups, postBackup, downloadBackup, getBackupIntegrity, removeBackup, getPosture,
 } from './backups.controller';
 
 export const backupsRouter = Router();
 backupsRouter.use(authenticate, requireRole('admin'));
 
 backupsRouter.get('/', getBackups);
+backupsRouter.get('/posture', getPosture);
 backupsRouter.post('/', postBackup);
 backupsRouter.get('/:id/download', downloadBackup);
 backupsRouter.get('/:id/verify', getBackupIntegrity);

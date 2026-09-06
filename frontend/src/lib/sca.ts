@@ -14,18 +14,36 @@ export interface ScaPolicy {
   endScan: string | null;
 }
 
+export type ScaImpact = 'alto' | 'medio' | 'contextual';
+
 export interface FailedCheck {
   title: string;
   count: number;
   remediation: string;
   rationale: string;
+  impact: ScaImpact;
 }
 
 export interface ScaData {
-  resumen: { agentesEvaluados: number; scorePromedio: number; totalChecks: number; pass: number; fail: number };
+  resumen: {
+    agentesEvaluados: number;
+    agentesActivos: number;
+    activosSinSca: string[];
+    scorePromedio: number;
+    totalChecks: number;
+    pass: number;
+    fail: number;
+    failAlto: number;
+  };
   agentes: ScaPolicy[];
   topFallidos: FailedCheck[];
 }
+
+export const IMPACT_META: Record<ScaImpact, { label: string; color: string }> = {
+  alto: { label: 'Alto impacto', color: '#ef4444' },
+  medio: { label: 'Medio', color: '#f97316' },
+  contextual: { label: 'Contextual', color: '#94a3b8' },
+};
 
 export const scaApi = {
   get: () => api.get<ScaData>('/sca').then((r) => r.data),

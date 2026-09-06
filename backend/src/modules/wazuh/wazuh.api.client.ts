@@ -128,6 +128,25 @@ export async function wazuhApiRestart(): Promise<void> {
   }
 }
 
+/** Elimina el REGISTRO de uno o más agentes de Wazuh (para depurar fantasmas/muertos). */
+export async function wazuhApiDelete(path: string, params?: Record<string, string | number>): Promise<unknown> {
+  const c = baseClient();
+  const jwt = await getToken();
+  try {
+    const { data } = await c.delete<{ data: unknown }>(path, { headers: { Authorization: `Bearer ${jwt}` }, params });
+    return data.data ?? data;
+  } catch (err) {
+    const e = err as { response?: { status: number } };
+    if (e.response?.status === 401) {
+      token = null;
+      const jwt2 = await getToken();
+      const { data } = await c.delete<{ data: unknown }>(path, { headers: { Authorization: `Bearer ${jwt2}` }, params });
+      return data.data ?? data;
+    }
+    mapApiError(err);
+  }
+}
+
 function mapApiError(err: unknown): never {
   if (err instanceof HttpError) throw err;
   const e = err as { code?: string; response?: { status: number } };

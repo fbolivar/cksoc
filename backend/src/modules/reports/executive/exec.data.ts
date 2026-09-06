@@ -154,9 +154,41 @@ function minutosEntre(desde: string, hasta: string): number {
 // Consultas al Indexer
 // --------------------------------------------------------------------------
 
+// Exclusión de ruido benigno CONSISTENTE con los dashboards afinados: sin esto el
+// informe inflaba ~65% las severidades (contaba el 100600 benigno interno/DVR/HexDesk
+// + churn de bajo nivel que los paneles ya ocultan). El "total de eventos" NO usa esto
+// (es throughput). Las severidades sí, para que el informe cuente la misma verdad.
 function reglasExcluidas(): unknown[] {
-  const ids = env.REPORT_EXCLUDE_RULES.split(',').map((s) => s.trim()).filter(Boolean);
-  return ids.length ? [{ bool: { must_not: [{ terms: { 'rule.id': ids } }] } }] : [];
+  const envIds = env.REPORT_EXCLUDE_RULES.split(',').map((s) => s.trim()).filter(Boolean);
+  const noiseRuleIds = ['81633', '80792', '550', '752', '91578', ...envIds]; // Forti app-passed, audit systemd, FIM checksum, registry, O365 MailItemsAccessed
+  return [{
+    bool: {
+      must_not: [
+        { terms: { 'rule.id': noiseRuleIds } },
+        { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
+        // 100600 benigno: exfil interna (egress RFC1918), DVR (srcip) y relays HexDesk. El externo real se conserva.
+        {
+          bool: {
+            filter: [
+              { term: { 'rule.id': '100600' } },
+              {
+                bool: {
+                  should: [
+                    { prefix: { 'data.dstip': '192.168.' } },
+                    { prefix: { 'data.dstip': '10.' } },
+                    { prefix: { 'data.dstip': '172.' } },
+                    { terms: { 'data.dstip': ['40.160.225.24', '209.250.254.15'] } },
+                    { term: { 'data.srcip': '192.168.0.31' } },
+                  ],
+                  minimum_should_match: 1,
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  }];
 }
 
 /** Conteos de volumen de un periodo (usado tambien para el periodo anterior). */

@@ -15,6 +15,8 @@
  */
 import { Router, type Request, type Response } from 'express';
 import { authenticate } from '../../middleware/auth';
+import { requireRole } from '../../middleware/roles';
+import { auditFromReq } from '../audit/audit.service';
 import {
   countAlerts,
   countBySeverity,
@@ -25,7 +27,7 @@ import {
   searchAlerts,
   getAlertDetail,
 } from './wazuh.service';
-import { getAgentsSummary, getAgents, getAgentsBySede } from './agents.service';
+import { getAgentsSummary, getAgents, getAgentsBySede, removeAgent } from './agents.service';
 import { HttpError } from '../auth/auth.service';
 
 export const wazuhRouter = Router();
@@ -157,6 +159,17 @@ wazuhRouter.get('/agents', async (req, res) => {
     const n = Number(req.query.limit);
     const limit = Number.isFinite(n) && n > 0 && n <= 500 ? Math.floor(n) : 50;
     res.json({ data: await getAgents(limit) });
+  } catch (err) {
+    sendError(err, res);
+  }
+});
+
+// Eliminar el registro de un agente (depurar fantasmas/muertos). Solo admin.
+wazuhRouter.delete('/agents/:id', requireRole('admin'), async (req: Request, res: Response) => {
+  try {
+    await removeAgent(String(req.params.id));
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'agent_delete', target: String(req.params.id), result: 'ok' });
+    res.json({ ok: true });
   } catch (err) {
     sendError(err, res);
   }

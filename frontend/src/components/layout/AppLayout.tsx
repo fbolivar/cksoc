@@ -27,7 +27,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   if (licLoading) {
     return <div className="flex h-screen items-center justify-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /></div>;
   }
-  if (!lic || lic.state !== 'active') {
+  if (!lic || (lic.state !== 'active' && lic.state !== 'grace')) {
     return <LockScreen status={lic} onActivated={setLic} />;
   }
 
@@ -61,11 +61,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <Topbar onMenuClick={() => setMobileOpen(true)} />
-          {lic.daysLeft != null && lic.daysLeft <= 15 && (
-            <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-center text-xs text-amber-700">
-              Licencia por vencer: {lic.daysLeft} día(s) restantes{lic.expiresAt ? ` (${lic.expiresAt.slice(0, 10)})` : ''}. Renueva en Operación → Licenciamiento.
+          {lic.state === 'grace' && (
+            <div className="border-b border-red-500/40 bg-red-500/10 px-4 py-1.5 text-center text-xs font-medium text-red-700">
+              ⚠ Licencia <b>VENCIDA</b>{lic.expiresAt ? ` el ${lic.expiresAt.slice(0, 10)}` : ''} · periodo de gracia: <b className="tabular-nums">{lic.graceDaysLeft} día(s)</b> antes del corte del servicio. Renueva YA en Operación → Licenciamiento.
             </div>
           )}
+          {lic.state === 'active' && lic.renewalWarning && lic.daysLeft != null && (() => {
+            const u = lic.urgency ?? 'info';
+            const style = u === 'urgent'
+              ? 'border-red-500/40 bg-red-500/10 text-red-700 font-medium'
+              : u === 'warn'
+                ? 'border-orange-500/40 bg-orange-500/10 text-orange-700'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-700';
+            return (
+              <div className={`border-b px-4 py-1.5 text-center text-xs ${style}`}>
+                {u === 'urgent' ? '⚠ ' : ''}Licencia por vencer: <b className="tabular-nums">{lic.daysLeft} día(s)</b> restantes{lic.expiresAt ? ` (vence ${lic.expiresAt.slice(0, 10)})` : ''}.
+                {u === 'urgent' ? ' El servicio se bloqueará al vencer — ' : ' '}Renueva en Operación → Licenciamiento.
+              </div>
+            );
+          })()}
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
             <Suspense
               fallback={

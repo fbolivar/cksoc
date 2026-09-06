@@ -17,6 +17,8 @@ function fmt(iso: string): string {
 export default function Audit() {
   const [items, setItems] = useState<AuditItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [resumen, setResumen] = useState<{ sensibles: number; rutina: number }>({ sensibles: 0, rutina: 0 });
+  const [sensitiveOnly, setSensitiveOnly] = useState(true);
   const [loading, setLoading] = useState(true);
   const [actions, setActions] = useState<string[]>([]);
   const [page, setPage] = useState(0);
@@ -32,16 +34,18 @@ export default function Audit() {
         actor: f.actor || undefined,
         result: f.result || undefined,
         q: f.q || undefined,
+        sensitive: sensitiveOnly ? '1' : undefined,
         limit: PAGE,
         offset: page * PAGE,
       };
       const data = await auditApi.list(query);
       setItems(data.items);
       setTotal(data.total);
+      setResumen(data.resumen);
     } finally {
       setLoading(false);
     }
-  }, [f, page]);
+  }, [f, page, sensitiveOnly]);
 
   useEffect(() => {
     void load();
@@ -60,11 +64,25 @@ export default function Audit() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <div>
-        <h1 className="hw-mono text-2xl font-bold tracking-tight">Auditoría</h1>
-        <p className="text-sm text-muted-foreground">
-          Quién hizo qué en la plataforma — inicios de sesión, cambios de usuarios, respaldos y más
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="hw-mono text-2xl font-bold tracking-tight">Auditoría</h1>
+          <p className="text-sm text-muted-foreground">
+            Quién hizo qué en la plataforma — las acciones sensibles (bloqueos, borrados, cambios de reglas) primero
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">
+            <b style={{ color: '#ef4444' }}>{resumen.sensibles}</b> sensibles · {resumen.rutina} de rutina
+          </span>
+          <button
+            onClick={() => { setPage(0); setSensitiveOnly((v) => !v); }}
+            title={sensitiveOnly ? 'Mostrando solo acciones consecuentes (bloqueos, borrados, cambios). Clic para incluir logins y consultas.' : 'Mostrando todo, incluidos logins y chats. Clic para ver solo lo sensible.'}
+            className={`flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs ${sensitiveOnly ? 'border-brand/50 bg-brand/15 text-brand' : 'border-input bg-background text-muted-foreground'}`}
+          >
+            {sensitiveOnly ? '◉ Solo sensibles' : '○ Ver todo'}
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -138,10 +156,15 @@ export default function Audit() {
               </thead>
               <tbody>
                 {items.map((it) => (
-                  <tr key={it.id} className="border-b border-border/30 hover:bg-secondary/40">
+                  <tr key={it.id} className="border-b border-border/30 hover:bg-secondary/40" style={it.sensitivity === 'sensible' ? { boxShadow: 'inset 3px 0 0 #ef4444' } : undefined}>
                     <td className="whitespace-nowrap px-4 py-2 text-xs text-muted-foreground">{fmt(it.createdAt)}</td>
                     <td className="px-4 py-2">{it.actorEmail ?? '—'}</td>
-                    <td className="px-4 py-2">{actionLabel(it.action)}</td>
+                    <td className="px-4 py-2">
+                      <span className="flex items-center gap-1.5">
+                        {it.sensitivity === 'sensible' && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" title="Acción sensible" />}
+                        {actionLabel(it.action)}
+                      </span>
+                    </td>
                     <td className="px-4 py-2">
                       <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
                         it.result === 'ok' ? 'bg-primary/15 text-primary' : 'bg-destructive/15 text-destructive'

@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { ClipboardCheck, RefreshCw, Loader2, Server, Wrench } from 'lucide-react';
-import { scaApi, scoreColor, type ScaData } from '@/lib/sca';
+import { scaApi, scoreColor, IMPACT_META, type ScaData } from '@/lib/sca';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { KpiCard } from '@/components/shared/KpiCard';
@@ -60,13 +60,20 @@ export default function Sca() {
       ) : r && data && (
         <>
           {/* KPIs */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <KpiCard label="Cumplimiento promedio" value={`${r.scorePromedio}%`} color={scoreColor(r.scorePromedio)} />
-            <KpiCard label="Activos evaluados" value={r.agentesEvaluados} />
+            <KpiCard label="Activos evaluados" value={`${r.agentesEvaluados}/${r.agentesActivos}`} />
+            <KpiCard label="Fallos alto impacto" value={r.failAlto} color="#ef4444" />
             <KpiCard label="Checks evaluados" value={r.totalChecks.toLocaleString('es-CO')} />
             <KpiCard label="Aprobados" value={r.pass.toLocaleString('es-CO')} color="#22c55e" />
             <KpiCard label="Fallidos" value={r.fail.toLocaleString('es-CO')} color="#ef4444" />
           </div>
+
+          {r.activosSinSca.length > 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+              Activos sin evaluación de hardening (sin política SCA): <b className="hw-mono">{r.activosSinSca.join(', ')}</b> — despliega el policy CIS para tener su postura.
+            </div>
+          )}
 
           {/* Postura por activo */}
           <Card>
@@ -108,10 +115,11 @@ export default function Sca() {
                   {data.topFallidos.map((c, i) => (
                     <div key={c.title} className="py-2.5">
                       <button onClick={() => setOpen(open === i ? null : i)} className="flex w-full items-start gap-3 text-left">
-                        <span className="mt-0.5 inline-flex h-5 min-w-[2rem] items-center justify-center rounded bg-red-500/15 px-1.5 text-[11px] font-semibold text-red-400">
+                        <span className="mt-0.5 inline-flex h-5 min-w-[2rem] items-center justify-center rounded px-1.5 text-[11px] font-semibold text-white" style={{ background: IMPACT_META[c.impact].color }} title={`${c.count} equipo(s) fallan este check`}>
                           {c.count}
                         </span>
                         <span className="flex-1 text-sm">{c.title}</span>
+                        <span className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase" style={{ color: IMPACT_META[c.impact].color, background: `${IMPACT_META[c.impact].color}1f` }}>{IMPACT_META[c.impact].label}</span>
                       </button>
                       {open === i && (c.remediation || c.rationale) && (
                         <div className="mt-2 ml-11 space-y-1.5 rounded-md border border-border/50 bg-secondary/30 p-3 text-xs">

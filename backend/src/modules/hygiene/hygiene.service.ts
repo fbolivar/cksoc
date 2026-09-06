@@ -31,6 +31,8 @@ async function termsByAgent(index: string, query?: unknown): Promise<{ map: Map<
 }
 
 // ----------------- Resumen: sistema + hardware + conteos -----------------
+export type HostKind = 'servidor' | 'estacion';
+
 export interface HostInfo {
   agent: string;
   hostname: string;
@@ -43,9 +45,43 @@ export interface HostInfo {
   ports: number;
   users: number;
   hotfixes: number;
+  kind: HostKind;
+  hygieneScore: number;   // 0 = limpio; más alto = peor higiene
+  flags: string[];        // problemas concretos, en lenguaje llano
+  needsAttention: boolean;
 }
 
-export async function getSummary(): Promise<{ kpis: Record<string, number>; hosts: HostInfo[] }> {
+function classifyKind(os: string): HostKind {
+  const o = (os || '').toLowerCase();
+  if (/ubuntu|debian|linux|centos|red\s?hat|windows server|server\b/.test(o)) return 'servidor';
+  return 'estacion';
+}
+
+/**
+ * Riesgo de higiene por host: superficie de ataque (puertos), proliferación de
+ * cuentas, parches y SO fuera de soporte. Umbrales según tipo (un servidor
+ * legítimamente tiene más puertos/cuentas de sistema que una estación).
+ */
+function assessHygiene(h: Omit<HostInfo, 'kind' | 'hygieneScore' | 'flags' | 'needsAttention'>): { kind: HostKind; hygieneScore: number; flags: string[] } {
+  const kind = classifyKind(h.os);
+  const isWin = /windows/i.test(h.os);
+  const flags: string[] = [];
+  let score = 0;
+
+  // SO fuera de soporte: Windows 10 terminó soporte en oct-2025 (sin parches de seguridad).
+  if (/windows\s*10/i.test(h.os)) { flags.push('SO fuera de soporte: Windows 10 (sin actualizaciones de seguridad desde oct-2025)'); score += 40; }
+  // Superficie de ataque: puertos a la escucha (umbral mayor para servidores).
+  const portLimit = kind === 'servidor' ? 40 : 35;
+  if (h.ports >= portLimit) { flags.push(`${h.ports} puertos a la escucha — superficie de ataque alta`); score += 20; }
+  // Proliferación de cuentas locales (en Windows; en Linux "users" incluye cuentas de sistema).
+  if (isWin && h.users >= 15) { flags.push(`${h.users} cuentas locales — revisar cuentas viejas/compartidas`); score += 25; }
+  // Parches: solo tiene sentido en Windows (Linux usa paquetes, hotfix=0 es normal).
+  if (isWin && h.hotfixes > 0 && h.hotfixes < 25) { flags.push(`solo ${h.hotfixes} actualizaciones instaladas — posible equipo sin parches recientes`); score += 10; }
+
+  return { kind, hygieneScore: score, flags };
+}
+
+export async function getSummary(): Promise<{ kpis: Record<string, number>; hosts: HostInfo[]; outliers: HostInfo[] }> {
   const client = getStatesClient();
   const listening = { term: { 'interface.state': 'listening' } };
 
@@ -75,7 +111,7 @@ export async function getSummary(): Promise<{ kpis: Record<string, number>; host
     const s = h._source as { agent?: { name?: string }; host?: { hostname?: string; architecture?: string; os?: { name?: string; kernel?: { release?: string } } } };
     const agent = s.agent?.name ?? '';
     const hwInfo = hw_by.get(agent);
-    return {
+    const base = {
       agent,
       hostname: s.host?.hostname ?? agent,
       os: s.host?.os?.name ?? '',
@@ -88,8 +124,12 @@ export async function getSummary(): Promise<{ kpis: Record<string, number>; host
       users: usr.map.get(agent) ?? 0,
       hotfixes: htf.map.get(agent) ?? 0,
     };
+    const { kind, hygieneScore, flags } = assessHygiene(base);
+    return { ...base, kind, hygieneScore, flags, needsAttention: hygieneScore >= 25 };
   });
-  hosts.sort((a, b) => a.hostname.localeCompare(b.hostname));
+  // Peor higiene primero; a igual score, alfabético.
+  hosts.sort((a, b) => b.hygieneScore - a.hygieneScore || a.hostname.localeCompare(b.hostname));
+  const outliers = hosts.filter((h) => h.needsAttention);
 
   return {
     kpis: {
@@ -99,8 +139,10 @@ export async function getSummary(): Promise<{ kpis: Record<string, number>; host
       processes: prc.total,
       users: usr.total,
       hotfixes: htf.total,
+      atencion: outliers.length,
     },
     hosts,
+    outliers,
   };
 }
 

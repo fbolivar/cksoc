@@ -4,9 +4,9 @@
  * verificar su integridad (sha256), descargarlos y eliminarlos.
  */
 import { useEffect, useState } from 'react';
-import { Database, Download, Trash2, ShieldCheck, Plus, Loader2, RefreshCw, HardDriveDownload } from 'lucide-react';
+import { Database, Download, Trash2, ShieldCheck, Plus, Loader2, RefreshCw, HardDriveDownload, AlertTriangle, Clock, CloudOff } from 'lucide-react';
 import { AxiosError } from 'axios';
-import { backupsApi, type BackupItem } from '@/lib/backups';
+import { backupsApi, type BackupItem, type RecoveryPosture } from '@/lib/backups';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -29,6 +29,7 @@ function fmtDate(iso: string): string {
 
 export default function Backups() {
   const [items, setItems] = useState<BackupItem[]>([]);
+  const [posture, setPosture] = useState<RecoveryPosture | null>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [note, setNote] = useState('');
@@ -44,6 +45,7 @@ export default function Backups() {
     setLoading(true);
     try {
       setItems(await backupsApi.list());
+      backupsApi.posture().then(setPosture).catch(() => setPosture(null));
     } catch {
       flash('err', 'No se pudieron cargar los respaldos');
     } finally {
@@ -138,6 +140,44 @@ export default function Backups() {
           {msg.text}
         </div>
       )}
+
+      {/* Postura de recuperación: la verdad sobre qué tan protegido está el SOC */}
+      {posture && (() => {
+        const c = posture.estado === 'fail' ? '#ef4444' : posture.estado === 'warn' ? '#f59e0b' : '#22c55e';
+        return (
+          <div className="rounded-lg border p-4" style={{ borderColor: `${c}55`, background: `${c}0d` }}>
+            <div className="mb-3 flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" style={{ color: c }} />
+              <p className="text-sm font-semibold">Postura de recuperación</p>
+              <span className="ml-auto hw-mono text-[10px] uppercase tracking-widest" style={{ color: c }}>
+                {posture.estado === 'ok' ? 'protegido' : posture.estado === 'warn' ? 'atención' : 'en riesgo'}
+              </span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div><p className="flex items-center gap-1 text-[10px] uppercase text-muted-foreground"><Clock className="h-3 w-3" /> Último respaldo</p>
+                <p className="text-sm font-semibold" style={{ color: posture.fresh ? '#22c55e' : '#f59e0b' }}>{posture.lastBackupAgeHours != null ? `hace ${Math.round(posture.lastBackupAgeHours)}h` : 'ninguno'}</p>
+                <p className="text-[10px] text-muted-foreground/70">{posture.fresh ? 'fresco' : 'revisar el automático'}</p></div>
+              <div><p className="text-[10px] uppercase text-muted-foreground">Respaldos</p>
+                <p className="text-sm font-semibold">{posture.totalBackups} <span className="font-normal text-muted-foreground">/ {posture.retention} ret.</span></p>
+                <p className="text-[10px] text-muted-foreground/70">{(posture.totalBytes / 1048576).toFixed(1)} MB</p></div>
+              <div><p className="text-[10px] uppercase text-muted-foreground">Integridad</p>
+                <p className="text-sm font-semibold">{posture.integrity.corrupto > 0 ? <span className="text-red-500">{posture.integrity.corrupto} corrupto</span> : posture.integrity.ok > 0 ? <span className="text-emerald-500">{posture.integrity.ok} verificado</span> : <span className="text-muted-foreground">sin verificar</span>}</p>
+                <p className="text-[10px] text-muted-foreground/70">sha256</p></div>
+              <div><p className="flex items-center gap-1 text-[10px] uppercase text-muted-foreground"><CloudOff className="h-3 w-3" /> Copia externa</p>
+                <p className="text-sm font-semibold" style={{ color: posture.offsite ? '#22c55e' : '#f59e0b' }}>{posture.offsite ? 'sí' : 'no'}</p>
+                <p className="text-[10px] text-muted-foreground/70 truncate" title={posture.location}>{posture.location}</p></div>
+            </div>
+            {posture.warnings.length > 0 && (
+              <ul className="mt-3 space-y-1.5 border-t border-border/40 pt-3">
+                {posture.warnings.map((w, i) => (
+                  <li key={i} className="flex gap-2 text-[11px] leading-snug text-muted-foreground"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" /><span>{w}</span></li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-[10px] text-muted-foreground/60"><b>Alcance:</b> {posture.scope}</p>
+          </div>
+        );
+      })()}
 
       {/* Crear respaldo */}
       <div className="glass rounded-lg p-4">

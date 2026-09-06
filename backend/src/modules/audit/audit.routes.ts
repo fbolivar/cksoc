@@ -27,6 +27,7 @@ auditRouter.get('/', async (req: Request, res: Response) => {
       from: str(req, 'from'),
       to: str(req, 'to'),
       q: str(req, 'q'),
+      sensitiveOnly: str(req, 'sensitive') === '1',
       limit: num(req, 'limit'),
       offset: num(req, 'offset'),
     });

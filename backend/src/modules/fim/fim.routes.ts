@@ -13,8 +13,9 @@ fimRouter.use(authenticate);
 fimRouter.get('/', async (req: Request, res: Response) => {
   const h = Number(req.query.hours);
   const hours = Number.isFinite(h) && h > 0 && h <= 720 ? Math.floor(h) : 168;
+  const signalOnly = req.query.signal !== '0'; // lente "solo señal" por defecto; ?signal=0 = ver todo
   try {
-    res.json(await getFim(hours));
+    res.json(await getFim(hours, signalOnly));
   } catch (err) {
     if (err instanceof HttpError) {
       res.status(err.status).json({ error: err.message });

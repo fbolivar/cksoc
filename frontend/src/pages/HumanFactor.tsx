@@ -4,8 +4,9 @@
  * Resumen Ejecutivo (tasa de clics, reporte por usuarios, % capacitados).
  */
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Users, RefreshCw, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Users, RefreshCw, Loader2, Plus, Trash2, Lightbulb, UserSearch, Target, KeyRound, ArrowRight } from 'lucide-react';
 import { phishingApi, type Campaign, type HumanFactor } from '@/lib/phishing';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -87,6 +88,28 @@ export default function HumanFactor() {
         <Kpi label="% empleados capacitados" value={metrics ? pct(metrics.trainedPct) : '—'} />
         <Kpi label="Postura factor humano" value={metrics ? `${metrics.posture}/100` : '—'} sub={metrics ? `${metrics.campaigns} campañas · ${metrics.totalSent} envíos` : 'sin campañas'} />
       </div>
+
+      {/* Estado vacío honesto: sin campañas no hay postura; se explica y se enlaza al riesgo humano REAL. */}
+      {!metrics && !loading && (
+        <Card className="border-amber-500/30"><CardContent className="space-y-3 p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold"><Lightbulb className="h-4 w-4 text-amber-500" /> Aún sin datos de simulación</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Este módulo mide el riesgo ante phishing con <b>simulaciones</b>: se envía un correo señuelo y se mide quién hace clic y quién lo reporta.
+            No se alimenta de la telemetría automática — necesita que corras una campaña y registres el resultado abajo. Por eso los indicadores están en «—»: no es un error, es que aún no hay campañas.
+          </p>
+          <div className="rounded-md border border-border bg-secondary/20 p-3">
+            <p className="mb-2 text-[11px] font-medium text-muted-foreground">Mientras tanto, el factor humano de comportamiento <b>real</b> (usuarios riesgosos por su conducta y sus credenciales) sí lo tienes en vivo:</p>
+            <div className="flex flex-wrap gap-2">
+              <Link to="/comportamiento" className="inline-flex items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-xs hover:border-primary/40 hover:text-primary"><UserSearch className="h-3.5 w-3.5" /> Comportamiento (UEBA) <ArrowRight className="h-3 w-3" /></Link>
+              <Link to="/riesgo-entidad" className="inline-flex items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-xs hover:border-primary/40 hover:text-primary"><Target className="h-3.5 w-3.5" /> Riesgo por entidad <ArrowRight className="h-3 w-3" /></Link>
+              <Link to="/exposicion-credenciales" className="inline-flex items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-xs hover:border-primary/40 hover:text-primary"><KeyRound className="h-3.5 w-3.5" /> Exposición de credenciales <ArrowRight className="h-3 w-3" /></Link>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground/80">
+            <b>Para empezar:</b> corre una simulación de phishing (con <span className="hw-mono">GoPhish</span> gratuito, o el <span className="hw-mono">Attack Simulation Training</span> de Microsoft 365 si tienen la licencia) y registra <b>enviados / clics / reportes</b> abajo. Con la primera campaña este panel cobra vida.
+          </p>
+        </CardContent></Card>
+      )}
 
       {/* Registrar campaña */}
       {canManage && (

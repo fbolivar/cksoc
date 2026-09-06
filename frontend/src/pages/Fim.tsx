@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { FileSearch, RefreshCw, Loader2, Server, User, FilePlus2, FilePen, FileX2, ShieldAlert } from 'lucide-react';
-import { fimApi, EVENT_META, type FimData } from '@/lib/fim';
+import { fimApi, EVENT_META, CRIT_META, type FimData } from '@/lib/fim';
 import { alertsApi, type AlertHit } from '@/lib/alerts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ function EventChip({ e }: { e: string }) {
 
 export default function Fim() {
   const [range, setRange] = useState<Range>('7d');
+  const [signalOnly, setSignalOnly] = useState(true);
   const [data, setData] = useState<FimData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,14 +42,14 @@ export default function Fim() {
       .then((res) => setRepoDel({ total: res.total, items: res.items }))
       .catch(() => setRepoDel(null));
     try {
-      setData(await fimApi.get(HOURS[r]));
+      setData(await fimApi.get(HOURS[r], signalOnly));
     } catch (e) {
       setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo cargar FIM');
     } finally {
       setLoading(false);
     }
   }
-  useEffect(() => { load(range); }, [range]);
+  useEffect(() => { load(range); /* eslint-disable-next-line */ }, [range, signalOnly]);
 
   const r = data?.resumen;
   const maxAg = Math.max(1, ...(data?.porAgente ?? []).map((a) => a.count));
@@ -65,6 +66,13 @@ export default function Fim() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSignalOnly((v) => !v)}
+            title={signalOnly ? 'Solo señal: oculta el churn benigno del SO (heartbeat Proxmox, diagnóstico VSS, servicios). Clic para ver TODO.' : 'Viendo todo (incluye churn del SO). Clic para volver a solo señal.'}
+            className={`flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs ${signalOnly ? 'border-brand/50 bg-brand/15 text-brand' : 'border-input bg-background text-muted-foreground'}`}
+          >
+            {signalOnly ? '◉ Solo señal' : '○ Ver todo'}
+          </button>
           <RangeTabs value={range} onChange={setRange} options={RANGE_24_7_30} />
           <Button variant="outline" size="sm" onClick={() => load(range)} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
@@ -115,13 +123,19 @@ export default function Fim() {
         </CardContent></Card>
       ) : r && data && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
             <KpiCard label="Cambios totales" value={r.total} icon={FileSearch} />
+            <KpiCard label="Críticos (recientes)" value={r.criticos} color={CRIT_META.critica.color} icon={ShieldAlert} />
             <KpiCard label="Añadidos" value={r.added} color={EVENT_META.added.color} icon={FilePlus2} />
             <KpiCard label="Modificados" value={r.modified} color={EVENT_META.modified.color} icon={FilePen} />
             <KpiCard label="Eliminados" value={r.deleted} color={EVENT_META.deleted.color} icon={FileX2} />
             <KpiCard label="Activos" value={r.agentes} icon={Server} />
           </div>
+          <p className="text-[11px] text-muted-foreground/70">
+            {signalOnly
+              ? 'Solo señal: se oculta el churn benigno del SO (heartbeat de Proxmox, diagnóstico VSS, servicios de sistema). Los cambios en rutas sensibles (autorun, tareas, hosts, credenciales) van primero.'
+              : 'Viendo todo, incluido el churn del SO. Usa «Solo señal» para ver únicamente los cambios que importan.'}
+          </p>
 
           <div className="grid gap-4 lg:grid-cols-2">
             {/* Por agente */}
@@ -149,6 +163,7 @@ export default function Fim() {
                 {data.topPaths.map((p) => (
                   <div key={p.path} className="flex items-center gap-2 text-xs">
                     <span className="tabular-nums rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">{p.count}</span>
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: CRIT_META[p.criticality].color }} title={CRIT_META[p.criticality].label} />
                     <span className="truncate font-mono text-muted-foreground" title={p.path}>{p.path}</span>
                   </div>
                 ))}
@@ -173,11 +188,14 @@ export default function Fim() {
                   </thead>
                   <tbody>
                     {data.recientes.map((c, i) => (
-                      <tr key={`${c.timestamp}-${c.path}-${i}`} className="border-b border-border/30 last:border-0">
+                      <tr key={`${c.timestamp}-${c.path}-${i}`} className="border-b border-border/30 last:border-0" style={c.criticality === 'critica' ? { background: `${CRIT_META.critica.color}0d` } : undefined}>
                         <td className="py-2 pr-3"><EventChip e={c.event} /></td>
                         <td className="py-2 pr-3 max-w-md">
-                          <span className="block truncate font-mono text-xs" title={c.path}>{c.path}</span>
-                          {c.mode && <span className="text-[10px] text-muted-foreground/50">{c.mode}</span>}
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: CRIT_META[c.criticality].color }} title={`Criticidad: ${CRIT_META[c.criticality].label}`} />
+                            <span className="block truncate font-mono text-xs" title={c.path}>{c.path}</span>
+                          </span>
+                          {c.mode && <span className="ml-3.5 text-[10px] text-muted-foreground/50">{c.mode}</span>}
                         </td>
                         <td className="py-2 pr-3 text-xs text-muted-foreground">
                           {c.user ? <span className="flex items-center gap-1"><User className="h-3 w-3" />{c.user}</span> : '—'}

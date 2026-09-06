@@ -20,18 +20,45 @@ export interface ScaPolicy {
   endScan: string | null;
 }
 
+export type ScaImpact = 'alto' | 'medio' | 'contextual';
+
 export interface FailedCheck {
   title: string;
   count: number;
   remediation: string;
   rationale: string;
+  impact: ScaImpact;
 }
 
 export interface ScaData {
-  resumen: { agentesEvaluados: number; scorePromedio: number; totalChecks: number; pass: number; fail: number };
+  resumen: {
+    agentesEvaluados: number;
+    agentesActivos: number;
+    activosSinSca: string[];   // activos sin política SCA (punto ciego de hardening)
+    scorePromedio: number;
+    totalChecks: number;
+    pass: number;
+    fail: number;
+    failAlto: number;          // tipos de check de ALTO impacto que fallan
+  };
   agentes: ScaPolicy[];
   topFallidos: FailedCheck[];
 }
+
+// Clasifica un check CIS por impacto de seguridad real (los checks de Wazuh no
+// traen severidad propia). Alto = ataca la superficie que un adversario usa
+// (auth/NTLM, acceso remoto, privilegios, red, auditoría). Contextual = depende
+// de infraestructura (BitLocker) o es de UI/telemetría/módulos L2, baja prioridad.
+const RE_CONTEXTUAL = /bitlocker|widget|universal windows|\buwp\b|cortana|cloud consumer|telemetry|onedrive|xbox|lock screen|start layout|kernel module|cramfs|freevxfs|jffs2|\bhfs\b|\budf\b|squashfs|gfs2|usb.*storage|screen ?saver|toast|spotlight/i;
+const RE_ALTO = /lan manager|ntlm|kerberos|password|lockout|credential|anonymous|guest account|null session|\bsmb\b|remote desktop|\brdp\b|telnet|\bssh\b|root login|\bsudo\b|\buac\b|user account control|privilege|administrator|firewall|\baudit\b|logging|log ?on|logoff|remote access|winrm|powershell|\brpc\b|kerberos|encryption oracle|restrict.*client|controlled folder/i;
+
+export function impactFor(title: string): ScaImpact {
+  const t = title || '';
+  if (RE_CONTEXTUAL.test(t)) return 'contextual';
+  if (RE_ALTO.test(t)) return 'alto';
+  return 'medio';
+}
+const IMPACT_RANK: Record<ScaImpact, number> = { alto: 0, medio: 1, contextual: 2 };
 
 interface AgentRow { id: string; name: string; os?: { platform?: string } }
 interface PolicyRow {
@@ -87,8 +114,18 @@ export async function getSca(): Promise<ScaData> {
     ? Math.round(policies.reduce((s, p) => s + p.score, 0) / policies.length)
     : 0;
 
+  // Cobertura honesta: qué agentes ACTIVOS no tienen política SCA (punto ciego).
+  const conSca = new Set(policies.map((p) => p.agentId));
+  const activosSinSca = agents.filter((a) => !conSca.has(a.id)).map((a) => a.name);
+  const failAlto = topFallidos.filter((c) => c.impact === 'alto').length;
+
   const result: ScaData = {
-    resumen: { agentesEvaluados: policies.length, scorePromedio, totalChecks, pass, fail },
+    resumen: {
+      agentesEvaluados: conSca.size,
+      agentesActivos: agents.length,
+      activosSinSca,
+      scorePromedio, totalChecks, pass, fail, failAlto,
+    },
     agentes: policies,
     topFallidos,
   };
@@ -117,12 +154,12 @@ async function topFailedChecks(): Promise<FailedCheck[]> {
       },
       aggs: {
         chk: {
-          terms: { field: 'data.sca.check.title', size: 15 },
+          terms: { field: 'data.sca.check.title', size: 40 },
           aggs: { info: { top_hits: { size: 1, _source: ['data.sca.check.remediation', 'data.sca.check.rationale'] } } },
         },
       },
     });
-    return data.aggregations.chk.buckets.map((b) => {
+    const checks: FailedCheck[] = data.aggregations.chk.buckets.map((b) => {
       const src = b.info.hits.hits[0]?._source ?? {};
       const sca = (((src.data as Record<string, unknown>)?.sca as Record<string, unknown>)?.check ?? {}) as Record<string, unknown>;
       return {
@@ -130,8 +167,12 @@ async function topFailedChecks(): Promise<FailedCheck[]> {
         count: b.doc_count,
         remediation: (sca.remediation as string) ?? '',
         rationale: (sca.rationale as string) ?? '',
+        impact: impactFor(b.key),
       };
     });
+    // Orden por impacto (alto primero), luego por cuántos equipos lo fallan.
+    checks.sort((a, b) => IMPACT_RANK[a.impact] - IMPACT_RANK[b.impact] || b.count - a.count);
+    return checks;
   } catch {
     return [];
   }

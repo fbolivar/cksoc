@@ -6,7 +6,7 @@ import { logger } from '../../config/logger';
 import { auditFromReq } from '../audit/audit.service';
 import {
   createBackup, listBackups, deleteBackup, verifyBackup,
-  backupFilePath, backupExists, HttpBackupError,
+  backupFilePath, backupExists, HttpBackupError, getRecoveryPosture,
 } from './backups.service';
 
 export async function getBackups(_req: Request, res: Response): Promise<void> {
@@ -15,6 +15,15 @@ export async function getBackups(_req: Request, res: Response): Promise<void> {
   } catch (err) {
     logger.error({ err }, 'No se pudo listar respaldos');
     res.status(500).json({ error: 'No se pudieron listar los respaldos' });
+  }
+}
+
+export async function getPosture(_req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await getRecoveryPosture());
+  } catch (err) {
+    logger.error({ err }, 'No se pudo calcular la postura de recuperación');
+    res.status(500).json({ error: 'No se pudo calcular la postura de recuperación' });
   }
 }
 

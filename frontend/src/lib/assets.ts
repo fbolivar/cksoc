@@ -1,8 +1,21 @@
 /** Tipos y API de Asset 360 (vista por activo). */
 import { api } from './api';
 
+export type AssetKind = 'servidor' | 'estacion';
+export type AssetHealth = 'ok' | 'apagado' | 'investigar' | 'alerta' | 'fantasma';
+
 export interface AssetListItem {
   id: string; name: string; status: string; ip: string; os: string; version: string; lastKeepAlive: string | null;
+  kind: AssetKind; staleDays: number | null; health: AssetHealth; reason: string; needsAttention: boolean;
+}
+
+export interface AssetCoverage {
+  total: number;
+  reporting: number;
+  servers: { total: number; reporting: number };
+  workstations: { total: number; reporting: number };
+  needsAttention: AssetListItem[];
+  offNormal: number;
 }
 
 export interface AssetDetail {
@@ -15,6 +28,6 @@ export interface AssetDetail {
 }
 
 export const assetsApi = {
-  list: () => api.get<{ assets: AssetListItem[] }>('/assets').then((r) => r.data.assets),
+  list: () => api.get<{ assets: AssetListItem[]; coverage: AssetCoverage }>('/assets').then((r) => r.data),
   get: (name: string) => api.get<AssetDetail>(`/assets/${encodeURIComponent(name)}`).then((r) => r.data),
 };

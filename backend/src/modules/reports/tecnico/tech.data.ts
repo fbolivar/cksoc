@@ -208,9 +208,38 @@ function rango(p: Periodo) {
 }
 
 /** Reglas marcadas como falso positivo conocido (se excluyen de severidades). */
+// Exclusión de ruido benigno CONSISTENTE con los dashboards afinados (mismo criterio
+// que exec.data): el informe técnico debe contar la misma verdad que los paneles.
 function reglasExcluidas(): unknown[] {
-  const ids = env.REPORT_EXCLUDE_RULES.split(',').map((s) => s.trim()).filter(Boolean);
-  return ids.length ? [{ bool: { must_not: [{ terms: { 'rule.id': ids } }] } }] : [];
+  const envIds = env.REPORT_EXCLUDE_RULES.split(',').map((s) => s.trim()).filter(Boolean);
+  const noiseRuleIds = ['81633', '80792', '550', '752', '91578', ...envIds];
+  return [{
+    bool: {
+      must_not: [
+        { terms: { 'rule.id': noiseRuleIds } },
+        { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
+        {
+          bool: {
+            filter: [
+              { term: { 'rule.id': '100600' } },
+              {
+                bool: {
+                  should: [
+                    { prefix: { 'data.dstip': '192.168.' } },
+                    { prefix: { 'data.dstip': '10.' } },
+                    { prefix: { 'data.dstip': '172.' } },
+                    { terms: { 'data.dstip': ['40.160.225.24', '209.250.254.15'] } },
+                    { term: { 'data.srcip': '192.168.0.31' } },
+                  ],
+                  minimum_should_match: 1,
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  }];
 }
 
 type Buckets<T = Record<string, unknown>> = { buckets: ({ key: string; doc_count: number } & T)[] };

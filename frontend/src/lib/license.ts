@@ -2,7 +2,8 @@
 import { AxiosError } from 'axios';
 import { api } from './api';
 
-export type LicenseState = 'active' | 'expired' | 'none' | 'invalid';
+export type LicenseState = 'active' | 'grace' | 'expired' | 'none' | 'invalid';
+export type LicenseUrgency = 'none' | 'info' | 'warn' | 'urgent';
 export interface LicenseStatus {
   state: LicenseState;
   message: string;
@@ -11,6 +12,9 @@ export interface LicenseStatus {
   expiresAt?: string;
   daysLeft?: number;
   clockWarning?: boolean;
+  renewalWarning?: boolean;
+  urgency?: LicenseUrgency;
+  graceDaysLeft?: number;
 }
 
 let cached: { at: number; data: LicenseStatus } | null = null;

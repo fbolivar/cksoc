@@ -11,8 +11,25 @@ export interface BackupItem {
   integrity: 'ok' | 'corrupto' | 'desconocida';
 }
 
+export interface RecoveryPosture {
+  estado: 'ok' | 'warn' | 'fail';
+  totalBackups: number;
+  lastBackupAt: string | null;
+  lastBackupAgeHours: number | null;
+  fresh: boolean;
+  totalBytes: number;
+  retention: number;
+  cron: string;
+  integrity: { ok: number; corrupto: number; desconocida: number };
+  offsite: boolean;
+  location: string;
+  scope: string;
+  warnings: string[];
+}
+
 export const backupsApi = {
   list: () => api.get<{ backups: BackupItem[] }>('/backups').then((r) => r.data.backups),
+  posture: () => api.get<RecoveryPosture>('/backups/posture').then((r) => r.data),
 
   create: (note?: string) =>
     api.post<BackupItem>('/backups', { note: note || undefined }).then((r) => r.data),

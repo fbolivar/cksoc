@@ -5,8 +5,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Server, RefreshCw, Loader2, ArrowLeft, ShieldAlert, ClipboardCheck, FileSearch, Cpu, ListFilter, Crosshair, ExternalLink } from 'lucide-react';
-import { assetsApi, type AssetListItem, type AssetDetail } from '@/lib/assets';
+import { Server, RefreshCw, Loader2, ArrowLeft, ShieldAlert, ClipboardCheck, FileSearch, Cpu, ListFilter, Crosshair, ExternalLink, AlertTriangle, Monitor, HardDrive } from 'lucide-react';
+import { assetsApi, type AssetListItem, type AssetDetail, type AssetCoverage, type AssetHealth } from '@/lib/assets';
 import { velociraptorApi } from '@/lib/velociraptor';
 import { scoreColor } from '@/lib/sca';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
@@ -15,6 +15,15 @@ import { Button } from '@/components/ui/button';
 import { ExportButton } from '@/components/shared/ExportButton';
 
 const STATUS_DOT: Record<string, string> = { active: 'bg-emerald-500', disconnected: 'bg-red-500', never_connected: 'bg-gray-500', pending: 'bg-amber-500' };
+
+// Salud operativa: color del punto + etiqueta legible.
+const HEALTH: Record<AssetHealth, { dot: string; label: string; chip: string }> = {
+  ok:         { dot: 'bg-emerald-500', label: 'Reportando',        chip: 'text-emerald-600' },
+  apagado:    { dot: 'bg-slate-400',   label: 'Apagada (normal)',  chip: 'text-muted-foreground' },
+  investigar: { dot: 'bg-amber-500',   label: 'Investigar',        chip: 'text-amber-600' },
+  alerta:     { dot: 'bg-red-500',     label: 'Servidor caído',    chip: 'text-red-600' },
+  fantasma:   { dot: 'bg-fuchsia-500', label: 'Nunca conectó',     chip: 'text-fuchsia-600' },
+};
 
 const ASSET_COLS: CsvCol<AssetListItem>[] = [
   { label: 'Nombre', get: (a) => a.name },
@@ -27,6 +36,7 @@ const ASSET_COLS: CsvCol<AssetListItem>[] = [
 
 export default function Assets() {
   const [list, setList] = useState<AssetListItem[] | null>(null);
+  const [coverage, setCoverage] = useState<AssetCoverage | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [detail, setDetail] = useState<AssetDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +46,7 @@ export default function Assets() {
   const [veloResult, setVeloResult] = useState<{ url?: string; error?: string } | null>(null);
 
   useEffect(() => {
-    assetsApi.list().then(setList).catch((e) => setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo listar activos')).finally(() => setLoading(false));
+    assetsApi.list().then((d) => { setList(d.assets); setCoverage(d.coverage); }).catch((e) => setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo listar activos')).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -73,7 +83,7 @@ export default function Assets() {
         ) : (
           <div className="flex items-center gap-2">
             <ExportButton onExport={() => downloadCsv(`activos-${fileStamp()}.csv`, list ?? [], ASSET_COLS)} disabled={!list || list.length === 0} />
-            <Button variant="outline" size="sm" onClick={() => { setLoading(true); assetsApi.list().then(setList).finally(() => setLoading(false)); }} disabled={loading}>
+            <Button variant="outline" size="sm" onClick={() => { setLoading(true); assetsApi.list().then((d) => { setList(d.assets); setCoverage(d.coverage); }).finally(() => setLoading(false)); }} disabled={loading}>
               <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
             </Button>
           </div>
@@ -86,22 +96,72 @@ export default function Assets() {
       {!sel && (loading ? (
         <p className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando activos…</p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(list ?? []).map((a) => (
-            <button key={a.id} onClick={() => setSel(a.name)} className="text-left">
-              <Card className="transition-colors hover:border-primary/40">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[a.status] ?? 'bg-gray-500'}`} />
-                    <span className="font-mono text-sm font-medium">{a.name}</span>
-                  </div>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">{a.os || '—'}</p>
-                  <p className="text-[11px] text-muted-foreground/60">{a.ip} · agente {a.version}</p>
-                </CardContent>
-              </Card>
-            </button>
-          ))}
-        </div>
+        <>
+          {/* Cobertura honesta: servidores vs estaciones (no mezclar apagadas normales con puntos ciegos) */}
+          {coverage && (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Card><CardContent className="p-4">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><HardDrive className="h-3.5 w-3.5" /> Servidores reportando</p>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: coverage.servers.reporting < coverage.servers.total ? 'hsl(var(--destructive))' : undefined }}>
+                  {coverage.servers.reporting}/{coverage.servers.total}
+                </p>
+                <p className="text-[11px] text-muted-foreground/70">deben estar siempre en línea</p>
+              </CardContent></Card>
+              <Card><CardContent className="p-4">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Monitor className="h-3.5 w-3.5" /> Estaciones reportando</p>
+                <p className="text-2xl font-bold tabular-nums">{coverage.workstations.reporting}/{coverage.workstations.total}</p>
+                <p className="text-[11px] text-muted-foreground/70">{coverage.offNormal} apagada(s) — normal fuera de horario</p>
+              </CardContent></Card>
+              <Card className={coverage.needsAttention.length ? 'border-amber-500/40' : ''}><CardContent className="p-4">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5" /> Puntos ciegos reales</p>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: coverage.needsAttention.length ? 'hsl(var(--warn-orange))' : 'hsl(var(--success))' }}>{coverage.needsAttention.length}</p>
+                <p className="text-[11px] text-muted-foreground/70">requieren revisión (no apagados normales)</p>
+              </CardContent></Card>
+            </div>
+          )}
+
+          {/* Necesitan atención: los que de verdad importan, arriba y explicados */}
+          {coverage && coverage.needsAttention.length > 0 && (
+            <Card className="border-amber-500/40"><CardContent className="p-4">
+              <p className="mb-2 flex items-center gap-2 text-sm font-semibold"><AlertTriangle className="h-4 w-4 text-amber-500" /> Necesitan atención</p>
+              <div className="space-y-2">
+                {coverage.needsAttention.map((a) => (
+                  <button key={a.id} onClick={() => setSel(a.name)} className="flex w-full items-start gap-2.5 rounded-md border border-border p-2.5 text-left hover:border-primary/40">
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${HEALTH[a.health].dot}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-medium">{a.name}</span>
+                        <span className={`text-[10px] font-semibold uppercase ${HEALTH[a.health].chip}`}>{HEALTH[a.health].label}</span>
+                        <span className="rounded bg-secondary px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{a.kind}</span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{a.reason}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </CardContent></Card>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {(list ?? []).map((a) => (
+              <button key={a.id} onClick={() => setSel(a.name)} className="text-left">
+                <Card className="transition-colors hover:border-primary/40">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${HEALTH[a.health]?.dot ?? STATUS_DOT[a.status] ?? 'bg-gray-500'}`} />
+                      <span className="font-mono text-sm font-medium">{a.name}</span>
+                      {a.needsAttention && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
+                      <span className="ml-auto rounded bg-secondary px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted-foreground">{a.kind}</span>
+                    </div>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{a.os || '—'}</p>
+                    <p className="text-[11px] text-muted-foreground/60">{a.ip} · agente {a.version}</p>
+                    <p className={`mt-1 text-[10.5px] ${HEALTH[a.health]?.chip ?? 'text-muted-foreground'}`}>{HEALTH[a.health]?.label ?? a.status}{a.staleDays != null && a.health !== 'ok' ? ` · ${a.staleDays}d` : ''}</p>
+                  </CardContent>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </>
       ))}
 
       {/* Detalle */}

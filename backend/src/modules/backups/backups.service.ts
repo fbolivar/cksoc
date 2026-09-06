@@ -47,6 +47,70 @@ export interface BackupItem {
   integrity: 'ok' | 'corrupto' | 'desconocida';
 }
 
+export interface RecoveryPosture {
+  estado: 'ok' | 'warn' | 'fail';
+  totalBackups: number;
+  lastBackupAt: string | null;
+  lastBackupAgeHours: number | null;
+  fresh: boolean;
+  totalBytes: number;
+  retention: number;
+  cron: string;
+  integrity: { ok: number; corrupto: number; desconocida: number };
+  offsite: boolean;
+  location: string;
+  scope: string;
+  warnings: string[];
+}
+
+/** Postura de recuperación: la VERDAD sobre qué tan protegido está el SOC (no solo la lista). */
+export async function getRecoveryPosture(): Promise<RecoveryPosture> {
+  const backups = await listBackups(); // ordenados por fecha desc
+  const last = backups[0] ?? null;
+  const ageHours = last ? (Date.now() - Date.parse(last.createdAt)) / 3_600_000 : null;
+  const fresh = ageHours != null && ageHours < 30; // cron diario → un respaldo sano tiene <30h
+  const integrity = { ok: 0, corrupto: 0, desconocida: 0 };
+  for (const b of backups) integrity[b.integrity] += 1;
+  const totalBytes = backups.reduce((s, b) => s + b.fileBytes, 0);
+  const offsite = false; // no hay mecanismo de copia externa: todo vive en este servidor
+
+  const warnings: string[] = [];
+  let estado: RecoveryPosture['estado'] = 'ok';
+  if (backups.length === 0) {
+    warnings.push('No hay ningún respaldo. No tienes punto de recuperación.');
+    estado = 'fail';
+  } else {
+    if (!fresh) {
+      warnings.push(`El último respaldo es de hace ~${Math.round((ageHours ?? 0) / 24)} día(s). Revisa el respaldo automático (cron ${env.BACKUP_CRON}) — puede estar fallando en silencio.`);
+      estado = 'warn';
+    }
+    if (integrity.corrupto > 0) {
+      warnings.push(`${integrity.corrupto} respaldo(s) con integridad CORRUPTA: no servirían para restaurar.`);
+      estado = 'fail';
+    }
+  }
+  if (!offsite) {
+    warnings.push('Sin copia externa: todos los respaldos están en el mismo servidor que la base de datos. Si el servidor se pierde (falla de disco, ransomware, borrado), se pierden con él. Recomendado: copiar los .pnnc a un destino externo (otro servidor, NAS o nube).');
+    if (estado === 'ok') estado = 'warn';
+  }
+
+  return {
+    estado,
+    totalBackups: backups.length,
+    lastBackupAt: last?.createdAt ?? null,
+    lastBackupAgeHours: ageHours != null ? Math.round(ageHours * 10) / 10 : null,
+    fresh,
+    totalBytes,
+    retention: env.BACKUP_RETENTION,
+    cron: env.BACKUP_CRON,
+    integrity,
+    offsite,
+    location: backupDir(),
+    scope: 'Base de datos de la plataforma (incidentes, reglas, usuarios, configuración, bitácora). NO incluye el archivo .env (secretos/tokens) ni las reglas de Wazuh del manager (local_rules.xml).',
+    warnings,
+  };
+}
+
 function backupDir(): string {
   return env.BACKUP_DIR ?? path.join(os.homedir(), 'soc-pnnc-backups');
 }
