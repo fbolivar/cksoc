@@ -2,7 +2,7 @@
 import { api } from './api';
 
 export type Severity = 'alta' | 'media' | 'baja';
-export interface ActionButton { kind: string; label: string; danger?: boolean; params: Record<string, string> }
+export interface ActionButton { kind: string; label: string; danger?: boolean; link?: string; params: Record<string, string> }
 export interface ActionItem {
   key: string;
   source: string;

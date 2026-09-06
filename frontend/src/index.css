@@ -247,3 +247,29 @@
 #hw-ttip i { width: 6px; height: 6px; }
 
 @media (prefers-reduced-motion: reduce) { .hw-reveal, .hw-fe, .hw-blink, .hw-sede b { animation: none !important; } }
+
+/* ------------------------------------------------------------------ */
+/* Barras de desplazamiento — finas, redondeadas y acordes al tema.    */
+/* Pista transparente; thumb gris tenue que se ilumina en coral.       */
+/* El borde transparente + background-clip afinan el thumb (premium).  */
+/* ------------------------------------------------------------------ */
+* { scrollbar-width: thin; scrollbar-color: hsl(var(--muted-foreground) / .30) transparent; }
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / .32);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background-color .15s ease;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / .60);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:active {
+  background: hsl(var(--primary) / .85);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }

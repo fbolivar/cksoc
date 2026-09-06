@@ -85,9 +85,40 @@ async function callClaude(system: string, messages: ChatMessage[], maxTokens?: n
   return textOf(res.content) || '(respuesta vacía del modelo)';
 }
 
+// Exclusión de ruido benigno estándar (misma que dashboards/reportes): para que
+// el copiloto razone sobre SEÑAL real y no sobre auditoría de comandos, checksums
+// FIM ni el tráfico del propio SOC. Se puede desactivar (investigación de FP).
+function ruidoMustNot(): unknown[] {
+  const envIds = (env.REPORT_EXCLUDE_RULES || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const noiseRuleIds = ['81633', '80792', '550', '752', '91578', ...envIds];
+  return [
+    { terms: { 'rule.id': noiseRuleIds } },
+    { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
+    {
+      bool: {
+        filter: [
+          { term: { 'rule.id': '100600' } },
+          {
+            bool: {
+              should: [
+                { prefix: { 'data.dstip': '192.168.' } },
+                { prefix: { 'data.dstip': '10.' } },
+                { prefix: { 'data.dstip': '172.' } },
+                { terms: { 'data.dstip': ['40.160.225.24', '209.250.254.15'] } },
+                { term: { 'data.srcip': '192.168.0.31' } },
+              ],
+              minimum_should_match: 1,
+            },
+          },
+        ],
+      },
+    },
+  ];
+}
+
 // --- Herramientas (tool-use): consultan datos en vivo del SOC ---
 const TOOLS = [
-  { name: 'buscar_alertas', description: 'Busca alertas recientes en el SIEM. Filtra por horas hacia atrás, nivel mínimo de regla y/o texto.', input_schema: { type: 'object', properties: { horas: { type: 'integer', description: 'ventana hacia atrás (default 24)' }, min_nivel: { type: 'integer', description: 'nivel mínimo de regla Wazuh (default 7)' }, texto: { type: 'string', description: 'texto a buscar en descripción/log (opcional)' }, limite: { type: 'integer', description: 'máx. resultados (default 10)' } } } },
+  { name: 'buscar_alertas', description: 'Busca alertas recientes en el SIEM. Por defecto EXCLUYE el ruido benigno conocido (auditoría de comandos, checksums FIM, tráfico del propio SOC) para mostrar señal real. Para investigar falsos positivos o ver ese ruido, pasa incluir_ruido=true.', input_schema: { type: 'object', properties: { horas: { type: 'integer', description: 'ventana hacia atrás (default 24)' }, min_nivel: { type: 'integer', description: 'nivel mínimo de regla Wazuh (default 7)' }, texto: { type: 'string', description: 'texto a buscar en descripción/log (opcional)' }, limite: { type: 'integer', description: 'máx. resultados (default 10)' }, incluir_ruido: { type: 'boolean', description: 'incluir el ruido benigno excluido por defecto (para investigar FP). Default false.' } } } },
   { name: 'top_vulnerabilidades', description: 'Vulnerabilidades priorizadas por riesgo real (CVSS + CISA KEV + EPSS).', input_schema: { type: 'object', properties: {} } },
   { name: 'anomalias_ueba', description: 'Anomalías de comportamiento de usuarios abiertas (viaje imposible, host nuevo, fuera de horario, pico de fallos).', input_schema: { type: 'object', properties: {} } },
   { name: 'incidentes_abiertos', description: 'Incidentes/casos abiertos o en curso.', input_schema: { type: 'object', properties: {} } },
@@ -99,18 +130,21 @@ async function toolBuscarAlertas(input: Record<string, unknown>): Promise<string
   const minNivel = Math.min(Math.max(Number(input.min_nivel ?? 7), 1), 16);
   const limite = Math.min(Math.max(Number(input.limite ?? 10), 1), 25);
   const texto = typeof input.texto === 'string' ? input.texto.trim() : '';
+  const incluirRuido = input.incluir_ruido === true;
   const filter: unknown[] = [{ range: { '@timestamp': { gte: `now-${horas}h` } } }, { range: { 'rule.level': { gte: minNivel } } }];
   if (texto) filter.push({ multi_match: { query: texto, fields: ['rule.description', 'full_log', 'data.srcip', 'agent.name'] } });
+  const boolQuery: Record<string, unknown> = { filter };
+  if (!incluirRuido) boolQuery.must_not = ruidoMustNot();
   const client = getIndexerClient();
   const { data } = await client.post<{ hits: { total: { value: number }; hits: { _source: Record<string, unknown> }[] } }>(
     `/${env.WAZUH_ALERTS_INDEX}/_search`,
-    { size: limite, sort: [{ 'rule.level': { order: 'desc' } }, { '@timestamp': { order: 'desc' } }], _source: ['@timestamp', 'rule.id', 'rule.level', 'rule.description', 'agent.name', 'data.srcip'], query: { bool: { filter } } }
+    { size: limite, track_total_hits: true, sort: [{ 'rule.level': { order: 'desc' } }, { '@timestamp': { order: 'desc' } }], _source: ['@timestamp', 'rule.id', 'rule.level', 'rule.description', 'agent.name', 'data.srcip'], query: { bool: boolQuery } }
   );
   const hits = data.hits.hits.map((h) => {
     const s = h._source as { '@timestamp'?: string; rule?: { id?: string; level?: number; description?: string }; agent?: { name?: string }; data?: { srcip?: string } };
     return { ts: s['@timestamp'], nivel: s.rule?.level, regla: s.rule?.id, desc: s.rule?.description, agente: s.agent?.name, srcip: s.data?.srcip };
   });
-  return JSON.stringify({ total: data.hits.total.value, mostrando: hits.length, alertas: hits });
+  return JSON.stringify({ total: data.hits.total.value, ruido_excluido: !incluirRuido, mostrando: hits.length, alertas: hits });
 }
 
 async function toolTopVulns(): Promise<string> {
@@ -190,7 +224,10 @@ async function alertsSnapshot(): Promise<string> {
       aggregations?: { crit: { doc_count: number }; alta: { doc_count: number }; media: { doc_count: number }; rules: { buckets: RuleBucket[] } };
     }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
       size: 0,
-      query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }] } },
+      track_total_hits: true,
+      // Señal real: se excluye el ruido benigno (mismo criterio que los dashboards)
+      // para que el contexto del copiloto no esté dominado por auditoría/FIM.
+      query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }], must_not: ruidoMustNot() } },
       aggs: {
         crit: { filter: { range: { 'rule.level': { gte: 12 } } } },
         alta: { filter: { range: { 'rule.level': { gte: 8, lt: 12 } } } },
@@ -203,7 +240,7 @@ async function alertsSnapshot(): Promise<string> {
     });
     const a = data.aggregations;
     const total = data.hits?.total?.value ?? 0;
-    const lines = [`Alertas últimas 24h: ${total} (críticas ≥12: ${a?.crit.doc_count ?? 0}, altas 8-11: ${a?.alta.doc_count ?? 0}, medias 5-7: ${a?.media.doc_count ?? 0}).`];
+    const lines = [`Alertas de seguridad últimas 24h (excluyendo ruido benigno): ${total} (críticas ≥12: ${a?.crit.doc_count ?? 0}, altas 8-11: ${a?.alta.doc_count ?? 0}, medias 5-7: ${a?.media.doc_count ?? 0}).`];
     const rules = a?.rules.buckets ?? [];
     if (rules.length) {
       lines.push('Reglas más frecuentes:');

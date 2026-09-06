@@ -5,8 +5,9 @@
  * persona (o media) sin recorrer 30 módulos.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Inbox, RefreshCw, Loader2, AlertTriangle, CheckCircle2, ShieldAlert, Network, UserCog, Briefcase, Crosshair, Bot } from 'lucide-react';
+import { Inbox, RefreshCw, Loader2, AlertTriangle, CheckCircle2, ShieldAlert, Network, UserCog, Briefcase, Crosshair, Bot, ShieldOff } from 'lucide-react';
 import { actionCenterApi, type ActionItem, type ActionButton, type Severity } from '@/lib/actionCenter';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,11 +15,12 @@ import { Button } from '@/components/ui/button';
 
 const SEV_COLOR: Record<Severity, string> = { alta: 'destructive', media: 'warn-orange', baja: 'success' };
 const SEV_LABEL: Record<Severity, string> = { alta: 'ALTA', media: 'MEDIA', baja: 'BAJA' };
-const SRC_ICON: Record<string, typeof Inbox> = { soar: Bot, red: Network, identidad: UserCog, incidente: Briefcase, endpoint: Crosshair };
-const SRC_LABEL: Record<string, string> = { soar: 'SOAR', red: 'Red', identidad: 'Identidad', incidente: 'Incidente', endpoint: 'Endpoint' };
+const SRC_ICON: Record<string, typeof Inbox> = { soar: Bot, red: Network, identidad: UserCog, incidente: Briefcase, endpoint: Crosshair, vuln: ShieldOff };
+const SRC_LABEL: Record<string, string> = { soar: 'SOAR', red: 'Red', identidad: 'Identidad', incidente: 'Incidente', endpoint: 'Endpoint', vuln: 'Vulnerab.' };
 
 export default function ActionCenter() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
   const [items, setItems] = useState<ActionItem[] | null>(null);
   const [counts, setCounts] = useState<Record<Severity, number>>({ alta: 0, media: 0, baja: 0 });
@@ -38,6 +40,8 @@ export default function ActionCenter() {
   useEffect(() => { load(); }, [load]);
 
   async function run(item: ActionItem, a: ActionButton) {
+    // Acción de navegación (no del servidor): parchar se hace en Vulnerabilidades.
+    if (a.kind === 'open_vulns') { navigate(a.link || '/vulnerabilidades'); return; }
     setBusy(item.key); setMsg(null);
     try {
       await actionCenterApi.execute(a.kind, a.params);

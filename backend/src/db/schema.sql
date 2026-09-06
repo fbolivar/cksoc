@@ -467,6 +467,7 @@ CREATE TABLE IF NOT EXISTS cve_intel_feeds (
 -- medir MTTA (time to acknowledge) y MTTR (time to resolve).
 -- =====================================================================
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS acknowledged_at TIMESTAMPTZ;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS disposition VARCHAR(20); -- verdadero_positivo | falso_positivo | prueba (NULL = sin clasificar)
 
 CREATE TABLE IF NOT EXISTS sla_policy (
     severity        VARCHAR(10) PRIMARY KEY,   -- critica | alta | media | baja

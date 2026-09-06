@@ -3,6 +3,12 @@ import { api } from './api';
 
 export type Severity = 'baja' | 'media' | 'alta' | 'critica';
 export type Status = 'abierto' | 'en_curso' | 'resuelto' | 'cerrado';
+export type Disposition = 'verdadero_positivo' | 'falso_positivo' | 'prueba';
+export const DISPOSITION_LABEL: Record<Disposition, string> = {
+  verdadero_positivo: 'Verdadero positivo',
+  falso_positivo: 'Falso positivo',
+  prueba: 'Prueba / benigno',
+};
 
 export type SlaState = 'ok' | 'due_soon' | 'breached' | 'met' | 'late';
 export interface IncidentSla {
@@ -43,6 +49,7 @@ export interface IncidentDetail extends IncidentListItem {
   source: IncidentSource;
   createdBy: string | null;
   closedAt: string | null;
+  disposition: Disposition | null;
   timeline: IncidentNote[];
 }
 
@@ -60,7 +67,7 @@ export const incidentsApi = {
   get: (id: string) => api.get<IncidentDetail>(`/incidents/${id}`).then((r) => r.data),
   create: (d: { title: string; description?: string; severity: Severity; source?: IncidentSource }) =>
     api.post<IncidentDetail>('/incidents', d).then((r) => r.data),
-  update: (id: string, p: { status?: Status; severity?: Severity; assigneeId?: string | null }) =>
+  update: (id: string, p: { status?: Status; severity?: Severity; assigneeId?: string | null; disposition?: Disposition | null }) =>
     api.patch<IncidentDetail>(`/incidents/${id}`, p).then((r) => r.data),
   addNote: (id: string, note: string) =>
     api.post<IncidentDetail>(`/incidents/${id}/notes`, { note }).then((r) => r.data),

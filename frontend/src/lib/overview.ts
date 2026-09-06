@@ -4,11 +4,12 @@ import { api } from './api';
 export interface OverviewData {
   generadoEn: string;
   global: { semaforo: 'verde' | 'amarillo' | 'rojo'; motivo: string };
-  amenazas: { alertas24h: number; criticas24h: number; altasCriticas24h: number; ataquesExternos: number };
+  amenazas: { alertas24h: number | null; criticas24h: number | null; altasCriticas24h: number | null; ataquesExternos: number };
   endpoints: { vulnCriticas: number; vulnAltas: number; vulnTotal: number; hardeningScore: number; fimCambios: number };
   cumplimiento: { marco: string; controles: number }[];
   siem: { semaforo: 'verde' | 'amarillo' | 'rojo'; ok: number; total: number };
-  agentes: { activos: number; total: number };
+  agentes: { activos: number | null; total: number | null };
+  degradado?: boolean;
 }
 
 export type AssetCategory = 'ep' | 'srv' | 'net';
@@ -45,11 +46,12 @@ export interface SedeMetrics {
 
 export interface Pulse {
   sistema: 'OPERATIVO' | 'EN GESTIÓN' | 'ATENCIÓN';
-  ingestaMin: number;
+  ingestaMin: number | null;
   discoPct: number | null;
-  kevEnv: number;
-  alertas24h: number;
-  deltaPct: number;
+  kevEnv: number | null;
+  alertas24h: number | null;
+  deltaPct: number | null;
+  degradado?: boolean;
 }
 export interface AlertTrend { range: string; critica: number[]; alta: number[]; media: number[] }
 

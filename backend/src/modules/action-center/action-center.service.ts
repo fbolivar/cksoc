@@ -13,12 +13,14 @@ import { slaBreachedIncidents } from '../incidents/sla.service';
 import { listEvents } from '../soar/soar.service';
 
 export type Severity = 'alta' | 'media' | 'baja';
-export type ActionKind = 'block_ip' | 'disable_m365' | 'delete_m365' | 'escalate' | 'collect' | 'soar_approve' | 'soar_reject';
+// `open_vulns` no es una acción del servidor: la resuelve el frontend navegando
+// al módulo de Vulnerabilidades (parchar no es una acción de un clic).
+export type ActionKind = 'block_ip' | 'disable_m365' | 'delete_m365' | 'escalate' | 'collect' | 'soar_approve' | 'soar_reject' | 'open_vulns';
 
-export interface ActionButton { kind: ActionKind; label: string; danger?: boolean; params: Record<string, string> }
+export interface ActionButton { kind: ActionKind; label: string; danger?: boolean; link?: string; params: Record<string, string> }
 export interface ActionItem {
   key: string;
-  source: 'soar' | 'identidad' | 'red' | 'endpoint' | 'incidente';
+  source: 'soar' | 'identidad' | 'red' | 'endpoint' | 'incidente' | 'vuln';
   severity: Severity;
   title: string;
   subject: string;
@@ -28,9 +30,27 @@ export interface ActionItem {
 }
 
 const RANK: Record<Severity, number> = { alta: 0, media: 1, baja: 2 };
-const SRC_RANK: Record<ActionItem['source'], number> = { soar: 0, red: 1, identidad: 2, incidente: 3, endpoint: 4 };
+const SRC_RANK: Record<ActionItem['source'], number> = { soar: 0, red: 1, identidad: 2, incidente: 3, endpoint: 4, vuln: 5 };
 
 interface VeloClient { host?: string }
+
+// Infraestructura PROPIA del SOC: no se triagea como si fuera un activo-cliente
+// (su volumen es ruido propio, no ataque). Se gestiona/parcha directamente.
+const SOC_INFRA_RE = /(gvm-soc|pmx-soc)/i;
+
+// Host con señal REAL de amenaza (no solo vulnerabilidades): alerta de nivel
+// crítico o alguna crítica en 24h. Solo entonces el triage forense es la acción
+// correcta; el riesgo por vulnerabilidades se atiende parchando, no con forense.
+function tieneSenalAmenaza(a: { critAlerts: number; maxLevel: number }): boolean {
+  return a.critAlerts > 0 || a.maxLevel >= 12;
+}
+
+// Principales de SISTEMA de M365 (no son usuarios borrables): no se ofrecen
+// acciones destructivas sobre ellos (p.ej. no-reply@teams.mail.microsoft).
+const SYSTEM_PRINCIPAL_RE = /^(no-?reply|noreply|donotreply|postmaster|mailer-daemon)@|@teams\.mail\.microsoft|@microsoft\.com$/i;
+function esPrincipalSistema(id: string): boolean {
+  return SYSTEM_PRINCIPAL_RE.test(String(id || ''));
+}
 
 export async function getActionQueue(): Promise<{ generatedAt: string; total: number; bySeverity: Record<Severity, number>; items: ActionItem[] }> {
   const items: ActionItem[] = [];
@@ -83,6 +103,9 @@ export async function getActionQueue(): Promise<{ generatedAt: string; total: nu
   // 3) Identidad — recomendaciones con acción (higiene de invitados + amenazas signin).
   if (ident.status === 'fulfilled') {
     for (const r of ident.value.items) {
+      // No proponer acciones destructivas sobre principales de sistema (artefactos
+      // de Microsoft, no usuarios reales que se puedan deshabilitar/eliminar).
+      if (esPrincipalSistema(r.upn) || esPrincipalSistema(r.mail || '')) continue;
       const acts: ActionButton[] = [];
       if (r.actions.includes('disable')) acts.push({ kind: 'disable_m365', label: 'Deshabilitar', params: { upn: r.upn } });
       if (r.actions.includes('delete')) acts.push({ kind: 'delete_m365', label: 'Eliminar', danger: true, params: { upn: r.upn } });
@@ -109,19 +132,46 @@ export async function getActionQueue(): Promise<{ generatedAt: string; total: nu
     }
   }
 
-  // 5) Endpoints de alto riesgo con cliente Velociraptor — triage forense.
-  if (radar.status === 'fulfilled' && veloList.status === 'fulfilled') {
-    const clients = Array.isArray(veloList.value) ? (veloList.value as VeloClient[]) : [];
+  // 5) Endpoints — dos tratamientos distintos según la NATURALEZA del riesgo:
+  //    (a) triage forense SOLO si hay señal de amenaza real (alerta crítica), con
+  //        cliente Velociraptor para actuar; excluye la infraestructura del SOC.
+  //    (b) los hosts "de alto riesgo" que en realidad lo son por VULNERABILIDADES
+  //        (sin ataque) no se triagean: se resumen en un solo ítem que enlaza a
+  //        Vulnerabilidades, que es donde se prioriza el parcheo.
+  if (radar.status === 'fulfilled') {
+    const clients = veloList.status === 'fulfilled' && Array.isArray(veloList.value) ? (veloList.value as VeloClient[]) : [];
     const veloHosts = new Set(clients.map((c) => String(c?.host ?? '').toLowerCase()).filter(Boolean));
+    const vulnHosts: { name: string; crit: number }[] = [];
+
     for (const a of radar.value.assets) {
-      if (a.band !== 'critico' && a.band !== 'alto') continue;
-      if (!veloHosts.has(a.name.toLowerCase())) continue;
+      if (SOC_INFRA_RE.test(a.name)) continue; // no triagear la propia plataforma
+      if (tieneSenalAmenaza(a)) {
+        // Amenaza real → triage forense (si hay agente Velo para recolectar).
+        if (!veloHosts.has(a.name.toLowerCase())) continue;
+        items.push({
+          key: `ep:${a.name}`, source: 'endpoint', severity: a.maxLevel >= 12 || a.critAlerts > 0 ? 'alta' : 'media',
+          title: 'Host con actividad de amenaza', subject: a.name,
+          reason: `${a.critAlerts ? `${a.critAlerts} alerta(s) crítica(s)` : `nivel máx ${a.maxLevel}`} en 24h${a.status !== 'active' ? ', desconectado' : ''}. Lanza triage forense para investigar.`,
+          meta: [{ label: 'alertas críticas', value: String(a.critAlerts) }, { label: 'nivel máx', value: String(a.maxLevel) }, { label: 'IP', value: a.ip || '—' }],
+          actions: [{ kind: 'collect', label: 'Investigar (triage)', params: { host: a.name } }],
+        });
+      } else if ((a.band === 'critico' || a.band === 'alto') && a.criticalVulns > 0) {
+        // Riesgo por vulnerabilidades, sin ataque → parcheo, no forense.
+        vulnHosts.push({ name: a.name, crit: a.criticalVulns });
+      }
+    }
+
+    // (b) Un único ítem de baja prioridad que apunta a Vulnerabilidades.
+    if (vulnHosts.length) {
+      vulnHosts.sort((x, y) => y.crit - x.crit);
+      const totalCrit = vulnHosts.reduce((n, h) => n + h.crit, 0);
+      const top = vulnHosts.slice(0, 4).map((h) => `${h.name} (${h.crit})`).join(', ');
       items.push({
-        key: `ep:${a.name}`, source: 'endpoint', severity: a.band === 'critico' ? 'alta' : 'media',
-        title: 'Host de alto riesgo', subject: a.name,
-        reason: `Riesgo ${a.risk}/100${a.criticalVulns ? `, ${a.criticalVulns} vulns críticas` : ''}${a.status !== 'active' ? ', desconectado' : ''}. Lanza triage forense.`,
-        meta: [{ label: 'riesgo', value: String(a.risk) }, { label: 'IP', value: a.ip || '—' }],
-        actions: [{ kind: 'collect', label: 'Investigar (triage)', params: { host: a.name } }],
+        key: 'vuln:parcheo', source: 'vuln', severity: 'baja',
+        title: 'Hosts con vulnerabilidades críticas', subject: `${vulnHosts.length} equipo(s)`,
+        reason: `${vulnHosts.length} host(s) acumulan ${totalCrit} vulnerabilidad(es) crítica(s) sin parchar (${top}${vulnHosts.length > 4 ? '…' : ''}). Priorízalos para parcheo — no requieren investigación forense.`,
+        meta: [{ label: 'hosts', value: String(vulnHosts.length) }, { label: 'vulns críticas', value: String(totalCrit) }],
+        actions: [{ kind: 'open_vulns', label: 'Ver Vulnerabilidades', link: '/vulnerabilidades', params: {} }],
       });
     }
   }

@@ -94,10 +94,12 @@ incidentsRouter.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+const dispositionEnum = z.enum(['verdadero_positivo', 'falso_positivo', 'prueba']);
 const patchSchema = z.object({
   status: statusEnum.optional(),
   severity: sevEnum.optional(),
   assigneeId: z.string().uuid().nullable().optional(),
+  disposition: dispositionEnum.nullable().optional(),
 });
 
 incidentsRouter.patch('/:id', manage, async (req: Request, res: Response) => {

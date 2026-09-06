@@ -6,6 +6,12 @@ export type Severity = 'baja' | 'media' | 'alta' | 'critica';
 export interface SocMetrics {
   window: { days: number; from: string };
   counts: { total: number; abierto: number; en_curso: number; resuelto: number; cerrado: number; bySeverity: Record<string, number> };
+  quality: {
+    realTotal: number;
+    dispositions: { verdadero_positivo: number; falso_positivo: number; prueba: number; sin_clasificar: number };
+    falsePositiveRate: number | null;
+    excludedFromMetrics: number;
+  };
   mttd: { avgMinutes: number | null; count: number };
   mtta: { avgMinutes: number | null; count: number };
   mttr: { avgMinutes: number | null; count: number };

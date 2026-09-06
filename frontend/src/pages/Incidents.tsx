@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { Briefcase, RefreshCw, Loader2, Plus, ArrowLeft, X, Send, User, Clock, Crosshair, ExternalLink, Ban, CheckCircle2, Timer, Gauge, AlertTriangle, Sparkles, FileSearch, Cpu, Network } from 'lucide-react';
-import { incidentsApi, SEV, ST, SLA_STATE, fmtDuration, type IncidentListItem, type IncidentDetail, type Severity, type Status, type CaseMetrics, type SlaState, type BreachRec } from '@/lib/incidents';
+import { incidentsApi, SEV, ST, SLA_STATE, DISPOSITION_LABEL, fmtDuration, type IncidentListItem, type IncidentDetail, type Severity, type Status, type Disposition, type CaseMetrics, type SlaState, type BreachRec } from '@/lib/incidents';
 import { responseApi } from '@/lib/response';
 import { velociraptorApi, type VeloResultSource } from '@/lib/velociraptor';
 import { copilotApi } from '@/lib/copilot';
@@ -191,7 +191,7 @@ export default function Incidents() {
     incidentsApi.get(sel).then(setDetail).catch(() => setDetail(null));
   }, [sel]);
 
-  async function patch(p: { status?: Status; severity?: Severity; assigneeId?: string | null }) {
+  async function patch(p: { status?: Status; severity?: Severity; assigneeId?: string | null; disposition?: Disposition | null }) {
     if (!sel) return;
     setBusy(true); setError(null);
     try { setDetail(await incidentsApi.update(sel, p)); await loadList(); }
@@ -440,6 +440,20 @@ export default function Incidents() {
                   className="h-9 w-full rounded-md border border-input bg-background/60 px-2 text-sm disabled:opacity-60">
                   {STATUSES.map((s) => <option key={s} value={s}>{ST[s].label}</option>)}
                 </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-muted-foreground">Clasificación</label>
+                <select value={detail.disposition ?? ''} disabled={!canManage || busy}
+                  onChange={(e) => patch({ disposition: (e.target.value || null) as Disposition | null })}
+                  className={`h-9 w-full rounded-md border bg-background/60 px-2 text-sm disabled:opacity-60 ${(detail.status === 'resuelto' || detail.status === 'cerrado') && !detail.disposition ? 'border-warn-orange/60' : 'border-input'}`}>
+                  <option value="">Sin clasificar</option>
+                  {(Object.keys(DISPOSITION_LABEL) as Disposition[]).map((d) => <option key={d} value={d}>{DISPOSITION_LABEL[d]}</option>)}
+                </select>
+                <p className="text-[10px] text-muted-foreground">
+                  {(detail.status === 'resuelto' || detail.status === 'cerrado') && !detail.disposition
+                    ? '⚠ Clasifícalo: los falsos positivos/prueba se excluyen de las métricas (MTTR/SLA).'
+                    : 'Distingue lo real del ruido para que las métricas no midan falsos positivos.'}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-muted-foreground">Severidad</label>

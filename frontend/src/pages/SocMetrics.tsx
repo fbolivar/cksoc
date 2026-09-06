@@ -78,6 +78,45 @@ export default function SocMetrics() {
               sub={`ventana de ${m.window.days} días`} tone={slaTone(m.sla.overallPct)} />
           </div>
 
+          {/* Calidad de detección: los FP/prueba se excluyen de los tiempos para no distorsionarlos */}
+          <div className="glass rounded-lg p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold">Calidad de detección</h3>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  MTTD/MTTA/MTTR/SLA se calculan solo sobre <b>incidentes reales</b>; los falsos positivos y pruebas se excluyen para no distorsionar los tiempos.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+                  {([
+                    ['Reales', m.quality.dispositions.verdadero_positivo, 'good'],
+                    ['Falsos positivos', m.quality.dispositions.falso_positivo, 'bad'],
+                    ['Prueba/benigno', m.quality.dispositions.prueba, 'muted'],
+                    ['Sin clasificar', m.quality.dispositions.sin_clasificar, 'warn'],
+                  ] as [string, number, string][]).map(([lbl, n, tone]) => (
+                    <span key={lbl} className="rounded-full border border-border/60 px-2 py-0.5"
+                      style={{ color: tone === 'bad' ? 'hsl(var(--destructive))' : tone === 'good' ? 'hsl(var(--success))' : tone === 'warn' ? 'hsl(var(--warn-orange))' : undefined }}>
+                      {lbl}: <b>{n}</b>
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Tasa de falsos positivos</p>
+                <p className="text-3xl font-bold" style={{ color: m.quality.falsePositiveRate === null ? undefined : m.quality.falsePositiveRate > 50 ? 'hsl(var(--destructive))' : m.quality.falsePositiveRate > 20 ? 'hsl(var(--warn-orange))' : 'hsl(var(--success))' }}>
+                  {m.quality.falsePositiveRate === null ? '—' : `${m.quality.falsePositiveRate}%`}
+                </p>
+                {m.quality.falsePositiveRate !== null && m.quality.falsePositiveRate > 50 && (
+                  <p className="text-[11px] text-muted-foreground">detecciones ruidosas: afina reglas</p>
+                )}
+              </div>
+            </div>
+            {m.quality.realTotal === 0 && m.counts.total > 0 && (
+              <p className="mt-3 rounded-md border border-border/60 bg-secondary/20 px-3 py-2 text-[12px] text-muted-foreground">
+                <b>Sin incidentes reales</b> en la ventana. Los {m.quality.excludedFromMetrics} incidente(s) fueron falsos positivos o pruebas — por eso los tiempos aparecen como «sin datos» (no hay nada real que medir), no porque el equipo haya fallado.
+              </p>
+            )}
+          </div>
+
           {/* Backlog / aging */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <Kpi icon={AlertTriangle} label="Incidentes abiertos" value={String(m.counts.abierto + m.counts.en_curso)}

@@ -10,7 +10,7 @@ import { query } from '../../config/db';
 import { getSocMetrics } from '../metrics/metrics.service';
 import { getVulnerabilities } from '../vulnerabilities/vuln.service';
 import { getSca } from '../sca/sca.service';
-import { cachedHealth, getOverallHealth } from '../health/siem-health.service';
+import { getAgents } from '../wazuh/agents.service';
 import { listBackups } from '../backups/backups.service';
 import { getHumanFactor } from '../phishing/phishing.service';
 import { logger } from '../../config/logger';
@@ -57,19 +57,40 @@ export async function getRiskBoard(): Promise<RiskBoard> {
   // ---------- 1. Detectar y responder ----------
   try {
     const m = await getSocMetrics(30);
-    const sla = m.sla.overallPct ?? 0;
-    const posture = clamp(sla);
-    domains.push({
-      key: 'deteccion', title: 'Detectar y responder',
-      businessQuestion: '¿Reducimos el tiempo en que una amenaza activa está sin contener?',
-      status: st(posture), posture,
-      kpis: [
-        { label: 'Cumplimiento de SLA', value: m.sla.overallPct === null ? 's/d' : `${m.sla.overallPct}%`, status: st(sla), source: 'real' },
-        { label: 'MTTR (resolución)', value: m.mttr.avgMinutes === null ? 's/d' : fmt(m.mttr.avgMinutes), status: m.mttr.avgMinutes !== null && m.mttr.avgMinutes <= 480 ? 'good' : 'warn', source: 'real' },
-        { label: 'MTTA (1ª respuesta)', value: m.mtta.avgMinutes === null ? 's/d' : fmt(m.mtta.avgMinutes), status: m.mtta.avgMinutes !== null && m.mtta.avgMinutes <= 240 ? 'good' : 'warn', source: 'real' },
-        { label: 'Incidentes abiertos > 24h', value: String(m.aging.openOver24h), status: m.aging.openOver24h === 0 ? 'good' : m.aging.openOver24h <= 3 ? 'warn' : 'bad', source: 'real' },
-      ],
-    });
+    // Tasa alta de FP = detecciones ruidosas (a afinar), no es "bueno".
+    const fpr = m.quality.falsePositiveRate;
+    const fpStatus: Status = fpr === null ? 'pending' : fpr <= 20 ? 'good' : fpr <= 50 ? 'warn' : 'bad';
+    const fpRateKpi = { label: 'Tasa de falsos positivos', value: fpr === null ? 's/d' : `${fpr}%`, status: fpStatus, source: (fpr === null ? 'pending' : 'real') as 'pending' | 'real', note: fpr !== null && fpr > 50 ? 'Detecciones ruidosas: conviene afinar reglas' : undefined };
+    if (m.quality.realTotal === 0) {
+      // Sin incidentes reales: no hay tiempos que medir. NO es "malo" (antes esto
+      // daba SLA 0 → crítico); la postura la marca el backlog: nada pendiente = sano.
+      const posture = m.aging.openOver24h === 0 ? 100 : clamp(100 - m.aging.openOver24h * 15);
+      domains.push({
+        key: 'deteccion', title: 'Detectar y responder',
+        businessQuestion: '¿Reducimos el tiempo en que una amenaza activa está sin contener?',
+        status: st(posture), posture,
+        kpis: [
+          { label: 'Incidentes reales (30d)', value: '0', status: 'good', source: 'real', note: `${m.quality.excludedFromMetrics} falso(s) positivo(s)/prueba depurados` },
+          { label: 'Incidentes abiertos > 24h', value: String(m.aging.openOver24h), status: m.aging.openOver24h === 0 ? 'good' : m.aging.openOver24h <= 3 ? 'warn' : 'bad', source: 'real' },
+          { label: 'Cumplimiento de SLA', value: 's/d', status: 'pending', source: 'pending', note: 'Sin incidentes reales que medir en el periodo' },
+          fpRateKpi,
+        ],
+      });
+    } else {
+      const sla = m.sla.overallPct ?? 0;
+      const posture = clamp(sla);
+      domains.push({
+        key: 'deteccion', title: 'Detectar y responder',
+        businessQuestion: '¿Reducimos el tiempo en que una amenaza activa está sin contener?',
+        status: st(posture), posture,
+        kpis: [
+          { label: 'Cumplimiento de SLA', value: m.sla.overallPct === null ? 's/d' : `${m.sla.overallPct}%`, status: st(sla), source: 'real', note: 'Sobre incidentes reales (excluye falsos positivos)' },
+          { label: 'MTTR (resolución)', value: m.mttr.avgMinutes === null ? 's/d' : fmt(m.mttr.avgMinutes), status: m.mttr.avgMinutes !== null && m.mttr.avgMinutes <= 480 ? 'good' : 'warn', source: 'real' },
+          { label: 'MTTA (1ª respuesta)', value: m.mtta.avgMinutes === null ? 's/d' : fmt(m.mtta.avgMinutes), status: m.mtta.avgMinutes !== null && m.mtta.avgMinutes <= 240 ? 'good' : 'warn', source: 'real' },
+          fpRateKpi,
+        ],
+      });
+    }
   } catch (err) { logger.warn({ err }, 'risk: deteccion'); domains.push(pending('deteccion', 'Detectar y responder', '¿Reducimos el tiempo en que una amenaza activa está sin contener?')); }
 
   // ---------- 2. Reducir la exposición ----------
@@ -103,19 +124,23 @@ export async function getRiskBoard(): Promise<RiskBoard> {
               count(*) FILTER (WHERE r.name = 'admin' AND totp_enabled) admins_mfa
          FROM users u JOIN roles r ON r.id = u.role_id WHERE u.is_active`
     );
-    const t = Number(rows[0].total), mfa = Number(rows[0].con_mfa), adm = Number(rows[0].admins), admMfa = Number(rows[0].admins_mfa);
-    const mfaPct = t ? clamp((mfa / t) * 100) : 0;
-    const privPct = adm ? clamp((admMfa / adm) * 100) : 100;
-    // Ponderamos fuerte el MFA en cuentas privilegiadas.
-    const posture = clamp(mfaPct * 0.4 + privPct * 0.6);
+    const t = Number(rows[0].total), mfa = Number(rows[0].con_mfa);
+    const socMfaPct = t ? clamp((mfa / t) * 100) : 0;
+    // La postura de identidad de la ORGANIZACIÓN (MFA de los usuarios de GVM en
+    // M365/Azure AD) requiere el informe de métodos de autenticación de Microsoft
+    // Graph, que aún no está conectado. El único dato de MFA disponible es el 2FA
+    // de la CONSOLA del SOC (tabla de operadores de HexWatch): un control interno
+    // real, pero que NO representa la postura de GVM. Por eso el dominio queda
+    // "sin fuente" (posture=null) y no puntúa el índice con un 0 falso; antes esto
+    // reportaba "0% MFA (0/1)" y hundía el índice global a "crítico".
     domains.push({
       key: 'identidades', title: 'Proteger identidades y accesos',
       businessQuestion: '¿Están protegidos los accesos a los sistemas críticos?',
-      status: st(posture, 90, 60), posture,
+      status: 'pending', posture: null,
       kpis: [
-        { label: 'Usuarios con MFA', value: `${mfaPct}% (${mfa}/${t})`, status: st(mfaPct, 90, 60), source: 'real' },
-        { label: 'Cuentas privilegiadas con MFA', value: `${privPct}% (${admMfa}/${adm})`, status: st(privPct, 100, 50), source: 'real', note: adm > admMfa ? 'Hay admins sin 2º factor' : undefined },
-        { label: 'Cobertura PAM', value: '—', status: 'pending', source: 'pending', note: 'Requiere herramienta PAM' },
+        { label: 'MFA en M365 (usuarios)', value: '—', status: 'pending', source: 'pending', note: 'Requiere el informe de métodos de autenticación de Microsoft Graph (Reports.Read.All)' },
+        { label: 'MFA en cuentas privilegiadas (M365)', value: '—', status: 'pending', source: 'pending', note: 'Requiere Microsoft Graph' },
+        { label: '2FA en la consola HexWatch', value: `${socMfaPct}% (${mfa}/${t})`, status: st(socMfaPct, 100, 50), source: 'real', note: 'Control interno: 2FA de los operadores del SOC. No representa la postura de identidad de GVM.' },
         { label: 'Revisiones de acceso', value: '—', status: 'pending', source: 'pending', note: 'Requiere proceso/registro de revisión' },
       ],
     });
@@ -155,10 +180,15 @@ export async function getRiskBoard(): Promise<RiskBoard> {
     const backups = await listBackups();
     const last = backups[0];
     const lastAgeH = last?.createdAt ? (Date.now() - new Date(last.createdAt).getTime()) / 3600000 : Infinity;
-    const health = cachedHealth() ?? (await getOverallHealth());
-    const agents = health.agentes ?? [];
-    const active = agents.filter((a) => a.status === 'active').length;
-    const avail = agents.length ? clamp((active / agents.length) * 100) : 100;
+    // Cobertura honesta: una estación apagada fuera de horario NO es una caída.
+    // Solo cuentan como no disponibles los problemas reales (servidor caído, agente
+    // que nunca conectó, o sin reportar >7 días) = needsAttention en la clasificación
+    // ya afinada. Antes esto reportaba 40% (8/20) contando estaciones apagadas.
+    const allAgents = await getAgents(500).catch(() => []);
+    const totalAg = allAgents.length;
+    const problemas = allAgents.filter((a) => a.needsAttention).length;
+    const disponibles = totalAg - problemas;
+    const avail = totalAg ? clamp((disponibles / totalAg) * 100) : 100;
     const backupOk = backups.length > 0 && lastAgeH <= 48;
     const posture = clamp(avail * 0.6 + (backupOk ? 40 : backups.length ? 20 : 0));
     domains.push({
@@ -168,7 +198,7 @@ export async function getRiskBoard(): Promise<RiskBoard> {
       kpis: [
         { label: 'Respaldos disponibles', value: `${backups.length}`, status: backups.length > 0 ? 'good' : 'bad', source: 'real', note: 'Restauración validada' },
         { label: 'Último respaldo', value: Number.isFinite(lastAgeH) ? fmt(lastAgeH * 60) : 'nunca', status: lastAgeH <= 48 ? 'good' : 'warn', source: 'real' },
-        { label: 'Disponibilidad de agentes', value: `${avail}% (${active}/${agents.length})`, status: st(avail, 95, 80), source: 'real' },
+        { label: 'Cobertura de agentes', value: `${avail}% (${disponibles}/${totalAg})`, status: st(avail, 95, 80), source: 'real', note: 'Solo cuentan caídas reales; estaciones apagadas fuera de horario no restan.' },
         { label: 'Cumplimiento RTO/RPO', value: '—', status: 'pending', source: 'pending', note: 'Requiere prueba de recuperación (DR) formal' },
       ],
     });

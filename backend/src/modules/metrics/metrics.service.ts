@@ -20,6 +20,8 @@ export const SLA_TARGETS: Record<Severity, { responseMin: number; resolutionMin:
 
 const CLOSED = ['resuelto', 'cerrado'];
 
+export type Disposition = 'verdadero_positivo' | 'falso_positivo' | 'prueba';
+
 interface IncRow {
   id: string;
   severity: Severity;
@@ -28,6 +30,7 @@ interface IncRow {
   closed_at: string | null;
   alert_time: string | null;
   first_action: string | null;
+  disposition: Disposition | null;
 }
 
 function minutesBetween(a: string, b: string): number {
@@ -48,6 +51,13 @@ export interface SocMetrics {
     resuelto: number;
     cerrado: number;
     bySeverity: Record<string, number>;
+  };
+  /** Calidad: los FP/prueba se excluyen de MTTD/MTTA/MTTR/SLA para no distorsionarlos. */
+  quality: {
+    realTotal: number;                // verdaderos positivos + sin clasificar (lo medido)
+    dispositions: { verdadero_positivo: number; falso_positivo: number; prueba: number; sin_clasificar: number };
+    falsePositiveRate: number | null; // FP / (FP + verdaderos positivos) clasificados
+    excludedFromMetrics: number;      // FP + prueba (fuera de los promedios)
   };
   mttd: { avgMinutes: number | null; count: number };
   mtta: { avgMinutes: number | null; count: number };
@@ -71,7 +81,7 @@ export interface SocMetrics {
 
 export async function getSocMetrics(days = 30): Promise<SocMetrics> {
   const rows = await query<IncRow>(
-    `SELECT i.id, i.severity, i.status, i.created_at, i.closed_at,
+    `SELECT i.id, i.severity, i.status, i.created_at, i.closed_at, i.disposition,
             (i.source->>'alertTime') AS alert_time,
             (SELECT min(n.created_at) FROM incident_notes n
                WHERE n.incident_id = i.id AND n.note NOT ILIKE 'Incidente creado%') AS first_action
@@ -100,6 +110,7 @@ export async function getSocMetrics(days = 30): Promise<SocMetrics> {
 
   const openAges: number[] = [];
   let openOver24h = 0;
+  const disp = { verdadero_positivo: 0, falso_positivo: 0, prueba: 0, sin_clasificar: 0 };
 
   for (const r of rows) {
     if (r.status === 'abierto') counts.abierto++;
@@ -107,6 +118,15 @@ export async function getSocMetrics(days = 30): Promise<SocMetrics> {
     else if (r.status === 'resuelto') counts.resuelto++;
     else if (r.status === 'cerrado') counts.cerrado++;
     if (r.severity in counts.bySeverity) counts.bySeverity[r.severity]++;
+
+    // Clasificación: los FP/prueba se cuentan pero NO entran a los promedios de
+    // desempeño (si no, un falso positivo abierto 3 semanas infla el MTTR).
+    if (r.disposition === 'verdadero_positivo') disp.verdadero_positivo++;
+    else if (r.disposition === 'falso_positivo') disp.falso_positivo++;
+    else if (r.disposition === 'prueba') disp.prueba++;
+    else disp.sin_clasificar++;
+    if (r.disposition === 'falso_positivo' || r.disposition === 'prueba') continue;
+
     const target = SLA_TARGETS[r.severity] ?? SLA_TARGETS.media;
     const s = sev[r.severity] ?? sev.media;
     s.total++;
@@ -185,9 +205,18 @@ export async function getSocMetrics(days = 30): Promise<SocMetrics> {
   }
   const throughput = [...tp.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, v]) => ({ date, ...v }));
 
+  const clasificados = disp.verdadero_positivo + disp.falso_positivo;
+  const quality = {
+    realTotal: disp.verdadero_positivo + disp.sin_clasificar,
+    dispositions: disp,
+    falsePositiveRate: clasificados > 0 ? Math.round((disp.falso_positivo / clasificados) * 1000) / 10 : null,
+    excludedFromMetrics: disp.falso_positivo + disp.prueba,
+  };
+
   return {
     window: { days, from: new Date(now - days * 86400000).toISOString() },
     counts,
+    quality,
     mttd: { avgMinutes: avg(mttd), count: mttd.length },
     mtta: { avgMinutes: avg(mtta), count: mtta.length },
     mttr: { avgMinutes: avg(mttr), count: mttr.length },

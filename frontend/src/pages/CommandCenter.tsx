@@ -17,22 +17,21 @@ const cssVar = (n: string) => getComputedStyle(document.documentElement).getProp
 const C = (n: string, a?: number) => { const v = cssVar(n); return a == null ? `hsl(${v})` : `hsl(${v} / ${a})`; };
 
 interface KpiData {
-  alertas24h: number; criticas: number; agActivos: number; agTotal: number;
+  alertas24h: number | null; criticas: number | null; agActivos: number | null; agTotal: number | null;
   siemPct: number; vulnCrit: number; incOpen: number; incBreached: number; slaPct: number | null; uebaOpen: number;
   risk: number;
 }
-// Estado inicial NEUTRO (ceros): nunca mostramos cifras inventadas antes de que
-// respondan las APIs; los valores reales llegan en el primer fetch.
-const FALLBACK: KpiData = { alertas24h: 0, criticas: 0, agActivos: 0, agTotal: 0, siemPct: 0, vulnCrit: 0, incOpen: 0, incBreached: 0, slaPct: null, uebaOpen: 0, risk: 0 };
+// Estado inicial DESCONOCIDO (null): antes de que respondan las APIs mostramos
+// "—", nunca un 0 que se leería como "no hay nada". Los valores reales llegan en
+// el primer fetch; si una consulta se cae, se queda en "—" (no en 0 falso).
+const FALLBACK: KpiData = { alertas24h: null, criticas: null, agActivos: null, agTotal: null, siemPct: 0, vulnCrit: 0, incOpen: 0, incBreached: 0, slaPct: null, uebaOpen: 0, risk: 0 };
 
 const BAND_COL: Record<string, Col> = { critica: 'destructive', alta: 'warn-orange', media: 'primary', baja: 'cyan' };
-const SEDES: [string, number, number][] = [['Bogotá', .30, .55], ['Medellín', .26, .44], ['La Ceja', .28, .50], ['Entrerríos', .24, .40], ['Fómeque', .33, .58]];
+const SEDES: [string, number, number][] = [['Bogotá', .30, .55]];
+// Respaldo mientras carga /overview/sedes: solo sedes con presencia real. El
+// backend ya filtra las ubicaciones sin telemetría; no sembramos fantasmas.
 const SEDE_INFO: { name: string; region: string; rol?: string }[] = [
   { name: 'Bogotá', region: 'Cundinamarca', rol: 'Principal' },
-  { name: 'Medellín', region: 'Antioquia' },
-  { name: 'La Ceja', region: 'Antioquia' },
-  { name: 'Entrerríos', region: 'Antioquia' },
-  { name: 'Fómeque', region: 'Cundinamarca' },
 ];
 
 export default function CommandCenter() {
@@ -68,7 +67,8 @@ export default function CommandCenter() {
       if (ov.status === 'fulfilled') { const o = ov.value; nd.alertas24h = o.amenazas.alertas24h; nd.criticas = o.amenazas.criticas24h; nd.agActivos = o.agentes.activos; nd.agTotal = o.agentes.total; nd.siemPct = o.siem.total ? Math.round(o.siem.ok / o.siem.total * 100) : nd.siemPct; nd.vulnCrit = o.endpoints.vulnCriticas; }
       if (mx.status === 'fulfilled') { const m = mx.value; nd.incOpen = m.counts.abierto + m.counts.en_curso; nd.incBreached = m.sla.openBreached; nd.slaPct = m.sla.compliancePct; }
       if (ue.status === 'fulfilled') nd.uebaOpen = ue.value.anomalies.length;
-      nd.risk = Math.max(8, Math.min(100, Math.round(nd.criticas * 0.16 + nd.incBreached * 16 + nd.uebaOpen * 3 + nd.vulnCrit * 0.04 + (100 - nd.siemPct) * 0.6)));
+      // Riesgo: lo desconocido no suma (no inflamos por un dato ausente).
+      nd.risk = Math.max(8, Math.min(100, Math.round((nd.criticas ?? 0) * 0.16 + nd.incBreached * 16 + nd.uebaOpen * 3 + nd.vulnCrit * 0.04 + (100 - nd.siemPct) * 0.6)));
       riskRef.current = nd.risk;
       setD(nd);
     })();
@@ -243,6 +243,7 @@ export default function CommandCenter() {
   }, []);
 
   const fmt = (n: number) => n.toLocaleString('es-CO');
+  const show = (n: number | null | undefined) => (n == null ? '—' : fmt(n));
   const relTime = (iso: string | null): string => {
     if (!iso) return '';
     const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
@@ -252,11 +253,16 @@ export default function CommandCenter() {
   };
   const sedeList: SedeMetrics[] = sedes ?? SEDE_INFO.map((s) => ({ ...s, agentes: 0, agentesActivos: 0, logins7d: 0, usuarios: 0, users: [], agentNames: [], ultimaActividad: null, estado: 'activa' as const }));
   const sedesActivas = sedeList.filter((s) => s.estado === 'activa').length;
-  const offlineAssets = radarData.assets.filter((a) => a.status !== 'active');
-  const offlineCount = d.agTotal > 0 ? Math.max(0, d.agTotal - d.agActivos) : offlineAssets.length;
+  // Agentes: una sola fuente para que KPI, radar y offline concuerden. Preferimos
+  // el universo del radar (endpoints, sin el activo de red); overview de respaldo.
+  const epAssets = radarData.assets.filter((a) => a.category !== 'net');
+  const agTotal = epAssets.length > 0 ? epAssets.length : d.agTotal;
+  const agActivos = epAssets.length > 0 ? epAssets.filter((a) => a.status === 'active').length : d.agActivos;
+  const offlineAssets = epAssets.filter((a) => a.status !== 'active');
+  const offlineCount = agTotal != null && agActivos != null ? Math.max(0, agTotal - agActivos) : offlineAssets.length;
   const sistema = pulse?.sistema ?? 'OPERATIVO';
   const sysColor = sistema === 'ATENCIÓN' ? 'destructive' : sistema === 'EN GESTIÓN' ? 'warn-orange' : 'success';
-  const deltaPct = pulse?.deltaPct ?? 0;
+  const deltaPct = pulse?.deltaPct ?? null;
 
   return (
     <div className="relative mx-auto max-w-[1480px]">
@@ -265,11 +271,11 @@ export default function CommandCenter() {
         {/* ticker */}
         <div className="hw-ticker hw-reveal">
           <span className="t"><i style={{ background: `hsl(var(--${sysColor}))`, boxShadow: `0 0 6px hsl(var(--${sysColor}))` }} />SISTEMA <b className="hw-blink" style={{ color: `hsl(var(--${sysColor}))` }}>{sistema}</b></span>
-          <span className="t">INGESTA <b>{pulse ? fmt(pulse.ingestaMin) : '—'}</b> ev/min</span>
+          <span className="t">INGESTA <b>{show(pulse?.ingestaMin)}</b> ev/min</span>
           <span className="t">INDEXER <b>{pulse?.discoPct != null ? pulse.discoPct + '%' : '—'}</b> disco</span>
-          <span className="t">AGENTES <b>{d.agActivos}/{d.agTotal}</b></span>
+          <span className="t">AGENTES <b>{show(agActivos)}/{show(agTotal)}</b></span>
           <span className="t"><i style={{ background: `hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))`, boxShadow: `0 0 6px hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))` }} />{d.incBreached} SLA <b style={{ color: `hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))` }}>{d.incBreached > 0 ? 'VENCIDO' : 'EN PLAZO'}</b></span>
-          <span className="t">KEV <b style={{ color: `hsl(var(--${(pulse?.kevEnv ?? 0) > 0 ? 'destructive' : 'success'}))` }}>{pulse?.kevEnv ?? 0} activas</b></span>
+          <span className="t">KEV <b style={{ color: `hsl(var(--${(pulse?.kevEnv ?? 0) > 0 ? 'destructive' : 'success'}))` }}>{pulse?.kevEnv != null ? `${pulse.kevEnv} activas` : '—'}</b></span>
         </div>
 
         {/* head */}
@@ -282,11 +288,11 @@ export default function CommandCenter() {
 
         {/* KPIs */}
         <div className="hw-reveal grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" style={{ animationDelay: '.06s' }}>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M4 6h16M4 12h16M4 18h10" /> Alertas 24h</div><div className="v">{fmt(d.alertas24h)}</div><div className={`d ${deltaPct > 0 ? 'hw-up' : deltaPct < 0 ? 'hw-down' : 'hw-flat'}`}>{pulse ? `${deltaPct > 0 ? '▲' : deltaPct < 0 ? '▼' : '='} ${Math.abs(deltaPct)}% VS AYER` : '—'}</div></div>
-          <div className="hud hw-kpi crit"><div className="l"><Ico d="M12 3l9 16H3z" /> Críticas</div><div className="v">{fmt(d.criticas)}</div><div className="d hw-flat">NIVEL ≥12 · 24H</div></div>
+          <div className="hud hw-kpi"><div className="l"><Ico d="M4 6h16M4 12h16M4 18h10" /> Alertas 24h</div><div className="v">{show(d.alertas24h)}</div><div className={`d ${deltaPct != null && deltaPct > 0 ? 'hw-up' : deltaPct != null && deltaPct < 0 ? 'hw-down' : 'hw-flat'}`}>{deltaPct != null ? `${deltaPct > 0 ? '▲' : deltaPct < 0 ? '▼' : '='} ${Math.abs(deltaPct)}% VS AYER` : '—'}</div></div>
+          <div className="hud hw-kpi crit"><div className="l"><Ico d="M12 3l9 16H3z" /> Críticas</div><div className="v">{show(d.criticas)}</div><div className="d hw-flat">NIVEL ≥12 · 24H</div></div>
           <div className="hud hw-kpi"><div className="l"><Ico d="M4 7h16v13H4z" /> Incidentes</div><div className="v">{d.incOpen}</div><div className={`d ${d.incBreached > 0 ? 'hw-down' : 'hw-flat'}`}>{d.incBreached > 0 ? `${d.incBreached} SLA VENCIDO` : 'SIN VENCIMIENTOS'}</div></div>
           <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> UEBA</div><div className="v">{d.uebaOpen}</div><div className="d hw-flat">ANOMALÍAS ABIERTAS</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> Agentes</div><div className="v">{d.agActivos}<span className="text-sm text-muted-foreground">/{d.agTotal}</span></div><div className={`d ${offlineCount > 0 ? 'hw-down' : 'hw-up'}`}>{offlineCount > 0 ? `▼ ${offlineCount} OFFLINE` : '✓ TODOS ONLINE'}</div></div>
+          <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> Agentes</div><div className="v">{show(agActivos)}<span className="text-sm text-muted-foreground">/{show(agTotal)}</span></div><div className={`d ${offlineCount > 0 ? 'hw-down' : 'hw-up'}`}>{offlineCount > 0 ? `▼ ${offlineCount} OFFLINE` : '✓ TODOS ONLINE'}</div></div>
           <div className="hud hw-kpi"><div className="l"><Ico d="M12 8v4l3 2" circle /> SLA</div><div className={`v ${d.incBreached > 0 ? 'hw-down' : ''}`}>{d.slaPct != null ? d.slaPct + '%' : '—'}</div><div className={`d ${d.incBreached > 0 ? 'hw-down' : 'hw-up'}`}>{d.incBreached > 0 ? `${d.incBreached} FUERA DE PLAZO` : '✓ CASOS EN PLAZO'}</div></div>
         </div>
 
@@ -421,7 +427,7 @@ export default function CommandCenter() {
             </div>
             <div className="hud hw-reveal" style={{ animationDelay: '.28s' }}>
               <div className="hw-chdr"><h3>Offline</h3><span className="sub">agentes ahora</span></div>
-              <div className="flex items-baseline gap-2"><span className="hw-tabular text-[26px] font-bold" style={{ color: offlineCount > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--success))' }}>{offlineCount}</span><span className="hw-tag">de {d.agTotal} desconectados</span></div>
+              <div className="flex items-baseline gap-2"><span className="hw-tabular text-[26px] font-bold" style={{ color: offlineCount > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--success))' }}>{offlineCount}</span><span className="hw-tag">de {show(agTotal)} desconectados</span></div>
               <div className="mt-2 flex max-h-[104px] flex-col gap-1 overflow-y-auto">
                 {offlineAssets.length === 0 ? (
                   <p className="hw-mono py-4 text-center text-[11px] text-muted-foreground">{offlineCount > 0 ? `${offlineCount} sin detalle de host` : 'Todos los agentes conectados.'}</p>

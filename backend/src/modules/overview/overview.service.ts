@@ -15,32 +15,40 @@ import { getIndexerClient } from '../wazuh/wazuh.client';
 import { env } from '../../config/env';
 
 /** Conteo de eventos criticos (nivel>=12) en 24h, excluyendo falsos positivos
- *  conocidos (mismos que el reporte ejecutivo) para que ambos surfaces coincidan. */
-async function criticosReales24h(): Promise<number> {
-  try {
-    const exclude = env.REPORT_EXCLUDE_RULES.split(',').map((s) => s.trim()).filter(Boolean);
-    const filter: unknown[] = [
-      { range: { timestamp: { gte: 'now-24h' } } },
-      { range: { 'rule.level': { gte: 12 } } },
-    ];
-    if (exclude.length) filter.push({ bool: { must_not: [{ terms: { 'rule.id': exclude } }] } });
-    const { data } = await getIndexerClient().post<{ count: number }>(
-      `/${env.WAZUH_ALERTS_INDEX}/_count`, { query: { bool: { filter } } }
-    );
-    return data.count;
-  } catch {
-    return 0;
+ *  conocidos (mismos que el reporte ejecutivo) para que ambos surfaces coincidan.
+ *  Devuelve `null` si la consulta falla: "desconocido" no es lo mismo que 0, y
+ *  jamas debemos pintar calma falsa por un timeout. Reintento suave + timeout
+ *  amplio para sobrevivir a la concurrencia del Command Center. */
+async function criticosReales24h(): Promise<number | null> {
+  const exclude = env.REPORT_EXCLUDE_RULES.split(',').map((s) => s.trim()).filter(Boolean);
+  const filter: unknown[] = [
+    { range: { timestamp: { gte: 'now-24h' } } },
+    { range: { 'rule.level': { gte: 12 } } },
+  ];
+  if (exclude.length) filter.push({ bool: { must_not: [{ terms: { 'rule.id': exclude } }] } });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { data } = await getIndexerClient().post<{ count: number }>(
+        `/${env.WAZUH_ALERTS_INDEX}/_count`, { query: { bool: { filter } } }, { timeout: 20_000 }
+      );
+      return data.count ?? 0;
+    } catch {
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 350));
+    }
   }
+  return null;
 }
 
 export interface OverviewData {
   generadoEn: string;
   global: { semaforo: 'verde' | 'amarillo' | 'rojo'; motivo: string };
-  amenazas: { alertas24h: number; criticas24h: number; altasCriticas24h: number; ataquesExternos: number };
+  amenazas: { alertas24h: number | null; criticas24h: number | null; altasCriticas24h: number | null; ataquesExternos: number };
   endpoints: { vulnCriticas: number; vulnAltas: number; vulnTotal: number; hardeningScore: number; fimCambios: number };
   cumplimiento: { marco: string; controles: number }[];
   siem: { semaforo: 'verde' | 'amarillo' | 'rojo'; ok: number; total: number };
-  agentes: { activos: number; total: number };
+  agentes: { activos: number | null; total: number | null };
+  /** true si esta respuesta se sirvio de la ultima cache buena por un fallo transitorio. */
+  degradado?: boolean;
 }
 
 let cache: { at: number; data: OverviewData } | null = null;
@@ -70,7 +78,7 @@ export async function getOverview(opts?: { force?: boolean }): Promise<OverviewD
     criticosReales24h(),
   ]);
 
-  const altasCriticas24h = (summary?.byBand.alta ?? 0) + (summary?.byBand.critica ?? 0);
+  const altasCriticas24h = summary ? (summary.byBand.alta ?? 0) + (summary.byBand.critica ?? 0) : null;
   const ataquesExternos = attacks ? attacks.filter((o) => o.esExterno).length : 0;
   const vulnCriticas = vuln?.resumen.critical ?? 0;
   const hardeningScore = sca?.resumen.scorePromedio ?? 0;
@@ -78,16 +86,18 @@ export async function getOverview(opts?: { force?: boolean }): Promise<OverviewD
   const compsOk = health ? health.componentes.filter((c) => c.estado === 'ok').length : 0;
   const compsTotal = health ? health.componentes.length : 0;
 
-  // Semaforo global: combina las señales de todos los dominios.
+  // Semaforo global: combina las señales de todos los dominios. Solo cuenta lo
+  // que SÍ pudimos medir (criticas24h/salud); un valor desconocido no dispara ni
+  // silencia el semaforo.
   const fallos: string[] = [];
   if (siemSem === 'rojo') fallos.push('la plataforma SIEM presenta fallos');
-  if (criticas24h >= 5) fallos.push(`${criticas24h} eventos críticos en 24h`);
+  if (criticas24h != null && criticas24h >= 5) fallos.push(`${criticas24h} eventos críticos en 24h`);
 
   const advertencias: string[] = [];
   if (vulnCriticas > 0) advertencias.push(`${vulnCriticas} vulnerabilidad(es) crítica(s)`);
   if (hardeningScore > 0 && hardeningScore < 60) advertencias.push(`hardening en ${hardeningScore}%`);
   if (ataquesExternos > 0) advertencias.push(`${ataquesExternos} origen(es) externo(s) marcados`);
-  if (criticas24h > 0 && criticas24h < 5) advertencias.push('eventos críticos recientes');
+  if (criticas24h != null && criticas24h > 0 && criticas24h < 5) advertencias.push('eventos críticos recientes');
   if (siemSem === 'amarillo') advertencias.push('advertencias en el SIEM');
 
   let semaforo: 'verde' | 'amarillo' | 'rojo' = 'verde';
@@ -104,7 +114,7 @@ export async function getOverview(opts?: { force?: boolean }): Promise<OverviewD
     generadoEn: new Date().toISOString(),
     global: { semaforo, motivo },
     amenazas: {
-      alertas24h: summary?.total ?? 0,
+      alertas24h: summary ? summary.total : null,
       criticas24h,
       altasCriticas24h,
       ataquesExternos,
@@ -125,8 +135,18 @@ export async function getOverview(opts?: { force?: boolean }): Promise<OverviewD
         ]
       : [],
     siem: { semaforo: siemSem, ok: compsOk, total: compsTotal },
-    agentes: { activos: agents?.active ?? 0, total: agents?.total ?? 0 },
+    agentes: { activos: agents?.active ?? null, total: agents?.total ?? null },
   };
-  cache = { at: Date.now(), data };
-  return data;
+
+  // Degradado = no pudimos medir las cifras cabecera (alertas o agentes o
+  // criticas). En ese caso NO envenenamos la cache con ceros: servimos la ultima
+  // foto buena (real aunque un poco vieja); si no hay, devolvemos "desconocido"
+  // sin cachear, para reintentar en la siguiente llamada.
+  const degradado = summary === null || agents === null || criticas24h === null;
+  if (!degradado) {
+    cache = { at: Date.now(), data };
+    return data;
+  }
+  if (cache) return { ...cache.data, degradado: true };
+  return { ...data, degradado: true };
 }

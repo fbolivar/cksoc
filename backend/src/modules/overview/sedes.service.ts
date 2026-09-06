@@ -81,5 +81,9 @@ export async function getSedes(): Promise<SedeMetrics[]> {
     for (const [, v] of matched) if (v.last && (!ultimaActividad || v.last > ultimaActividad)) ultimaActividad = v.last;
     const estado: 'activa' | 'inactiva' = agentesActivos > 0 || logins7d > 0 ? 'activa' : 'inactiva';
     return { name: s.name, region: s.region, rol: s.rol, agentes: ags.length, agentesActivos, logins7d, usuarios, users: matched.map(([u]) => u).slice(0, 15), agentNames: ags.map((a) => a.name), ultimaActividad, estado };
-  });
+  })
+    // Solo sedes con presencia REAL (agentes registrados o logins de sus usuarios).
+    // No pintamos ubicaciones fantasma sin telemetría: el mapa muestra la huella
+    // que de verdad monitoreamos. Las sedes reales de GVM se siembran en SEDES[].
+    .filter((s) => s.agentes > 0 || s.logins7d > 0);
 }

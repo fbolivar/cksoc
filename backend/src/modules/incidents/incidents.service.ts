@@ -43,15 +43,25 @@ export interface IncidentNote {
   createdAt: string;
 }
 
+/** Clasificación del incidente al cerrarlo: distingue lo real del ruido para que
+ *  las métricas (MTTR/SLA) no midan falsos positivos ni pruebas. */
+export type Disposition = 'verdadero_positivo' | 'falso_positivo' | 'prueba';
+
 export interface IncidentDetail extends IncidentListItem {
   description: string | null;
   source: IncidentSource;
   createdBy: string | null;
   closedAt: string | null;
+  disposition: Disposition | null;
   timeline: IncidentNote[];
 }
 
 const CLOSED: Status[] = ['resuelto', 'cerrado'];
+const DISPOSITION_LABEL: Record<Disposition, string> = {
+  verdadero_positivo: 'Verdadero positivo',
+  falso_positivo: 'Falso positivo',
+  prueba: 'Prueba / benigno',
+};
 
 interface ListRow {
   id: string; title: string; severity: Severity; status: Status;
@@ -88,10 +98,10 @@ export async function listIncidents(f: { status?: string; severity?: string; ass
 }
 
 export async function getIncident(id: string): Promise<IncidentDetail | null> {
-  const rows = await query<ListRow & { description: string | null; source: IncidentSource; created_by: string | null; closed_at: string | null }>(
+  const rows = await query<ListRow & { description: string | null; source: IncidentSource; created_by: string | null; closed_at: string | null; disposition: Disposition | null }>(
     `SELECT i.id, i.title, i.description, i.severity, i.status, i.assignee_id,
             ua.full_name AS assignee_name, uc.full_name AS creator_name,
-            i.created_by, i.source, i.closed_at, i.acknowledged_at, i.created_at, i.updated_at,
+            i.created_by, i.source, i.closed_at, i.disposition, i.acknowledged_at, i.created_at, i.updated_at,
             0 AS notes
        FROM incidents i
        LEFT JOIN users ua ON ua.id = i.assignee_id
@@ -110,6 +120,7 @@ export async function getIncident(id: string): Promise<IncidentDetail | null> {
     id: r.id, title: r.title, description: r.description, severity: r.severity, status: r.status,
     assigneeId: r.assignee_id, assigneeName: r.assignee_name, creatorName: r.creator_name,
     createdBy: r.created_by, source: r.source ?? {}, closedAt: r.closed_at,
+    disposition: r.disposition ?? null,
     notes: 0, createdAt: r.created_at, updatedAt: r.updated_at,
     sla: slaFor(r, policy),
     timeline: timeline.map((t) => ({ id: t.id, authorName: t.author_name, kind: t.kind, note: t.note, createdAt: t.created_at })),
@@ -190,11 +201,11 @@ export async function addComment(id: string, note: string, userId: string): Prom
 
 export async function updateIncident(
   id: string,
-  patch: { status?: Status; severity?: Severity; assigneeId?: string | null },
+  patch: { status?: Status; severity?: Severity; assigneeId?: string | null; disposition?: Disposition | null },
   userId: string
 ): Promise<IncidentDetail | null> {
-  const cur = (await query<{ status: Status; severity: Severity; assignee_id: string | null; title: string }>(
-    'SELECT status, severity, assignee_id, title FROM incidents WHERE id = $1', [id]
+  const cur = (await query<{ status: Status; severity: Severity; assignee_id: string | null; title: string; disposition: Disposition | null }>(
+    'SELECT status, severity, assignee_id, title, disposition FROM incidents WHERE id = $1', [id]
   ))[0];
   if (!cur) return null;
 
@@ -214,6 +225,12 @@ export async function updateIncident(
   if (patch.severity && patch.severity !== cur.severity) {
     sets.push(`severity = $${p++}`); params.push(patch.severity);
     sysNotes.push(`Severidad: ${cur.severity} → ${patch.severity}.`);
+  }
+  if (patch.disposition !== undefined && patch.disposition !== cur.disposition) {
+    sets.push(`disposition = $${p++}`); params.push(patch.disposition);
+    sysNotes.push(patch.disposition
+      ? `Clasificado como: ${DISPOSITION_LABEL[patch.disposition]}.`
+      : 'Clasificación removida.');
   }
   if (patch.assigneeId !== undefined && patch.assigneeId !== cur.assignee_id) {
     sets.push(`assignee_id = $${p++}`); params.push(patch.assigneeId);
