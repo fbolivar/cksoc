@@ -27,6 +27,7 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { reportsRouter } from './modules/reports/reports.routes';
 import { shiftReportRouter } from './modules/shift-report/shift-report.routes';
 import { netperfRouter } from './modules/netperf/netperf.routes';
+import { fwpostureRouter } from './modules/fwposture/fwposture.routes';
 import { executiveRouter } from './modules/reports/executive/exec.routes';
 import { usersRouter } from './modules/users/users.routes';
 import { systemRouter } from './modules/system/system.routes';
@@ -119,6 +120,7 @@ app.use('/api/reports/executive', executiveRouter); // antes de /api/reports
 app.use('/api/reports', reportsRouter);
 app.use('/api/shift-report', shiftReportRouter);
 app.use('/api/netperf', netperfRouter);
+app.use('/api/fwposture', fwpostureRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/system', systemRouter);
 app.use('/api/attacks', attacksRouter);

@@ -161,3 +161,9 @@ export const shiftApi = {
       .get<string>('/shift-report/preview', { params: turno ? { turno } : {}, responseType: 'text' })
       .then((r) => r.data),
 };
+
+// ----------------- Postura de seguridad del Firewall (FortiGate + IA) -----------------
+export const fwpostureApi = {
+  /** Genera y devuelve el HTML del informe de postura (tarda ~20-25 s por el análisis IA). */
+  preview: () => api.get<string>('/fwposture/preview', { responseType: 'text' }).then((r) => r.data),
+};

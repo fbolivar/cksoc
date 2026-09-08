@@ -295,6 +295,12 @@ export async function chat(history: ChatMessage[], message: string): Promise<{ r
   return runAgentic(system, [...hist, { role: 'user', content: msg }]);
 }
 
+/** Ejecuta un prompt puntual (system + user) y devuelve el texto. Reutilizable por
+ *  otros módulos que necesitan análisis de Claude (p.ej. postura del firewall). */
+export async function completarPrompt(system: string, user: string, maxTokens = 2500): Promise<string> {
+  return callClaude(system, [{ role: 'user', content: user }], maxTokens);
+}
+
 export async function triageAlert(text: string): Promise<{ reply: string }> {
   const t = String(text ?? '').trim().slice(0, MAX_INPUT);
   if (!t) throw new HttpError(400, 'Falta la alerta a triar.');

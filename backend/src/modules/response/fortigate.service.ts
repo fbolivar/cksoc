@@ -16,9 +16,34 @@ import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
 
 let client: AxiosInstance | null = null;
+let fullClient: AxiosInstance | null = null;
 
 export function isFortigateConfigured(): boolean {
   return Boolean(env.FORTIGATE_HOST && env.FORTIGATE_API_TOKEN);
+}
+
+/** Cliente con baseURL en la raíz de la API (para leer /api/v2/monitor y /api/v2/cmdb). */
+function fgFull(): AxiosInstance {
+  if (fullClient) return fullClient;
+  if (!isFortigateConfigured()) throw new HttpError(503, 'FortiGate no configurado (define FORTIGATE_HOST y FORTIGATE_API_TOKEN)');
+  fullClient = axios.create({
+    baseURL: `https://${env.FORTIGATE_HOST}`,
+    headers: { Authorization: `Bearer ${env.FORTIGATE_API_TOKEN}` },
+    timeout: 20_000,
+    httpsAgent: new https.Agent({ rejectUnauthorized: env.FORTIGATE_TLS_REJECT_UNAUTHORIZED }),
+  });
+  return fullClient;
+}
+
+/** GET genérico a la API del FortiGate (ruta absoluta, p.ej. `/api/v2/cmdb/system/global`).
+ *  SOLO LECTURA. axios descomprime gzip automáticamente. Para auditoría de postura. */
+export async function fgGet<T = unknown>(path: string): Promise<T> {
+  try {
+    const { data } = await fgFull().get<T>(path);
+    return data;
+  } catch (err) {
+    mapFgError(err, `GET ${path}`);
+  }
 }
 
 function fg(): AxiosInstance {
