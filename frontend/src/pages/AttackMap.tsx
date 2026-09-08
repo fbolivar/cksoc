@@ -110,9 +110,11 @@ export default function AttackMap() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, threatsOnly]);
 
-  // Estado del modulo de Respuesta (para habilitar el bloqueo desde el mapa)
+  // Estado del modulo de Respuesta + IPs ya bloqueadas (para marcarlas al entrar).
   useEffect(() => {
-    if (isAdmin) responseApi.status().then(setResp).catch(() => undefined);
+    if (!isAdmin) return;
+    responseApi.status().then(setResp).catch(() => undefined);
+    responseApi.blocked().then((list) => setBlockedIps(new Set(list.map((b) => b.ip)))).catch(() => undefined);
   }, [isAdmin]);
 
   // Tiempo real
@@ -319,16 +321,16 @@ export default function AttackMap() {
                       <span className="tabular-nums text-sm font-medium">{o.count}</span>
                       {canBlock && (
                         blockedIps.has(o.ips[0]) ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400" title="IP bloqueada">
-                            <ShieldCheck className="h-3.5 w-3.5" />
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400" title="Bloqueada en FortiGate (cuarentena, 24 h)">
+                            <ShieldCheck className="h-3 w-3" /> Bloqueada
                           </span>
                         ) : (
                           <button
                             onClick={() => openBlock(o)}
                             title={`Bloquear ${o.ips[0]} en FortiGate`}
-                            className="rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-red-500/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400"
                           >
-                            <ShieldBan className="h-4 w-4" />
+                            <ShieldBan className="h-3 w-3" /> Bloquear
                           </button>
                         )
                       )}

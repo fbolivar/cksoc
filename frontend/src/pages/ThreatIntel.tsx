@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import {
-  Radar, Loader2, Plus, Trash2, X, Ban, CheckCircle2, ExternalLink, ShieldAlert, Rss,
+  Radar, Loader2, Plus, Trash2, X, Ban, ExternalLink, ShieldAlert, ShieldCheck, Rss,
 } from 'lucide-react';
 import { threatIntelApi, type Ioc, type IocMatch, type FeedStatus, type IocType } from '@/lib/threatintel';
 import { responseApi } from '@/lib/response';
@@ -53,6 +53,13 @@ export default function ThreatIntel() {
 
   useEffect(() => { void loadAll(); }, [loadAll]);
   useEffect(() => { void loadIocs(); }, [loadIocs]);
+  // IPs ya bloqueadas en FortiGate → marcarlas al entrar (persistente entre recargas).
+  useEffect(() => {
+    if (!canManage) return;
+    responseApi.blocked()
+      .then((list) => setBlocked((prev) => { const n = { ...prev }; for (const it of list) if (!n[it.ip]) n[it.ip] = { ok: true }; return n; }))
+      .catch(() => undefined);
+  }, [canManage]);
 
   async function refresh() {
     setRefreshing(true);
@@ -147,12 +154,17 @@ export default function ThreatIntel() {
                             <div className="flex items-center gap-1">
                               <Link to={m.type === 'ip' ? `/alertas?srcip=${encodeURIComponent(m.value)}` : `/alertas?q=${encodeURIComponent(m.value)}`} className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-neon hover:underline"><ExternalLink className="h-3 w-3" /> ver</Link>
                               {canManage && m.type === 'ip' && (
-                                <Button size="sm" variant="destructive" onClick={() => void block(m.value, m.sampleRule)} disabled={st?.busy || st?.ok}>
-                                  {st?.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear
-                                </Button>
+                                st?.ok ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600" title="Bloqueada en FortiGate (cuarentena, 24 h)">
+                                    <ShieldCheck className="h-3.5 w-3.5" /> Bloqueada · 24h
+                                  </span>
+                                ) : (
+                                  <Button size="sm" variant="destructive" onClick={() => void block(m.value, m.sampleRule)} disabled={st?.busy}>
+                                    {st?.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear
+                                  </Button>
+                                )
                               )}
                             </div>
-                            {st?.ok && <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600"><CheckCircle2 className="h-3 w-3" /> bloqueada</span>}
                             {st?.error && <span className="text-[11px] text-destructive">{st.error}</span>}
                           </div>
                         </td>
