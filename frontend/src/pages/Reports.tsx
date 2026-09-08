@@ -180,8 +180,9 @@ export default function Reports() {
       const html = await fwpostureApi.preview();
       if (w) { w.document.open(); w.document.write(html); w.document.close(); }
     } catch (e) {
-      if (w) w.close();
-      flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar la postura del firewall');
+      const em = (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar la postura del firewall (revisa la conexión con el FortiGate).';
+      if (w) { w.document.open(); w.document.write(`<p style="font-family:system-ui;padding:2rem;color:#b91c1c">${em}</p>`); w.document.close(); }
+      flash('err', em);
     } finally { setFwBusy(false); }
   }
 
