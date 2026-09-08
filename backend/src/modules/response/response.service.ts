@@ -18,6 +18,8 @@ export interface BlockedItem {
   motivo: string | null;
   usuario_email: string | null;
   blocked_at: string | null;
+  permanent: boolean;
+  expiresAt: number | null; // epoch ms; null si permanente
 }
 
 async function logAction(
@@ -44,6 +46,9 @@ export async function block(opts: {
   user: ActingUser;
   adminIp?: string;
   alertaOrigenId?: string;
+  /** Duración del ban; 0 = permanente. Si se omite, usa el default (24h) — lo
+   *  usan los bloqueos automáticos (SOAR). El bloqueo MANUAL pasa 0 (permanente). */
+  expirySeconds?: number;
 }): Promise<void> {
   // 1) Validacion de seguridad (lista blanca) — ANTES de tocar el FortiGate
   const check = canBlock(opts.ip, opts.adminIp);
@@ -53,7 +58,7 @@ export async function block(opts: {
   }
   // 2) Ejecucion + auditoria
   try {
-    await blockIP(opts.ip);
+    await blockIP(opts.ip, opts.expirySeconds);
     await logAction(opts.ip, 'block', opts.motivo, opts.user, 'success', null, opts.alertaOrigenId);
   } catch (err) {
     const detalle = err instanceof Error ? err.message : 'error desconocido';
@@ -90,6 +95,8 @@ export async function listBlocked(): Promise<BlockedItem[]> {
       motivo: rows[0]?.motivo ?? null,
       usuario_email: rows[0]?.usuario_email ?? null,
       blocked_at: rows[0]?.created_at ?? null,
+      permanent: b.permanent,
+      expiresAt: b.expiresAt,
     });
   }
   return result;

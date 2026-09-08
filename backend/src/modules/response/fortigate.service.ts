@@ -48,18 +48,22 @@ function mapFgError(err: unknown, context: string): never {
   throw new HttpError(502, `Error en el FortiGate (${context}, HTTP ${e.response?.status ?? '?'})`);
 }
 
-interface BannedResult { results?: { ip_address?: string; srcip?: string }[] }
+interface BannedRow { ip_address?: string; srcip?: string; expires?: number; created?: number; source?: string }
+interface BannedResult { results?: BannedRow[] }
 
-function parseBanned(data: BannedResult): { ip: string; name: string }[] {
+export interface BannedEntry { ip: string; name: string; expiresAt: number | null; permanent: boolean }
+
+function parseBanned(data: BannedResult): BannedEntry[] {
   const rows = data?.results ?? [];
   return rows
-    .map((r) => String(r.ip_address ?? r.srcip ?? '').trim())
-    .filter((ip) => ip.length > 0)
-    .map((ip) => ({ ip, name: ip }));
+    .map((r) => ({ ip: String(r.ip_address ?? r.srcip ?? '').trim(), expires: r.expires }))
+    .filter((r) => r.ip.length > 0)
+    // Sin `expires` (ban "Administrative"/expiry=0) = permanente; con `expires` = temporal.
+    .map((r) => ({ ip: r.ip, name: r.ip, expiresAt: r.expires ? r.expires * 1000 : null, permanent: !r.expires }));
 }
 
 /** Lee las IPs en cuarentena (SOLO LECTURA). */
-export async function listBlocked(): Promise<{ ip: string; name: string }[]> {
+export async function listBlocked(): Promise<BannedEntry[]> {
   try {
     const { data } = await fg().get<BannedResult>('/user/banned');
     return parseBanned(data);
@@ -78,10 +82,15 @@ export async function verifyConnection(): Promise<{ group: string; count: number
   }
 }
 
-/** Añade una IP a la cuarentena del FortiGate (con expiración de seguridad). */
-export async function blockIP(ip: string): Promise<void> {
+/**
+ * Añade una IP a la cuarentena del FortiGate.
+ * `expirySeconds`: duración del ban; 0 = PERMANENTE (ban "Administrative" sin
+ * expiración). Si no se indica, usa el default de seguridad (FORTIGATE_BAN_SECONDS).
+ */
+export async function blockIP(ip: string, expirySeconds?: number): Promise<void> {
+  const expiry = expirySeconds === undefined ? env.FORTIGATE_BAN_SECONDS : expirySeconds;
   try {
-    await fg().post('/user/banned/add_users', { ip_addresses: [ip], expiry: env.FORTIGATE_BAN_SECONDS });
+    await fg().post('/user/banned/add_users', { ip_addresses: [ip], expiry });
   } catch (err) {
     mapFgError(err, 'bloquear IP');
   }

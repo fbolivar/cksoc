@@ -42,6 +42,8 @@ export interface BlockedItem {
   motivo: string | null;
   usuario_email: string | null;
   blocked_at: string | null;
+  permanent: boolean;
+  expiresAt: number | null; // epoch ms; null si permanente
 }
 
 export interface AuditRow {

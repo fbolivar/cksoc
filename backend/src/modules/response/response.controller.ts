@@ -35,6 +35,9 @@ export async function postBlock(req: Request, res: Response): Promise<void> {
       user: { id: req.user!.id, email: req.user!.email },
       adminIp: adminIpOf(req),
       alertaOrigenId: parsed.data.alertaOrigenId,
+      // Bloqueo MANUAL (decisión de un analista) = permanente; no se suelta solo.
+      // Los automáticos (SOAR) no pasan por aquí y mantienen el ban temporal (24h).
+      expirySeconds: 0,
     });
     res.json({ ok: true, ip: parsed.data.ip });
   } catch (err) {

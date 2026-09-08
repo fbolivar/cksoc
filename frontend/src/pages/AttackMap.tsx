@@ -49,7 +49,7 @@ export default function AttackMap() {
   const [blockTarget, setBlockTarget] = useState<AttackOrigin | null>(null);
   const [motivo, setMotivo] = useState('');
   const [blocking, setBlocking] = useState(false);
-  const [blockedIps, setBlockedIps] = useState<Set<string>>(new Set());
+  const [blockedIps, setBlockedIps] = useState<Map<string, boolean>>(new Map()); // ip → permanente
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const canBlock = isAdmin && Boolean(resp?.configured && resp?.connection.ok);
 
@@ -72,8 +72,8 @@ export default function AttackMap() {
     setBlocking(true);
     try {
       await responseApi.block(ip, motivo.trim() || 'Bloqueo manual desde mapa de ataques');
-      setBlockedIps((prev) => new Set(prev).add(ip));
-      flash('ok', `IP ${ip} bloqueada en FortiGate`);
+      setBlockedIps((prev) => new Map(prev).set(ip, true)); // manual = permanente
+      flash('ok', `IP ${ip} bloqueada permanentemente en FortiGate`);
       setBlockTarget(null);
     } catch (e) {
       flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo bloquear la IP');
@@ -114,7 +114,7 @@ export default function AttackMap() {
   useEffect(() => {
     if (!isAdmin) return;
     responseApi.status().then(setResp).catch(() => undefined);
-    responseApi.blocked().then((list) => setBlockedIps(new Set(list.map((b) => b.ip)))).catch(() => undefined);
+    responseApi.blocked().then((list) => setBlockedIps(new Map(list.map((b) => [b.ip, b.permanent])))).catch(() => undefined);
   }, [isAdmin]);
 
   // Tiempo real
@@ -321,8 +321,8 @@ export default function AttackMap() {
                       <span className="tabular-nums text-sm font-medium">{o.count}</span>
                       {canBlock && (
                         blockedIps.has(o.ips[0]) ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400" title="Bloqueada en FortiGate (cuarentena, 24 h)">
-                            <ShieldCheck className="h-3 w-3" /> Bloqueada
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400" title={blockedIps.get(o.ips[0]) ? 'Bloqueada en FortiGate · permanente' : 'Bloqueada en FortiGate · temporal (24 h)'}>
+                            <ShieldCheck className="h-3 w-3" /> Bloqueada · {blockedIps.get(o.ips[0]) ? 'permanente' : '24h'}
                           </span>
                         ) : (
                           <button
