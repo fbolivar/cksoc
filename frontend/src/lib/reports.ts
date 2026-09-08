@@ -164,7 +164,17 @@ export const shiftApi = {
 
 // ----------------- Postura de seguridad del Firewall (FortiGate + IA) -----------------
 export const fwpostureApi = {
-  /** Genera y devuelve el HTML del informe de postura. El análisis IA tarda ~20-30 s,
-   *  por eso el timeout sube a 90 s (el global de 15 s abortaría la petición). */
-  preview: () => api.get<string>('/fwposture/preview', { responseType: 'text', timeout: 90_000 }).then((r) => r.data),
+  /** Genera el informe de postura en PDF y dispara la descarga. El análisis IA
+   *  tarda ~20-30 s → timeout 90 s (el global de 15 s abortaría la petición). */
+  download: async () => {
+    const res = await api.get('/fwposture/pdf', { responseType: 'blob', timeout: 90_000 });
+    const cd = String(res.headers['content-disposition'] ?? '');
+    const m = cd.match(/filename="?([^"]+)"?/);
+    const name = m?.[1] ?? `Postura_Firewall_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const url = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  },
 };

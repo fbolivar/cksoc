@@ -172,17 +172,13 @@ export default function Reports() {
     }
   }
 
-  async function fwPreview() {
+  async function fwDownload() {
     setFwBusy(true);
-    const w = window.open('', '_blank');
-    if (w) w.document.write('<p style="font-family:system-ui;padding:2rem;color:#555">Generando postura del firewall (analizando la configuración con IA, ~20-30 s)…</p>');
     try {
-      const html = await fwpostureApi.preview();
-      if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+      await fwpostureApi.download();
+      flash('ok', 'Postura del firewall generada · PDF descargado.');
     } catch (e) {
-      const em = (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar la postura del firewall (revisa la conexión con el FortiGate).';
-      if (w) { w.document.open(); w.document.write(`<p style="font-family:system-ui;padding:2rem;color:#b91c1c">${em}</p>`); w.document.close(); }
-      flash('err', em);
+      flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar la postura del firewall (revisa la conexión con el FortiGate).');
     } finally { setFwBusy(false); }
   }
 
@@ -294,11 +290,11 @@ export default function Reports() {
                 Audita la configuración del FortiGate contra mejores prácticas (CIS/hardening) y el Security
                 Rating de Fortinet, y la IA redacta un informe con calificación, hallazgos priorizados y remediación.
               </p>
-              <p className="hw-mono mt-2 text-[10px] text-muted-foreground/70">Solo lectura · sin secretos · el análisis tarda ~20-30 s</p>
+              <p className="hw-mono mt-2 text-[10px] text-muted-foreground/70">Solo lectura · sin secretos · genera un PDF (~20-30 s por el análisis IA)</p>
             </div>
-            <Button size="sm" onClick={fwPreview} disabled={fwBusy}>
-              {fwBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-1.5 h-4 w-4" />}
-              {fwBusy ? 'Analizando…' : 'Generar postura'}
+            <Button size="sm" onClick={fwDownload} disabled={fwBusy}>
+              {fwBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+              {fwBusy ? 'Generando PDF…' : 'Descargar postura (PDF)'}
             </Button>
           </div>
         </div>
