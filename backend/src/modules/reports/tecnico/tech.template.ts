@@ -657,6 +657,73 @@ function seccionAnexos(m: TechMetrics, a: AnalisisTecnico): string {
 // Documento
 // --------------------------------------------------------------------------
 
+function seccionRed(m: TechMetrics): string {
+  const r = m.red;
+  if (!r || r.totalSesiones === 0) {
+    return nota(
+      'No se observaron sesiones de red en el periodo. El FortiGate es la fuente de red; ' +
+      'para poblar esta sección debe estar activo el App Control y el registro de sesiones en sus políticas.'
+    );
+  }
+  let out = rich(
+    'Patrones de tráfico observados por el FortiGate (App Control y reenvío) durante el periodo, ' +
+    'medidos por número de sesiones. El volumen en bytes (MB por host/aplicación) y la utilización de ' +
+    'enlace se incorporarán en una fase posterior.', 11
+  );
+  out += kpiGrid([
+    { valor: fmt(r.totalSesiones), etiqueta: 'Sesiones observadas', pie: 'App Control + reenvío' },
+    { valor: fmt(r.ipsEventos), etiqueta: 'Eventos IPS', pie: 'detecciones de red' },
+    { valor: fmt(r.topTalkers.length), etiqueta: 'Orígenes principales', pie: 'top talkers listados' },
+    { valor: fmt(r.categorias.length), etiqueta: 'Categorías de tráfico', pie: 'observadas' },
+  ], 4);
+
+  if (r.topApps.length) {
+    out += h3('Aplicaciones más usadas');
+    out += tabla(
+      ['Aplicación', 'Sesiones', '% del tráfico', ''],
+      r.topApps.map((x) => [mono(esc(x.app)), fmt(x.conteo), `${x.pct} %`, barra(x.pct)]),
+      { anchos: ['34%', '16%', '16%', '34%'] }
+    );
+  }
+  if (r.categorias.length) {
+    out += h3('Categorías de tráfico');
+    out += tabla(
+      ['Categoría', 'Sesiones'],
+      r.categorias.map((x) => [esc(x.categoria), fmt(x.conteo)]),
+      { anchos: ['70%', '30%'] }
+    );
+  }
+  if (r.topTalkers.length) {
+    out += h3('Top talkers (orígenes con más tráfico)');
+    out += tabla(
+      ['Origen', 'Sesiones', 'Destinos distintos'],
+      r.topTalkers.map((x) => [mono(esc(x.ip)), fmt(x.sesiones), fmt(x.destinos)]),
+      { anchos: ['44%', '28%', '28%'] }
+    );
+  }
+  if (r.topDestinos.length) {
+    out += h3('Destinos más contactados');
+    out += tabla(
+      ['Destino', 'País', 'Sesiones'],
+      r.topDestinos.map((x) => [mono(esc(x.ip)), esc(x.pais ?? '—'), fmt(x.conteo)]),
+      { anchos: ['40%', '32%', '28%'] }
+    );
+  }
+  if (r.topDominios.length) {
+    out += h3('Dominios más visitados (SNI)');
+    out += tabla(
+      ['Dominio', 'Sesiones'],
+      r.topDominios.map((x) => [mono(esc(x.dominio)), fmt(x.conteo)]),
+      { anchos: ['70%', '30%'] }
+    );
+  }
+  out += nota(
+    'Los dominios provienen del SNI del App Control (los equipos usan DNS cifrado, por lo que el ' +
+    'filtro DNS no los registra). Estas cifras son de patrón/uso, no de volumen en bytes.'
+  );
+  return out;
+}
+
 export function buildTechnicalHtml(m: TechMetrics): string {
   const a = analizarTecnico(m);
   const logo = logoDataUri();
@@ -675,6 +742,7 @@ export function buildTechnicalHtml(m: TechMetrics): string {
     'Alcance y telemetría',
     'Panorama de detecciones',
     'Análisis por dominio',
+    'Red y ancho de banda',
     'Observaciones del analista',
     'Hallazgos priorizados',
     'Plan de acción',
@@ -724,22 +792,25 @@ export function buildTechnicalHtml(m: TechMetrics): string {
     ${h2(3, 'Análisis por dominio')}
     ${seccionDominios(m)}
 
-    ${h2(4, 'Observaciones del analista')}
+    ${h2(4, 'Red y ancho de banda')}
+    ${seccionRed(m)}
+
+    ${h2(5, 'Observaciones del analista')}
     ${rich(a.observaciones, 11)}
 
-    ${h2(5, 'Hallazgos priorizados')}
+    ${h2(6, 'Hallazgos priorizados')}
     ${a.hallazgos.length
       ? rich('Cada ficha incluye la evidencia que la sustenta, el impacto técnico, los pasos de remediación, el criterio con el que se dará por cerrada y —cuando aplica— la consulta exacta para reproducir el hallazgo en el Indexer.') +
         a.hallazgos.map((x, i) => fichaHallazgo(x, i + 1)).join('')
       : rich('No se identificaron hallazgos en el periodo analizado. Conviene verificar que la telemetría esté llegando correctamente antes de concluir que la ausencia de hallazgos equivale a ausencia de riesgo.')}
 
-    ${h2(6, 'Plan de acción')}
+    ${h2(7, 'Plan de acción')}
     ${seccionPlan(m, a)}
 
-    ${h2(7, 'Hoja de ruta por sprints')}
+    ${h2(8, 'Hoja de ruta por sprints')}
     ${seccionHojaRuta(a)}
 
-    ${h2(8, 'Anexos')}
+    ${h2(9, 'Anexos')}
     ${seccionAnexos(m, a)}
   `;
 

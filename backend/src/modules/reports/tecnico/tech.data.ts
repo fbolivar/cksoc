@@ -116,6 +116,17 @@ export interface SaludTelemetria {
   versionesAgente: { version: string; agentes: number }[];
 }
 
+export interface RedData {
+  totalSesiones: number;           // sesiones observadas por el FortiGate (app-ctrl + forward)
+  ipsEventos: number;              // eventos IPS del periodo
+  subtipos: { nombre: string; conteo: number }[];
+  topApps: { app: string; conteo: number; pct: number }[];
+  categorias: { categoria: string; conteo: number }[];
+  topTalkers: { ip: string; sesiones: number; destinos: number }[];
+  topDestinos: { ip: string; conteo: number; pais: string | null }[];
+  topDominios: { dominio: string; conteo: number }[];
+}
+
 export interface TechMetrics {
   periodo: Periodo;
   generadoEn: string;
@@ -163,6 +174,9 @@ export interface TechMetrics {
   anomalias: AnomaliaUeba[];
   bloqueos: BloqueoAplicado[];
   salud: SaludTelemetria;
+
+  // Red / ancho de banda (FortiGate: App Control + tráfico)
+  red: RedData;
 }
 
 // --------------------------------------------------------------------------
@@ -714,6 +728,51 @@ async function saludTelemetria(
 // Recoleccion principal
 // --------------------------------------------------------------------------
 
+/**
+ * Red / ancho de banda: patrones de tráfico observados por el FortiGate
+ * (App Control + forward) en el periodo — apps, categorías, top talkers,
+ * destinos y dominios (SNI). Por conteo de sesiones (el volumen en bytes llega
+ * en una fase posterior; hoy los contadores de bytes vienen como texto y el
+ * logging de sesiones con volumen aún no está a fondo en el FortiGate).
+ */
+async function redDelPeriodo(p: Periodo): Promise<RedData> {
+  const forti = [{ match: { 'rule.groups': 'fortigate' } }];
+  const sesion = [...forti, { terms: { 'data.subtype': ['app-ctrl', 'forward'] } }];
+  type B = { key: string; doc_count: number };
+  const data = await search<{
+    hits: { total: { value: number } };
+    aggregations: {
+      subt: { buckets: B[] }; apps: { buckets: B[] }; cats: { buckets: B[] };
+      talk: { buckets: (B & { d: { value: number } })[] }; dst: { buckets: B[] }; dom: { buckets: B[] };
+    };
+  }>({
+    size: 0,
+    track_total_hits: true,
+    query: { bool: { filter: [rango(p), ...sesion] } },
+    aggs: {
+      subt: { terms: { field: 'data.subtype', size: 10 } },
+      apps: { terms: { field: 'data.app', size: 12 } },
+      cats: { terms: { field: 'data.appcat', size: 8 } },
+      talk: { terms: { field: 'data.srcip', size: 10 }, aggs: { d: { cardinality: { field: 'data.dstip' } } } },
+      dst: { terms: { field: 'data.dstip', size: 10 } },
+      dom: { terms: { field: 'data.hostname', size: 12 } },
+    },
+  });
+  const ipsEventos = await contar(p, [...forti, { term: { 'data.subtype': 'ips' } }]);
+  const total = data?.hits?.total?.value ?? 0;
+  const a = data?.aggregations;
+  return {
+    totalSesiones: total,
+    ipsEventos,
+    subtipos: (a?.subt.buckets ?? []).map((x) => ({ nombre: x.key, conteo: x.doc_count })),
+    topApps: (a?.apps.buckets ?? []).map((x) => ({ app: x.key, conteo: x.doc_count, pct: total ? Math.round((x.doc_count / total) * 1000) / 10 : 0 })),
+    categorias: (a?.cats.buckets ?? []).map((x) => ({ categoria: x.key, conteo: x.doc_count })),
+    topTalkers: (a?.talk.buckets ?? []).map((x) => ({ ip: x.key, sesiones: x.doc_count, destinos: x.d?.value ?? 0 })),
+    topDestinos: (a?.dst.buckets ?? []).map((x) => ({ ip: x.key, conteo: x.doc_count, pais: isPublicIP(x.key) ? (geolocate(x.key)?.country ?? null) : null })),
+    topDominios: (a?.dom.buckets ?? []).map((x) => ({ dominio: x.key, conteo: x.doc_count })),
+  };
+}
+
 export async function collectTechMetrics(p: Periodo, titulo: string): Promise<TechMetrics> {
   const prev = periodoAnterior(p);
 
@@ -779,6 +838,9 @@ export async function collectTechMetrics(p: Periodo, titulo: string): Promise<Te
   ]);
 
   const salud = await saludTelemetria(p, serie, conEventos, inventario);
+  const red = await redDelPeriodo(p).catch(() => ({
+    totalSesiones: 0, ipsEventos: 0, subtipos: [], topApps: [], categorias: [], topTalkers: [], topDestinos: [], topDominios: [],
+  } as RedData));
 
   return {
     periodo: p,
@@ -829,5 +891,6 @@ export async function collectTechMetrics(p: Periodo, titulo: string): Promise<Te
       pais: isPublicIP(b.ip) ? (geolocate(b.ip)?.country ?? null) : null,
     })),
     salud,
+    red,
   };
 }
