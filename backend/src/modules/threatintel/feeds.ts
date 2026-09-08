@@ -10,8 +10,12 @@ export interface TypedIoc { type: FeedIocType; value: string }
 
 export interface FeedDef {
   name: string;
-  url: string;
-  parse: (raw: string) => TypedIoc[];
+  /** URL de descarga (feeds de texto/CSV). Omitir si se usa `fetch`. */
+  url?: string;
+  /** Parseo de la descarga a IOCs tipados. Requerido junto con `url`. */
+  parse?: (raw: string) => TypedIoc[];
+  /** Recolector propio (para APIs con paginación/clave, p.ej. OTX). Alternativa a url+parse. */
+  fetch?: () => Promise<TypedIoc[]>;
   /** Tope de indicadores a ingerir por corrida (acota tamaño/tiempo). */
   cap?: number;
   /** Confianza base (0-100) de los IOCs de este feed. */
@@ -21,6 +25,7 @@ export interface FeedDef {
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 const DOMAIN = /^(?=.{4,253}$)([a-z0-9](-?[a-z0-9])*\.)+[a-z]{2,}$/i;
 const SHA256 = /^[a-f0-9]{64}$/i;
+const SHA1 = /^[a-f0-9]{40}$/i;
 const MD5 = /^[a-f0-9]{32}$/i;
 
 const lines = (raw: string): string[] =>
@@ -106,16 +111,80 @@ export const FEEDS: FeedDef[] = [
   },
 ];
 
+// --------------------------------------------------------------------------
+// AlienVault OTX (API con clave). Aporta IOCs de "pulses" de la comunidad —
+// campañas y APTs dirigidas que los feeds de abuse.ch/blocklist no traen.
+// Se activa solo si OTX_API_KEY está en el entorno.
+// --------------------------------------------------------------------------
+const OTX_KEY = process.env.OTX_API_KEY || '';
+const OTX_BASE = process.env.OTX_BASE_URL || 'https://otx.alienvault.com';
+const OTX_CAP = Number(process.env.OTX_CAP || 20000);
+const OTX_MAX_PAGES = Number(process.env.OTX_MAX_PAGES || 40);
+
+/** Mapea el tipo de indicador de OTX a nuestro tipo (o null si no aplica/ inválido). */
+function mapOtx(type: string, value: string): TypedIoc | null {
+  const v = String(value || '').trim();
+  switch (type) {
+    case 'IPv4': return IPV4.test(v) ? { type: 'ip', value: v } : null;
+    case 'domain':
+    case 'hostname': return DOMAIN.test(v) ? { type: 'domain', value: v.toLowerCase() } : null;
+    case 'URL':
+    case 'URI': return /^https?:\/\//i.test(v) ? { type: 'url', value: v } : null;
+    case 'FileHash-MD5': return MD5.test(v) ? { type: 'md5', value: v.toLowerCase() } : null;
+    case 'FileHash-SHA1': return SHA1.test(v) ? { type: 'sha1', value: v.toLowerCase() } : null;
+    case 'FileHash-SHA256': return SHA256.test(v) ? { type: 'sha256', value: v.toLowerCase() } : null;
+    default: return null; // CIDR, email, CVE, Mutex, YARA, etc. → se ignoran
+  }
+}
+
+interface OtxPulse { indicators?: { indicator: string; type: string }[] }
+interface OtxPage { results?: OtxPulse[]; next?: string | null }
+
+/** Recorre los pulses suscritos paginando y extrae indicadores hasta el tope. */
+async function fetchOtx(): Promise<TypedIoc[]> {
+  if (!OTX_KEY) throw new Error('OTX_API_KEY no configurada');
+  const out: TypedIoc[] = [];
+  for (let page = 1; page <= OTX_MAX_PAGES && out.length < OTX_CAP; page++) {
+    const { data } = await axios.get<OtxPage>(`${OTX_BASE}/api/v1/pulses/subscribed`, {
+      params: { limit: 50, page },
+      timeout: 30_000,
+      headers: { 'X-OTX-API-KEY': OTX_KEY, 'User-Agent': 'HexWatch-ThreatIntel/1.0' },
+    });
+    const results = data.results ?? [];
+    if (results.length === 0) break;
+    for (const pulse of results) {
+      for (const ind of pulse.indicators ?? []) {
+        const m = mapOtx(ind.type, ind.indicator);
+        if (m) out.push(m);
+        if (out.length >= OTX_CAP) break;
+      }
+      if (out.length >= OTX_CAP) break;
+    }
+    if (!data.next) break;
+  }
+  return out;
+}
+
+if (OTX_KEY) {
+  FEEDS.push({ name: 'AlienVault OTX', fetch: fetchOtx, cap: OTX_CAP, confidence: 75 });
+}
+
 /** Descarga un feed y devuelve los indicadores tipados únicos (aplicando el tope). */
 export async function fetchFeed(def: FeedDef): Promise<TypedIoc[]> {
-  const { data } = await axios.get<string>(def.url, {
-    timeout: 30_000,
-    responseType: 'text',
-    headers: { 'User-Agent': 'HexWatch-ThreatIntel/1.0' },
-  });
+  let items: TypedIoc[];
+  if (def.fetch) {
+    items = await def.fetch();
+  } else {
+    const { data } = await axios.get<string>(def.url as string, {
+      timeout: 30_000,
+      responseType: 'text',
+      headers: { 'User-Agent': 'HexWatch-ThreatIntel/1.0' },
+    });
+    items = def.parse ? def.parse(String(data)) : [];
+  }
   const seen = new Set<string>();
   const out: TypedIoc[] = [];
-  for (const it of def.parse(String(data))) {
+  for (const it of items) {
     const k = `${it.type}|${it.value}`;
     if (seen.has(k)) continue;
     seen.add(k);

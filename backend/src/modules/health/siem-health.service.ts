@@ -177,6 +177,28 @@ export async function checkIndexer(): Promise<HealthComponent[]> {
   } catch (err) {
     comps.push({ id: 'disco', nombre: 'Disco del Indexer', estado: 'warn', resumen: 'No se pudo leer el disco', detalle: errMsg(err) });
   }
+  // Heap JVM del Indexer: si se llena, OpenSearch activa el circuit breaker y
+  // rechaza consultas (429) → mapa/métricas caen. Avisar ANTES de llegar al tope.
+  try {
+    const warn = Number(process.env.HEALTH_HEAP_WARN ?? 85);
+    const crit = Number(process.env.HEALTH_HEAP_CRIT ?? 92);
+    const { data } = await client.get<{ 'heap.percent': string | null; 'heap.max': string | null }[]>('/_cat/nodes?format=json&h=heap.percent,heap.max');
+    const node = data.find((n) => n['heap.percent'] != null);
+    const pct = node ? Number(node['heap.percent']) : null;
+    const max = node?.['heap.max'] ?? null;
+    let estado: Estado = 'ok';
+    if (pct != null && pct >= crit) estado = 'fail';
+    else if (pct != null && pct >= warn) estado = 'warn';
+    comps.push({
+      id: 'heap', nombre: 'Memoria del Indexer (heap)', estado,
+      resumen: pct != null ? `${pct}% de ${max ?? '—'}` : 'desconocido',
+      detalle: pct != null && pct >= warn
+        ? `Heap alto (umbral ${estado === 'fail' ? crit : warn}%): riesgo de rechazo de consultas por el circuit breaker (429). Sube el heap del wazuh-indexer (jvm.options) o reduce shards.`
+        : undefined,
+    });
+  } catch (err) {
+    comps.push({ id: 'heap', nombre: 'Memoria del Indexer (heap)', estado: 'warn', resumen: 'No se pudo leer el heap', detalle: errMsg(err) });
+  }
   return comps;
 }
 
