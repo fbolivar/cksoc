@@ -657,6 +657,14 @@ function seccionAnexos(m: TechMetrics, a: AnalisisTecnico): string {
 // Documento
 // --------------------------------------------------------------------------
 
+function fmtBytes(n: number): string {
+  if (!n || n <= 0) return '—';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0; let v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${u[i]}`;
+}
+
 function seccionRed(m: TechMetrics): string {
   const r = m.red;
   if (!r || r.totalSesiones === 0) {
@@ -666,21 +674,36 @@ function seccionRed(m: TechMetrics): string {
     );
   }
   let out = rich(
-    'Patrones de tráfico observados por el FortiGate (App Control y reenvío) durante el periodo, ' +
-    'medidos por número de sesiones. El volumen en bytes (MB por host/aplicación) y la utilización de ' +
-    'enlace se incorporarán en una fase posterior.', 11
+    'Tráfico observado por el FortiGate (App Control y reenvío) durante el periodo: patrones de uso ' +
+    '(por número de sesiones) y consumo de ancho de banda (por volumen en bytes registrado en las sesiones).', 11
   );
   out += kpiGrid([
+    { valor: fmtBytes(r.volumenBytes), etiqueta: 'Volumen de tráfico', pie: 'enviado + recibido' },
     { valor: fmt(r.totalSesiones), etiqueta: 'Sesiones observadas', pie: 'App Control + reenvío' },
     { valor: fmt(r.ipsEventos), etiqueta: 'Eventos IPS', pie: 'detecciones de red' },
-    { valor: fmt(r.topTalkers.length), etiqueta: 'Orígenes principales', pie: 'top talkers listados' },
     { valor: fmt(r.categorias.length), etiqueta: 'Categorías de tráfico', pie: 'observadas' },
   ], 4);
 
-  if (r.topApps.length) {
-    out += h3('Aplicaciones más usadas');
+  if (r.topTalkers.length) {
+    out += h3('Consumo de ancho de banda por equipo (top talkers)');
     out += tabla(
-      ['Aplicación', 'Sesiones', '% del tráfico', ''],
+      ['Origen', 'Volumen', 'Sesiones', 'Destinos distintos'],
+      r.topTalkers.map((x) => [mono(esc(x.ip)), fmtBytes(x.bytes), fmt(x.sesiones), fmt(x.destinos)]),
+      { anchos: ['34%', '24%', '21%', '21%'] }
+    );
+  }
+  if (r.topAppsVol.length) {
+    out += h3('Aplicaciones por consumo de ancho de banda');
+    out += tabla(
+      ['Aplicación', 'Volumen'],
+      r.topAppsVol.map((x) => [mono(esc(x.app)), fmtBytes(x.bytes)]),
+      { anchos: ['70%', '30%'] }
+    );
+  }
+  if (r.topApps.length) {
+    out += h3('Aplicaciones más usadas (por número de sesiones)');
+    out += tabla(
+      ['Aplicación', 'Sesiones', '% de sesiones', ''],
       r.topApps.map((x) => [mono(esc(x.app)), fmt(x.conteo), `${x.pct} %`, barra(x.pct)]),
       { anchos: ['34%', '16%', '16%', '34%'] }
     );
@@ -693,20 +716,12 @@ function seccionRed(m: TechMetrics): string {
       { anchos: ['70%', '30%'] }
     );
   }
-  if (r.topTalkers.length) {
-    out += h3('Top talkers (orígenes con más tráfico)');
-    out += tabla(
-      ['Origen', 'Sesiones', 'Destinos distintos'],
-      r.topTalkers.map((x) => [mono(esc(x.ip)), fmt(x.sesiones), fmt(x.destinos)]),
-      { anchos: ['44%', '28%', '28%'] }
-    );
-  }
   if (r.topDestinos.length) {
-    out += h3('Destinos más contactados');
+    out += h3('Destinos que más consumen');
     out += tabla(
-      ['Destino', 'País', 'Sesiones'],
-      r.topDestinos.map((x) => [mono(esc(x.ip)), esc(x.pais ?? '—'), fmt(x.conteo)]),
-      { anchos: ['40%', '32%', '28%'] }
+      ['Destino', 'País', 'Volumen', 'Sesiones'],
+      r.topDestinos.map((x) => [mono(esc(x.ip)), esc(x.pais ?? '—'), fmtBytes(x.bytes), fmt(x.conteo)]),
+      { anchos: ['34%', '26%', '20%', '20%'] }
     );
   }
   if (r.topDominios.length) {
@@ -718,8 +733,9 @@ function seccionRed(m: TechMetrics): string {
     );
   }
   out += nota(
-    'Los dominios provienen del SNI del App Control (los equipos usan DNS cifrado, por lo que el ' +
-    'filtro DNS no los registra). Estas cifras son de patrón/uso, no de volumen en bytes.'
+    'El volumen es el que el FortiGate registró en las sesiones (enviado+recibido); refleja el tráfico ' +
+    'con logging de sesión activo, no necesariamente el 100 % del enlace. Los dominios provienen del SNI ' +
+    'del App Control (los equipos usan DNS cifrado, por lo que el filtro DNS no los registra).'
   );
   return out;
 }
