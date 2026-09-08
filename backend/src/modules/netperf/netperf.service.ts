@@ -9,12 +9,22 @@
  * rendimiento = throughput y % de utilización. Fuente única: FortiGate.
  */
 import { fetchInterfaces, isFortigateConfigured, type FgInterface } from '../response/fortigate.service';
+import { sendTelegram, isTelegramConfigured } from '../notifications/telegram.service';
+import { env } from '../../config/env';
 import { query } from '../../config/db';
 import { logger } from '../../config/logger';
 
 const POLL_SECONDS = Number(process.env.NETPERF_POLL_SECONDS || 60);
 const RETAIN_DAYS = Number(process.env.NETPERF_RETAIN_DAYS || 30);
 const WINDOW = 120; // muestras en memoria por interfaz (~2 h a 60 s)
+
+// Alerta por saturación de enlace: se dispara si la utilización supera el umbral
+// de forma SOSTENIDA (varias lecturas seguidas), con enfriamiento para no spamear,
+// y se avisa la recuperación al bajar. Solo enlaces activos con velocidad conocida.
+const ALERT_UTIL = Number(process.env.NETPERF_ALERT_UTIL || 85);        // % de utilización
+const ALERT_SUSTAIN = Number(process.env.NETPERF_ALERT_SUSTAIN || 3);   // lecturas seguidas
+const ALERT_COOLDOWN_MS = Number(process.env.NETPERF_ALERT_COOLDOWN_MIN || 60) * 60_000;
+const fmtBps = (n: number): string => n >= 1e9 ? `${(n / 1e9).toFixed(1)} Gbps` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} Mbps` : n >= 1e3 ? `${(n / 1e3).toFixed(0)} Kbps` : `${n} bps`;
 
 export interface IfaceSample { ts: number; inBps: number; outBps: number; utilPct: number }
 interface IfaceState {
@@ -23,6 +33,7 @@ interface IfaceState {
   inBps: number; outBps: number; utilPct: number; peakUtilPct: number; flaps: number;
   samples: IfaceSample[];
   _lastTx: number; _lastRx: number; _lastTs: number; _lastLink: boolean;
+  _overCount: number; _alerted: boolean; _lastAlertAt: number;
 }
 
 const state = new Map<string, IfaceState>();
@@ -53,6 +64,7 @@ async function pollOnce(): Promise<void> {
         name: i.name, alias: i.alias, ip: i.ip, link: i.link, speedMbps: i.speedMbps,
         txErrors: i.txErrors, rxErrors: i.rxErrors, inBps: 0, outBps: 0, utilPct: 0, peakUtilPct: 0, flaps: 0,
         samples: [], _lastTx: i.txBytes, _lastRx: i.rxBytes, _lastTs: now, _lastLink: i.link,
+        _overCount: 0, _alerted: false, _lastAlertAt: 0,
       };
       state.set(i.name, s);
       continue; // primera lectura = línea base, sin delta todavía
@@ -73,6 +85,7 @@ async function pollOnce(): Promise<void> {
     if (s.samples.length > WINDOW) s.samples.shift();
     s._lastTx = i.txBytes; s._lastRx = i.rxBytes; s._lastTs = now; s._lastLink = i.link;
     toPersist.push([i.name, inBps, outBps, u, i.link]);
+    evalAlert(s, now);
   }
   lastPollAt = now; lastPollOk = true;
 
@@ -96,6 +109,32 @@ async function prune(): Promise<void> {
   // Cada ~1h (60 ciclos de 60 s) borra muestras viejas.
   if (++pruneCounter % 60 !== 0) return;
   await query(`DELETE FROM iface_samples WHERE ts < now() - ($1 || ' days')::interval`, [String(RETAIN_DAYS)]).catch(() => undefined);
+}
+
+/** Evalúa la alerta de saturación de un enlace (sostenida + cooldown + recuperación). */
+function evalAlert(s: IfaceState, now: number): void {
+  if (!s.link || s.speedMbps <= 0) { s._overCount = 0; return; } // enlaces caídos/sin velocidad no aplican
+  const over = s.utilPct >= ALERT_UTIL;
+  s._overCount = over ? s._overCount + 1 : 0;
+
+  if (over && !s._alerted && s._overCount >= ALERT_SUSTAIN && now - s._lastAlertAt >= ALERT_COOLDOWN_MS) {
+    s._alerted = true; s._lastAlertAt = now;
+    void notify(
+      `🟠 *Ancho de banda alto* — enlace *${s.name}*${s.alias ? ` ${s.alias}` : ''} al *${s.utilPct}%* ` +
+      `(↓ ${fmtBps(s.inBps)} · ↑ ${fmtBps(s.outBps)}) sostenido ${Math.round((ALERT_SUSTAIN * POLL_SECONDS) / 60)}+ min. ` +
+      `Umbral ${ALERT_UTIL}% sobre ${s.speedMbps >= 1000 ? s.speedMbps / 1000 + ' Gbps' : s.speedMbps + ' Mbps'}.`
+    );
+  } else if (!over && s._alerted) {
+    // Recuperación: bajó del umbral tras haber alertado.
+    s._alerted = false;
+    void notify(`🟢 Ancho de banda normalizado — enlace *${s.name}* de vuelta al *${s.utilPct}%*.`);
+  }
+}
+
+async function notify(text: string): Promise<void> {
+  if (!isTelegramConfigured() || !env.TELEGRAM_CHAT_ID) return;
+  try { await sendTelegram([env.TELEGRAM_CHAT_ID], text); logger.info('netperf: alerta de ancho de banda enviada por Telegram'); }
+  catch (err) { logger.warn({ err: err instanceof Error ? err.message : err }, 'netperf: fallo al enviar alerta de ancho de banda'); }
 }
 
 export function startNetperfPoller(): void {
