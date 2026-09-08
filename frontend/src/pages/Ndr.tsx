@@ -6,8 +6,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Network, RefreshCw, Loader2, ShieldAlert, Globe2, Upload, Activity } from 'lucide-react';
-import { ndrApi, netperfApi, type NdrOverview, type NdrTransfer, type NetLive, type NetIface } from '@/lib/ndr';
+import { Network, RefreshCw, Loader2, ShieldAlert, Globe2, Upload, Activity, Lock, Users } from 'lucide-react';
+import { ndrApi, netperfApi, type NdrOverview, type NdrTransfer, type NetLive, type NetIface, type VpnLive, type UserActivity } from '@/lib/ndr';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -17,6 +17,8 @@ const fmt = (n: number) => n.toLocaleString('es-CO');
 const fmtBytes = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${(n / 1e3).toFixed(0)} KB`;
 const fmtBps = (n: number) => !n || n <= 0 ? '—' : n >= 1e9 ? `${(n / 1e9).toFixed(1)} Gbps` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} Mbps` : n >= 1e3 ? `${(n / 1e3).toFixed(0)} Kbps` : `${n} bps`;
 const utilColor = (p: number) => p >= 90 ? 'destructive' : p >= 70 ? 'warn-orange' : 'success';
+const fmtDur = (s: number) => s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m` : `${Math.round(s / 60)}m`;
+const nivelColor = (n: string) => n === 'alto' ? 'destructive' : n === 'medio' ? 'warn-orange' : 'success';
 
 function IfaceRow({ i }: { i: NetIface }) {
   const c = utilColor(i.utilPct);
@@ -118,14 +120,19 @@ export default function Ndr() {
   const [error, setError] = useState<string | null>(null);
   const [showTrusted, setShowTrusted] = useState(false);
   const [net, setNet] = useState<NetLive | null>(null);
+  const [vpn, setVpn] = useState<VpnLive | null>(null);
+  const [activity, setActivity] = useState<UserActivity | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const loadNet = () => netperfApi.interfaces().then(setNet).catch(() => undefined);
-    void loadNet();
-    const iv = setInterval(loadNet, 15000);
+    const loadVpn = () => ndrApi.vpn().then(setVpn).catch(() => undefined);
+    void loadNet(); void loadVpn();
+    const iv = setInterval(() => { loadNet(); loadVpn(); }, 15000);
     return () => clearInterval(iv);
   }, []);
+
+  useEffect(() => { ndrApi.userActivity(range).then(setActivity).catch(() => undefined); }, [range]);
 
   async function load(r: Range) {
     setLoading(true); setError(null);
@@ -176,6 +183,74 @@ export default function Ndr() {
                 <span className="hw-mono text-[10px] font-normal text-muted-foreground">actualiza cada {net.pollSeconds}s</span></p>
               <div className="grid gap-2 md:grid-cols-2">
                 {net.interfaces.map((i) => <IfaceRow key={i.name} i={i} />)}
+              </div>
+            </CardContent></Card>
+          )}
+
+          {/* VPN · sesiones activas (tiempo real, FortiGate SSL-VPN) */}
+          {vpn && vpn.configured && (
+            <Card><CardContent className="p-4">
+              <p className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold"><Lock className="h-4 w-4 text-neon" /> VPN · sesiones activas
+                <span className="hw-mono text-[11px] font-normal text-muted-foreground">{vpn.count} conectado(s) · ↓ {fmtBytes(vpn.totalInBytes)} ↑ {fmtBytes(vpn.totalOutBytes)}</span></p>
+              {vpn.sessions.length === 0 ? (
+                <p className="py-4 text-center text-xs text-muted-foreground">Sin usuarios VPN conectados ahora.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-border/60 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <th className="pb-1.5 pr-3 font-medium">Usuario</th><th className="pb-1.5 pr-3 font-medium">Grupo</th>
+                      <th className="pb-1.5 pr-3 font-medium">Origen → IP VPN</th><th className="pb-1.5 pr-3 font-medium">Sesión</th>
+                      <th className="pb-1.5 pr-3 font-medium text-right">↓ / ↑</th><th className="pb-1.5 font-medium">2FA</th>
+                    </tr></thead>
+                    <tbody>
+                      {vpn.sessions.map((s, i) => (
+                        <tr key={i} className="border-b border-border/30 last:border-0">
+                          <td className="py-1.5 pr-3 font-semibold">{s.user || '—'}</td>
+                          <td className="py-1.5 pr-3 hw-mono text-[11px] text-muted-foreground">{s.group || '—'}</td>
+                          <td className="py-1.5 pr-3 hw-mono text-[11px] text-muted-foreground">{s.remoteHost} → {s.aip}</td>
+                          <td className="py-1.5 pr-3 tabular-nums text-muted-foreground">{fmtDur(s.durationSec)}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">{fmtBytes(s.inBytes)} / {fmtBytes(s.outBytes)}</td>
+                          <td className="py-1.5">
+                            <span className="rounded px-1.5 py-0.5 text-[9px] font-bold" style={{ color: s.twoFactor ? 'hsl(var(--success))' : 'hsl(var(--destructive))', background: s.twoFactor ? 'hsl(var(--success)/.12)' : 'hsl(var(--destructive)/.12)' }}>{s.twoFactor ? 'SÍ' : 'NO'}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {vpn.byGroup.length > 1 && (
+                    <p className="mt-2 hw-mono text-[10px] text-muted-foreground">Por grupo: {vpn.byGroup.map((g) => `${g.group} (${g.sesiones}·${fmtBytes(g.bytes)})`).join(' · ')}</p>
+                  )}
+                </div>
+              )}
+            </CardContent></Card>
+          )}
+
+          {/* Actividad por equipo · categorías + riesgo (App Control) */}
+          {activity && activity.dispositivos.length > 0 && (
+            <Card><CardContent className="p-4">
+              <p className="mb-1 flex items-center gap-2 text-sm font-semibold"><Users className="h-4 w-4 text-neon" /> Actividad en Internet por equipo</p>
+              <p className="mb-3 text-[11px] text-muted-foreground">Categorías del App Control por equipo (atribución por IP; el FortiGate no identifica usuario). Resalta alto riesgo: proxy/anonimizador, acceso remoto, IA generativa, juegos, streaming, redes sociales.</p>
+              <div className="space-y-2">
+                {activity.dispositivos.slice(0, 12).map((dv) => {
+                  const cc = nivelColor(dv.nivel);
+                  return (
+                    <div key={dv.ip} className="hw-clip border border-border bg-secondary/20 p-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase" style={{ color: `hsl(var(--${cc}))`, background: `hsl(var(--${cc})/.12)` }}>{dv.nivel}</span>
+                        <span className="text-sm font-semibold">{dv.host || dv.ip}</span>
+                        {dv.host && <span className="hw-mono text-[10px] text-muted-foreground">{dv.ip}</span>}
+                        <span className="ml-auto hw-mono text-[10px] text-muted-foreground">{fmt(dv.total)} sesiones</span>
+                      </div>
+                      {dv.catsRiesgo.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {dv.categorias.filter((c) => c.riesgo).map((c) => (
+                            <span key={c.cat} className="rounded-full border px-2 py-0.5 text-[10px]" style={{ color: 'hsl(var(--warn-orange))', borderColor: 'hsl(var(--warn-orange) / .3)' }}>{c.label}: {fmt(c.sesiones)}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </CardContent></Card>
           )}

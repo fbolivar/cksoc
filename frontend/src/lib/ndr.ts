@@ -33,8 +33,25 @@ export interface NdrOverview {
   generatedAt: string;
 }
 
+export interface VpnSession {
+  user: string; group: string; remoteHost: string; aip: string;
+  durationSec: number; inBytes: number; outBytes: number; twoFactor: boolean; lastLogin: number;
+}
+export interface VpnLive {
+  configured: boolean; count: number; totalInBytes: number; totalOutBytes: number;
+  sessions: VpnSession[]; byGroup: { group: string; sesiones: number; bytes: number }[]; generatedAt: string;
+}
+export interface DeviceActivity {
+  ip: string; host: string | null; total: number;
+  categorias: { cat: string; label: string; sesiones: number; riesgo: boolean }[];
+  riesgoScore: number; nivel: 'alto' | 'medio' | 'bajo'; catsRiesgo: string[];
+}
+export interface UserActivity { range: string; total: number; dispositivos: DeviceActivity[]; generatedAt: string }
+
 export const ndrApi = {
   overview: (range: string) => api.get<NdrOverview>('/ndr', { params: { range } }).then((r) => r.data),
+  vpn: () => api.get<VpnLive>('/ndr/vpn').then((r) => r.data),
+  userActivity: (range: string) => api.get<UserActivity>('/ndr/user-activity', { params: { range } }).then((r) => r.data),
 };
 
 // --- NPM: rendimiento de interfaces (FortiGate) ---

@@ -10,6 +10,7 @@ import { query } from '../../config/db';
 import { getAssetList } from '../assets/assets.service';
 import { collectLogins } from '../ueba/ueba.service';
 import { enrichIp } from '../enrichment/enrichment.service';
+import { fgGet, isFortigateConfigured } from '../response/fortigate.service';
 
 const RANGE: Record<string, string> = { '1h': 'now-1h', '24h': 'now-24h', '7d': 'now-7d' };
 const SESSION_SUBTYPES = ['app-ctrl', 'forward'];
@@ -314,4 +315,106 @@ export async function getNdrOverview(rangeIn: string): Promise<NdrOverview> {
     largeTransferCount: enrichedXfer.filter((t) => !t.trusted).length,
     generatedAt: new Date().toISOString(),
   };
+}
+
+// ==========================================================================
+// VPN en tiempo real (sesiones SSL-VPN activas del FortiGate)
+// ==========================================================================
+export interface VpnSession {
+  user: string; group: string; remoteHost: string; aip: string;
+  durationSec: number; inBytes: number; outBytes: number; twoFactor: boolean; lastLogin: number;
+}
+export interface VpnLive {
+  configured: boolean; count: number; totalInBytes: number; totalOutBytes: number;
+  sessions: VpnSession[];
+  byGroup: { group: string; sesiones: number; bytes: number }[];
+  generatedAt: string;
+}
+
+interface FgVpnRow {
+  user_name?: string; group_name?: string; remote_host?: string; duration?: number;
+  two_factor_auth?: boolean; last_login_timestamp?: number;
+  subsessions?: { aip?: string; in_bytes?: number; out_bytes?: number }[];
+}
+
+export async function getVpnSessions(): Promise<VpnLive> {
+  const empty: VpnLive = { configured: false, count: 0, totalInBytes: 0, totalOutBytes: 0, sessions: [], byGroup: [], generatedAt: new Date().toISOString() };
+  if (!isFortigateConfigured()) return empty;
+  const data = await fgGet<{ results?: FgVpnRow[] }>('/api/v2/monitor/vpn/ssl?scope=global').catch(() => ({ results: [] as FgVpnRow[] }));
+  const rows = data.results ?? [];
+  const sessions: VpnSession[] = rows.map((r) => {
+    const subs = r.subsessions ?? [];
+    const inB = subs.reduce((n, x) => n + Number(x.in_bytes ?? 0), 0);
+    const outB = subs.reduce((n, x) => n + Number(x.out_bytes ?? 0), 0);
+    return {
+      user: r.user_name ?? '', group: r.group_name ?? '', remoteHost: r.remote_host ?? '',
+      aip: subs[0]?.aip ?? '', durationSec: Number(r.duration ?? 0),
+      inBytes: inB, outBytes: outB, twoFactor: Boolean(r.two_factor_auth), lastLogin: Number(r.last_login_timestamp ?? 0),
+    };
+  }).sort((a, b) => (b.inBytes + b.outBytes) - (a.inBytes + a.outBytes));
+  const gmap = new Map<string, { group: string; sesiones: number; bytes: number }>();
+  for (const s of sessions) {
+    const e = gmap.get(s.group) ?? { group: s.group || '(sin grupo)', sesiones: 0, bytes: 0 };
+    e.sesiones++; e.bytes += s.inBytes + s.outBytes; gmap.set(s.group, e);
+  }
+  return {
+    configured: true, count: sessions.length,
+    totalInBytes: sessions.reduce((n, s) => n + s.inBytes, 0),
+    totalOutBytes: sessions.reduce((n, s) => n + s.outBytes, 0),
+    sessions, byGroup: [...gmap.values()].sort((a, b) => b.bytes - a.bytes), generatedAt: new Date().toISOString(),
+  };
+}
+
+// ==========================================================================
+// Actividad en Internet por equipo, clasificada por categoría (App Control) +
+// marca de alto riesgo (proxy/anonimizador, acceso remoto, IA generativa, juegos,
+// streaming, redes sociales). Atribución por EQUIPO (el Forti no identifica usuario).
+// ==========================================================================
+const RIESGO_CAT: Record<string, number> = {
+  'Proxy': 5, 'Remote.Access': 3, 'GenAI': 3, 'Game': 2, 'Video/Audio': 1, 'Social.Media': 1,
+};
+const CAT_LABEL: Record<string, string> = {
+  'Proxy': 'Proxy/anonimizador', 'Remote.Access': 'Acceso remoto', 'GenAI': 'IA generativa',
+  'Game': 'Juegos', 'Video/Audio': 'Streaming', 'Social.Media': 'Redes sociales',
+  'Storage.Backup': 'Almacenamiento/backup', 'Collaboration': 'Colaboración', 'Email': 'Correo',
+  'Network.Service': 'Servicios de red', 'General.Interest': 'Interés general', 'Web.Client': 'Web',
+};
+
+export interface DeviceActivity {
+  ip: string; host: string | null; total: number;
+  categorias: { cat: string; label: string; sesiones: number; riesgo: boolean }[];
+  riesgoScore: number; nivel: 'alto' | 'medio' | 'bajo'; catsRiesgo: string[];
+}
+export interface UserActivity { range: string; total: number; dispositivos: DeviceActivity[]; generatedAt: string }
+
+export async function getUserActivity(rangeIn: string): Promise<UserActivity> {
+  const gte = RANGE[rangeIn] ?? RANGE['24h'];
+  const client = getIndexerClient();
+  const { data } = await client.post<{ aggregations?: { dev: { buckets: { key: string; doc_count: number; cat: { buckets: { key: string; doc_count: number }[] } }[] } } }>(
+    `/${env.WAZUH_ALERTS_INDEX}/_search`,
+    {
+      size: 0,
+      query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { term: { 'data.subtype': 'app-ctrl' } }, { exists: { field: 'data.srcip' } }] } },
+      aggs: { dev: { terms: { field: 'data.srcip', size: 25 }, aggs: { cat: { terms: { field: 'data.appcat', size: 10 } } } } },
+    }
+  );
+  const assets = await getAssetList().catch(() => []);
+  const hostByIp = new Map<string, string>();
+  for (const a of assets) if (a.ip) hostByIp.set(a.ip, a.name);
+
+  const devs: DeviceActivity[] = (data.aggregations?.dev.buckets ?? []).map((d) => {
+    const cats = (d.cat.buckets ?? []).map((c) => ({ cat: c.key, label: CAT_LABEL[c.key] ?? c.key, sesiones: c.doc_count, riesgo: (RIESGO_CAT[c.key] ?? 0) > 0 }));
+    const riesgoScore = cats.reduce((n, c) => n + c.sesiones * (RIESGO_CAT[c.cat] ?? 0), 0);
+    const riesgoSes = cats.filter((c) => c.riesgo).reduce((n, c) => n + c.sesiones, 0);
+    const hasProxy = cats.some((c) => c.cat === 'Proxy');
+    const share = d.doc_count ? riesgoSes / d.doc_count : 0;
+    const nivel: 'alto' | 'medio' | 'bajo' = hasProxy || share >= 0.4 ? 'alto' : share >= 0.15 ? 'medio' : 'bajo';
+    return {
+      ip: d.key, host: hostByIp.get(d.key) ?? null, total: d.doc_count,
+      categorias: cats.sort((a, b) => b.sesiones - a.sesiones).slice(0, 6),
+      riesgoScore, nivel, catsRiesgo: cats.filter((c) => c.riesgo).map((c) => c.label),
+    };
+  }).sort((a, b) => b.riesgoScore - a.riesgoScore || b.total - a.total);
+
+  return { range: rangeIn, total: devs.length, dispositivos: devs, generatedAt: new Date().toISOString() };
 }
