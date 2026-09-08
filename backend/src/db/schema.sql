@@ -571,3 +571,14 @@ CREATE TABLE IF NOT EXISTS credexp_breaches (
     is_sensitive BOOLEAN NOT NULL DEFAULT false,
     actualizado TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- NPM: muestras de rendimiento por interfaz del FortiGate (netperf poller)
+CREATE TABLE IF NOT EXISTS iface_samples (
+    ts       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    iface    VARCHAR(64) NOT NULL,
+    in_bps   BIGINT      NOT NULL,
+    out_bps  BIGINT      NOT NULL,
+    util_pct REAL        NOT NULL,
+    link     BOOLEAN     NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_iface_samples_iface_ts ON iface_samples(iface, ts);

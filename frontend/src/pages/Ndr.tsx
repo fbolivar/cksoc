@@ -6,8 +6,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Network, RefreshCw, Loader2, ShieldAlert, Globe2, Upload } from 'lucide-react';
-import { ndrApi, type NdrOverview, type NdrTransfer } from '@/lib/ndr';
+import { Network, RefreshCw, Loader2, ShieldAlert, Globe2, Upload, Activity } from 'lucide-react';
+import { ndrApi, netperfApi, type NdrOverview, type NdrTransfer, type NetLive, type NetIface } from '@/lib/ndr';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -15,6 +15,38 @@ type Range = '1h' | '24h' | '7d';
 const RANGES: Range[] = ['1h', '24h', '7d'];
 const fmt = (n: number) => n.toLocaleString('es-CO');
 const fmtBytes = (n: number) => n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${(n / 1e3).toFixed(0)} KB`;
+const fmtBps = (n: number) => !n || n <= 0 ? '—' : n >= 1e9 ? `${(n / 1e9).toFixed(1)} Gbps` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} Mbps` : n >= 1e3 ? `${(n / 1e3).toFixed(0)} Kbps` : `${n} bps`;
+const utilColor = (p: number) => p >= 90 ? 'destructive' : p >= 70 ? 'warn-orange' : 'success';
+
+function IfaceRow({ i }: { i: NetIface }) {
+  const c = utilColor(i.utilPct);
+  const max = Math.max(1, ...i.spark);
+  return (
+    <div className="hw-clip border border-border bg-secondary/20 p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: i.link ? 'hsl(var(--success))' : 'hsl(var(--destructive))', boxShadow: i.link ? '0 0 6px hsl(var(--success))' : 'none' }} />
+        <span className="text-sm font-semibold">{i.name}</span>
+        {i.alias && <span className="hw-mono text-[10px] text-muted-foreground">{i.alias}</span>}
+        <span className="hw-mono text-[10px] text-muted-foreground">{i.speedMbps ? `${i.speedMbps >= 1000 ? i.speedMbps / 1000 + ' Gbps' : i.speedMbps + ' Mbps'}` : ''}</span>
+        <span className="ml-auto hw-tabular text-sm font-bold" style={{ color: `hsl(var(--${c}))` }}>{i.utilPct}%</span>
+      </div>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, i.utilPct)}%`, background: `hsl(var(--${c}))` }} />
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 hw-mono text-[10px] text-muted-foreground">
+        <span>↓ {fmtBps(i.inBps)}</span><span>↑ {fmtBps(i.outBps)}</span>
+        <span>pico {i.peakUtilPct}%</span>
+        {(i.txErrors + i.rxErrors) > 0 && <span style={{ color: 'hsl(var(--warn-orange))' }}>errores {fmt(i.txErrors + i.rxErrors)}</span>}
+        {i.flaps > 0 && <span style={{ color: 'hsl(var(--destructive))' }}>{i.flaps} caídas</span>}
+        {i.spark.length > 1 && (
+          <span className="ml-auto inline-flex items-end gap-[1px]" style={{ height: 14 }} title="utilización reciente">
+            {i.spark.slice(-24).map((v, k) => <span key={k} style={{ width: 2, height: `${Math.max(1, (v / max) * 14)}px`, background: `hsl(var(--${utilColor(v)}))` }} />)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 const VERDICT_VAR: Record<string, string> = { malicioso: 'destructive', sospechoso: 'warn-orange', limpio: 'success', interno: 'cyan', desconocido: 'muted-foreground' };
 
 function Kpi({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
@@ -85,7 +117,15 @@ export default function Ndr() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTrusted, setShowTrusted] = useState(false);
+  const [net, setNet] = useState<NetLive | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const loadNet = () => netperfApi.interfaces().then(setNet).catch(() => undefined);
+    void loadNet();
+    const iv = setInterval(loadNet, 15000);
+    return () => clearInterval(iv);
+  }, []);
 
   async function load(r: Range) {
     setLoading(true); setError(null);
@@ -128,6 +168,17 @@ export default function Ndr() {
             <Kpi label="Alertas IPS" value={fmt(d.ipsCount)} danger={d.ipsCount > 0} />
             <Kpi label="Transferencias sospechosas" value={fmt(d.largeTransferCount)} danger={d.largeTransferCount > 0} />
           </div>
+
+          {/* Interfaces / ancho de banda (NPM en vivo, FortiGate) */}
+          {net && net.interfaces.length > 0 && (
+            <Card><CardContent className="p-4">
+              <p className="mb-3 flex items-center gap-2 text-sm font-semibold"><Activity className="h-4 w-4 text-neon" /> Enlaces · utilización en vivo
+                <span className="hw-mono text-[10px] font-normal text-muted-foreground">actualiza cada {net.pollSeconds}s</span></p>
+              <div className="grid gap-2 md:grid-cols-2">
+                {net.interfaces.map((i) => <IfaceRow key={i.name} i={i} />)}
+              </div>
+            </CardContent></Card>
+          )}
 
           {/* IOC hits (si hay) */}
           {d.iocHits.length > 0 && (

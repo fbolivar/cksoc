@@ -665,6 +665,14 @@ function fmtBytes(n: number): string {
   return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${u[i]}`;
 }
 
+function fmtBps(n: number): string {
+  if (!n || n <= 0) return '—';
+  const u = ['bps', 'Kbps', 'Mbps', 'Gbps'];
+  let i = 0; let v = n;
+  while (v >= 1000 && i < u.length - 1) { v /= 1000; i++; }
+  return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${u[i]}`;
+}
+
 function seccionRed(m: TechMetrics): string {
   const r = m.red;
   if (!r || r.totalSesiones === 0) {
@@ -683,6 +691,26 @@ function seccionRed(m: TechMetrics): string {
     { valor: fmt(r.ipsEventos), etiqueta: 'Eventos IPS', pie: 'detecciones de red' },
     { valor: fmt(r.categorias.length), etiqueta: 'Categorías de tráfico', pie: 'observadas' },
   ], 4);
+
+  if (r.interfaces.length) {
+    out += h3('Utilización y estabilidad de los enlaces');
+    out += tabla(
+      ['Interfaz', 'Disponibilidad', 'Util. prom.', 'Util. pico', 'Tráfico prom. ↓', 'Tráfico prom. ↑'],
+      r.interfaces.map((x) => [
+        mono(esc(x.iface)),
+        `${x.disponibilidadPct} %`,
+        `${x.utilProm} %`,
+        `${x.utilPico} %`,
+        fmtBps(x.inPromBps),
+        fmtBps(x.outPromBps),
+      ]),
+      { anchos: ['20%', '18%', '15%', '15%', '16%', '16%'] }
+    );
+    out += nota('Disponibilidad = % de muestras con el enlace activo (estabilidad). La utilización es frente a la velocidad del enlace. Muestreo cada 60 s desde el FortiGate.');
+  } else {
+    out += h3('Utilización y estabilidad de los enlaces');
+    out += nota('El monitoreo de interfaces (NPM) se activó recientemente; las estadísticas de utilización por enlace aparecerán a medida que se acumulen muestras del periodo (sondeo cada 60 s al FortiGate).');
+  }
 
   if (r.topTalkers.length) {
     out += h3('Consumo de ancho de banda por equipo (top talkers)');

@@ -36,3 +36,15 @@ export interface NdrOverview {
 export const ndrApi = {
   overview: (range: string) => api.get<NdrOverview>('/ndr', { params: { range } }).then((r) => r.data),
 };
+
+// --- NPM: rendimiento de interfaces (FortiGate) ---
+export interface NetIface {
+  name: string; alias: string | null; ip: string | null; link: boolean; speedMbps: number;
+  inBps: number; outBps: number; utilPct: number; peakUtilPct: number; flaps: number;
+  txErrors: number; rxErrors: number; spark: number[];
+}
+export interface NetLive { polling: boolean; lastPollAt: number | null; pollSeconds: number; interfaces: NetIface[] }
+
+export const netperfApi = {
+  interfaces: () => api.get<NetLive>('/netperf/interfaces').then((r) => r.data),
+};

@@ -72,6 +72,35 @@ export async function listBlocked(): Promise<BannedEntry[]> {
   }
 }
 
+export interface FgInterface {
+  name: string; alias: string | null; ip: string | null; link: boolean;
+  speedMbps: number; txBytes: number; rxBytes: number; txErrors: number; rxErrors: number;
+}
+
+/** Lee el estado y contadores de las interfaces (SOLO LECTURA). Para NPM. */
+export async function fetchInterfaces(): Promise<FgInterface[]> {
+  try {
+    const { data } = await fg().get<{ results?: Record<string, {
+      name?: string; alias?: string; ip?: string; link?: boolean; speed?: number;
+      tx_bytes?: number; rx_bytes?: number; tx_errors?: number; rx_errors?: number;
+    }> }>('/system/interface?scope=global');
+    const results = data?.results ?? {};
+    return Object.entries(results).map(([key, i]) => ({
+      name: i.name ?? key,
+      alias: i.alias ?? null,
+      ip: i.ip ?? null,
+      link: Boolean(i.link),
+      speedMbps: Number(i.speed ?? 0),
+      txBytes: Number(i.tx_bytes ?? 0),
+      rxBytes: Number(i.rx_bytes ?? 0),
+      txErrors: Number(i.tx_errors ?? 0),
+      rxErrors: Number(i.rx_errors ?? 0),
+    }));
+  } catch (err) {
+    mapFgError(err, 'leer interfaces');
+  }
+}
+
 /** Verifica conexión y permisos en SOLO LECTURA (no modifica nada). */
 export async function verifyConnection(): Promise<{ group: string; count: number }> {
   try {

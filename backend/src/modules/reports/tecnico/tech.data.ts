@@ -20,6 +20,7 @@ import { getCoverage, type CoverageData } from '../../mitre/mitre.service';
 import { getPorts, getUsers, type PortRow, type UserRow } from '../../hygiene/hygiene.service';
 import { listSuppressions, getCustomRules, type Suppression } from '../../detection/detection.service';
 import { getMatches, type IocMatch } from '../../threatintel/threatintel.service';
+import { getInterfacePeriod, type IfacePeriodStat } from '../../netperf/netperf.service';
 import { SLA_TARGETS, type Severity as SevIncidente } from '../../metrics/metrics.service';
 import { type Periodo, periodoAnterior } from '../executive/periodo';
 
@@ -127,6 +128,7 @@ export interface RedData {
   topTalkers: { ip: string; sesiones: number; destinos: number; bytes: number }[]; // por volumen
   topDestinos: { ip: string; conteo: number; bytes: number; pais: string | null }[]; // por volumen
   topDominios: { dominio: string; conteo: number }[];
+  interfaces: IfacePeriodStat[];    // rendimiento por interfaz (NPM) en el periodo
 }
 
 export interface TechMetrics {
@@ -773,11 +775,13 @@ async function redDelPeriodo(p: Periodo): Promise<RedData> {
     },
   });
   const ipsEventos = await contar(p, [...forti, { term: { 'data.subtype': 'ips' } }]);
+  const interfaces = await getInterfacePeriod(p.gte, p.lt).catch(() => [] as IfacePeriodStat[]);
   const total = data?.hits?.total?.value ?? 0;
   const a = data?.aggregations;
   return {
     totalSesiones: total,
     ipsEventos,
+    interfaces,
     volumenBytes: a?.volTotal?.value ?? 0,
     subtipos: (a?.subt.buckets ?? []).map((x) => ({ nombre: x.key, conteo: x.doc_count })),
     topApps: (a?.apps.buckets ?? []).map((x) => ({ app: x.key, conteo: x.doc_count, pct: total ? Math.round((x.doc_count / total) * 1000) / 10 : 0 })),
@@ -855,7 +859,7 @@ export async function collectTechMetrics(p: Periodo, titulo: string): Promise<Te
 
   const salud = await saludTelemetria(p, serie, conEventos, inventario);
   const red = await redDelPeriodo(p).catch(() => ({
-    totalSesiones: 0, ipsEventos: 0, volumenBytes: 0, subtipos: [], topApps: [], topAppsVol: [], categorias: [], topTalkers: [], topDestinos: [], topDominios: [],
+    totalSesiones: 0, ipsEventos: 0, volumenBytes: 0, subtipos: [], topApps: [], topAppsVol: [], categorias: [], topTalkers: [], topDestinos: [], topDominios: [], interfaces: [],
   } as RedData));
 
   return {
