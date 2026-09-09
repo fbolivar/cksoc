@@ -601,3 +601,6 @@ CREATE TABLE IF NOT EXISTS remediation_jobs (
     finished_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_remediation_jobs_created ON remediation_jobs(created_at DESC);
+-- Remediacion Linux: columnas platform y reboot en remediation_jobs (idempotente).
+ALTER TABLE remediation_jobs ADD COLUMN IF NOT EXISTS platform VARCHAR(16) NOT NULL DEFAULT 'windows';
+ALTER TABLE remediation_jobs ADD COLUMN IF NOT EXISTS reboot BOOLEAN;

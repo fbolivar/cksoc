@@ -1,9 +1,12 @@
 /** Tipos y llamadas del panel de Remediación (winget vía Velociraptor). */
 import { api } from './api';
 
+export type Platform = 'windows' | 'linux';
+
 export interface RemediationHost {
   host: string;
   os: string | null;
+  platform: Platform;
   online: boolean;
   lastSeenH: number | null;
   isPilot: boolean;
@@ -15,6 +18,7 @@ export interface WingetPackage {
   current: string;
   available: string;
   source: string;
+  security?: boolean; // Linux/apt
 }
 
 export interface RemediationJob {
@@ -22,10 +26,12 @@ export interface RemediationJob {
   host: string;
   client_id: string;
   flow_id: string | null;
-  kind: 'scan' | 'apply';
+  kind: 'scan' | 'apply' | 'auto';
+  platform: Platform;
   package: string | null;
   status: 'running' | 'done' | 'error';
   exit_code: number | null;
+  reboot: boolean | null;
   packages: WingetPackage[] | null;
   output: string | null;
   error: string | null;
@@ -41,6 +47,12 @@ export const remediationApi = {
     api.post<{ job: RemediationJob }>('/remediation/scan', { host }).then((r) => r.data.job),
   apply: (host: string, packageId: string) =>
     api.post<{ job: RemediationJob }>('/remediation/apply', { host, packageId, confirm: true }).then((r) => r.data.job),
+  // Linux: aplica solo parches de seguridad (sin packageId).
+  applySecurity: (host: string) =>
+    api.post<{ job: RemediationJob }>('/remediation/apply', { host, confirm: true }).then((r) => r.data.job),
+  // Linux: activa unattended-upgrades (solo-seguridad, sin reinicio automático).
+  autoEnable: (host: string) =>
+    api.post<{ job: RemediationJob }>('/remediation/autoenable', { host, confirm: true }).then((r) => r.data.job),
   job: (id: string) =>
     api.get<{ job: RemediationJob }>(`/remediation/job/${id}`).then((r) => r.data.job),
   jobs: () =>

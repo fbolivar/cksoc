@@ -12,7 +12,7 @@ import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
 import { auditFromReq } from '../audit/audit.service';
 import {
-  listRemediationHosts, startScan, startApply, getJob, recentJobs, pilotHosts,
+  listRemediationHosts, startScan, startApply, startAutoEnable, getJob, recentJobs, pilotHosts,
 } from './remediation.service';
 
 export const remediationRouter = Router();
@@ -67,6 +67,26 @@ remediationRouter.post('/apply', requireRole('admin'), async (req: Request, res:
       });
     }
     res.status(code).json({ error: msg });
+  }
+});
+
+// Activar automatización nativa de parches de seguridad (unattended-upgrades) en Linux.
+// Sólo hosts piloto; requiere confirm explícito. Instala/configura en el endpoint.
+remediationRouter.post('/autoenable', requireRole('admin'), async (req: Request, res: Response) => {
+  const host = String(req.body?.host || '').trim();
+  const confirm = req.body?.confirm === true;
+  if (!confirm) { res.status(400).json({ error: 'Falta confirmación explícita (confirm=true).' }); return; }
+  try {
+    const job = await startAutoEnable(host, req.user!.email);
+    void auditFromReq(req, {
+      actorId: req.user!.id, actorEmail: req.user!.email,
+      action: 'remediation_autoenable', target: host, result: 'ok',
+      detail: { job_id: job.id, client_id: job.client_id, flow_id: job.flow_id },
+    });
+    res.status(202).json({ job });
+  } catch (e) {
+    const msg = (e as Error).message;
+    res.status(/piloto|Linux/.test(msg) ? 403 : 400).json({ error: msg });
   }
 });
 

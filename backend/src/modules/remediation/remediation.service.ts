@@ -17,6 +17,9 @@ import { runHelper } from '../velociraptor/velociraptor.helper';
 import { query } from '../../config/db';
 import { logger } from '../../config/logger';
 import { parseWingetList, parseWingetApply, isComplete } from './winget.parse';
+import { parseAptScan, parseAptApply } from './apt.parse';
+
+type Platform = 'windows' | 'linux';
 
 const PILOT_HOSTS = (process.env.REMEDIATION_PILOT_HOSTS || 'GVMBOGADM01')
   .split(',').map((h) => h.trim().toUpperCase()).filter(Boolean);
@@ -30,17 +33,24 @@ export function isPilotHost(host: string): boolean {
 export function pilotHosts(): string[] { return [...PILOT_HOSTS]; }
 
 export interface RemediationHost {
-  host: string; os: string | null; online: boolean; lastSeenH: number | null; isPilot: boolean;
+  host: string; os: string | null; platform: Platform; online: boolean; lastSeenH: number | null; isPilot: boolean;
 }
 
-/** Hosts Windows candidatos a remediación (de-dup por host, liveness real de Velo). */
+function platformOf(system: string): Platform | null {
+  const s = (system || '').toLowerCase();
+  if (s.includes('windows')) return 'windows';
+  if (s.includes('linux')) return 'linux';
+  return null; // macOS u otros: no soportado por ahora
+}
+
+/** Hosts Windows/Linux candidatos a remediación (de-dup por host, liveness real de Velo). */
 export async function listRemediationHosts(): Promise<RemediationHost[]> {
   const raw = await runHelper(['list']);
   if (!Array.isArray(raw)) throw new Error(raw?.error || 'Velociraptor no disponible');
   const now = Date.now();
   const byHost = new Map<string, any>();
   for (const c of raw) {
-    if (!String(c?.system || '').toLowerCase().includes('windows')) continue;
+    if (!platformOf(String(c?.system || ''))) continue; // solo Windows/Linux
     const host = String(c?.host || '');
     if (!host) continue;
     const prev = byHost.get(host.toLowerCase());
@@ -51,6 +61,7 @@ export async function listRemediationHosts(): Promise<RemediationHost[]> {
     const lastSeenH = ms ? (now - ms) / 3_600_000 : null;
     return {
       host: String(c.host), os: c.release || c.system || null,
+      platform: platformOf(String(c.system || '')) as Platform,
       online: lastSeenH !== null && lastSeenH <= 24,
       lastSeenH: lastSeenH === null ? null : Math.round(lastSeenH * 10) / 10,
       isPilot: isPilotHost(String(c.host)),
@@ -60,42 +71,72 @@ export async function listRemediationHosts(): Promise<RemediationHost[]> {
   return out;
 }
 
+async function resolvePlatform(host: string): Promise<Platform | null> {
+  const hosts = await listRemediationHosts();
+  return hosts.find((h) => h.host.toLowerCase() === host.toLowerCase())?.platform ?? null;
+}
+
 export interface RemediationJob {
   id: string; host: string; client_id: string; flow_id: string | null;
-  kind: 'scan' | 'apply'; package: string | null;
+  kind: 'scan' | 'apply' | 'auto'; platform: Platform; package: string | null;
   status: 'running' | 'done' | 'error';
-  exit_code: number | null; packages: unknown; output: string | null; error: string | null;
+  exit_code: number | null; reboot: boolean | null; packages: unknown; output: string | null; error: string | null;
   actor_email: string | null; created_at: string; finished_at: string | null;
 }
 
 async function insertJob(j: Partial<RemediationJob>): Promise<RemediationJob> {
   const id = randomUUID();
   const rows = await query<RemediationJob>(
-    `INSERT INTO remediation_jobs (id, host, client_id, flow_id, kind, package, status, actor_email)
-     VALUES ($1,$2,$3,$4,$5,$6,'running',$7) RETURNING *`,
-    [id, j.host, j.client_id, j.flow_id ?? null, j.kind, j.package ?? null, j.actor_email ?? null]
+    `INSERT INTO remediation_jobs (id, host, client_id, flow_id, kind, platform, package, status, actor_email)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'running',$8) RETURNING *`,
+    [id, j.host, j.client_id, j.flow_id ?? null, j.kind, j.platform ?? 'windows', j.package ?? null, j.actor_email ?? null]
   );
   return rows[0];
 }
 
-/** Lanza un escaneo (dry-run, sólo lectura): lista de actualizaciones disponibles. */
+/** Lanza un escaneo (dry-run, sólo lectura). Windows: winget upgrade; Linux: apt (solo lista). */
 export async function startScan(host: string, actorEmail: string): Promise<RemediationJob> {
   if (!HOST_RE.test(host)) throw new Error('host inválido');
-  const r = await runHelper(['winget_list', host]);
+  const platform = await resolvePlatform(host);
+  if (!platform) throw new Error('host no soportado (solo Windows/Linux) o sin agente Velociraptor.');
+  const r = await runHelper([platform === 'linux' ? 'apt_scan' : 'winget_list', host]);
   if (r?.error) throw new Error(r.error);
   if (!r?.flow_id) throw new Error('No se pudo lanzar el escaneo en el endpoint (¿agente en línea?).');
-  return insertJob({ host, client_id: r.client_id, flow_id: r.flow_id, kind: 'scan', actor_email: actorEmail });
+  return insertJob({ host, client_id: r.client_id, flow_id: r.flow_id, kind: 'scan', platform, actor_email: actorEmail });
 }
 
-/** Lanza una aplicación (instala/actualiza un paquete). Sólo hosts piloto. */
+/**
+ * Lanza una aplicación. Sólo hosts piloto.
+ * Windows: actualiza el paquete winget indicado (packageId).
+ * Linux: aplica SOLO parches de seguridad (apt); packageId se ignora. Nunca reinicia.
+ */
 export async function startApply(host: string, packageId: string, actorEmail: string): Promise<RemediationJob> {
   if (!HOST_RE.test(host)) throw new Error('host inválido');
-  if (!PKG_RE.test(packageId)) throw new Error('paquete inválido');
   if (!isPilotHost(host)) throw new Error(`"${host}" no es un equipo piloto. La aplicación está restringida a: ${PILOT_HOSTS.join(', ') || '(ninguno)'}.`);
-  const r = await runHelper(['winget_apply', host, packageId]);
+  const platform = await resolvePlatform(host);
+  if (!platform) throw new Error('host no soportado (solo Windows/Linux) o sin agente Velociraptor.');
+  let r: any;
+  if (platform === 'linux') {
+    r = await runHelper(['apt_apply', host]); // solo-seguridad
+  } else {
+    if (!PKG_RE.test(packageId)) throw new Error('paquete inválido');
+    r = await runHelper(['winget_apply', host, packageId]);
+  }
   if (r?.error) throw new Error(r.error);
   if (!r?.flow_id) throw new Error('No se pudo lanzar la actualización en el endpoint (¿agente en línea?).');
-  return insertJob({ host, client_id: r.client_id, flow_id: r.flow_id, kind: 'apply', package: packageId, actor_email: actorEmail });
+  return insertJob({ host, client_id: r.client_id, flow_id: r.flow_id, kind: 'apply', platform, package: platform === 'linux' ? 'seguridad' : packageId, actor_email: actorEmail });
+}
+
+/** Activa la automatización nativa de parches de SEGURIDAD (unattended-upgrades) en Linux. Sólo piloto. */
+export async function startAutoEnable(host: string, actorEmail: string): Promise<RemediationJob> {
+  if (!HOST_RE.test(host)) throw new Error('host inválido');
+  if (!isPilotHost(host)) throw new Error(`"${host}" no es un equipo piloto. La automatización está restringida a: ${PILOT_HOSTS.join(', ') || '(ninguno)'}.`);
+  const platform = await resolvePlatform(host);
+  if (platform !== 'linux') throw new Error('La automatización nativa (unattended-upgrades) solo aplica a Linux.');
+  const r = await runHelper(['apt_autoenable', host]);
+  if (r?.error) throw new Error(r.error);
+  if (!r?.flow_id) throw new Error('No se pudo lanzar la automatización en el endpoint (¿agente en línea?).');
+  return insertJob({ host, client_id: r.client_id, flow_id: r.flow_id, kind: 'auto', platform, actor_email: actorEmail });
 }
 
 /** Cancela la sesión PowerShell del flow (best-effort). */
@@ -105,8 +146,8 @@ async function cancelFlow(cid: string, fid: string): Promise<void> {
 
 async function finish(id: string, patch: Partial<RemediationJob>): Promise<void> {
   await query(
-    `UPDATE remediation_jobs SET status=$2, exit_code=$3, packages=$4, output=$5, error=$6, finished_at=now() WHERE id=$1`,
-    [id, patch.status, patch.exit_code ?? null, patch.packages ? JSON.stringify(patch.packages) : null, patch.output ?? null, patch.error ?? null]
+    `UPDATE remediation_jobs SET status=$2, exit_code=$3, packages=$4, output=$5, error=$6, reboot=$7, finished_at=now() WHERE id=$1`,
+    [id, patch.status, patch.exit_code ?? null, patch.packages ? JSON.stringify(patch.packages) : null, patch.output ?? null, patch.error ?? null, patch.reboot ?? null]
   );
 }
 
@@ -125,12 +166,25 @@ export async function refreshJob(job: RemediationJob): Promise<RemediationJob> {
 
   if (isComplete(out)) {
     await cancelFlow(job.client_id, job.flow_id);
-    if (job.kind === 'scan') {
+    if (job.platform === 'linux') {
+      if (job.kind === 'scan') {
+        const p = parseAptScan(out);
+        await finish(job.id, p.ok
+          ? { status: 'done', packages: p.packages, reboot: p.reboot, error: null }
+          : { status: 'error', error: p.error || 'apt falló' });
+      } else {
+        const p = parseAptApply(out);
+        const ok = p.exitCode === 0;
+        await finish(job.id, {
+          status: ok ? 'done' : 'error', exit_code: p.exitCode, output: p.clean, reboot: p.reboot,
+          error: ok ? null : (p.error || `apt terminó con código ${p.exitCode}`),
+        });
+      }
+    } else if (job.kind === 'scan') {
       const p = parseWingetList(out);
-      const patch: Partial<RemediationJob> = p.ok
+      await finish(job.id, p.ok
         ? { status: 'done', packages: p.packages, output: p.clean, error: null }
-        : { status: 'error', error: p.error || 'winget falló', output: p.clean };
-      await finish(job.id, patch);
+        : { status: 'error', error: p.error || 'winget falló', output: p.clean });
     } else {
       const p = parseWingetApply(out);
       const ok = p.exitCode === 0;

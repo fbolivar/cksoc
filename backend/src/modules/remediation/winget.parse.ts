@@ -12,6 +12,7 @@ export interface WingetPackage {
   current: string;   // versión instalada ("Unknown" si winget no la conoce)
   available: string; // versión disponible
   source: string;
+  security?: boolean; // Linux/apt: si el paquete viene del repo de seguridad
 }
 
 export interface WingetListResult {
