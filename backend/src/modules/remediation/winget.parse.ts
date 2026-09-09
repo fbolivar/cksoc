@@ -24,6 +24,17 @@ export interface WingetListResult {
 
 const DASHES = /^[\s-]*-{8,}[\s-]*$/;
 
+// Paquetes de framework/runtime UWP: winget los LISTA como actualizables pero no los
+// puede actualizar en modo silencioso (fallan con 0x80070057 E_INVALIDARG). Los mantiene
+// la Microsoft Store o se actualizan como dependencia de otras apps UWP; no son parches
+// accionables. Se ocultan de la lista para no meter ruido ni errores confusos.
+// NOTA: NO incluye Microsoft.VCRedist.* (los redistribuibles Win32 SÍ se parchean por winget).
+const FRAMEWORK_ID_RE = /^(Microsoft\.VCLibs\.|Microsoft\.UI\.Xaml\.|Microsoft\.NET\.Native\.|Microsoft\.WindowsAppRuntime\.|Microsoft\.WinAppRuntime|Microsoft\.Services\.Store\.Engagement|Microsoft\.Advertising\.Xaml)/i;
+
+export function isFrameworkPackage(id: string): boolean {
+  return FRAMEWORK_ID_RE.test(id || '');
+}
+
 /** Índices de inicio de cada columna a partir de la fila de cabecera. */
 function columnStarts(header: string): number[] {
   const starts: number[] = [];
@@ -69,6 +80,7 @@ export function parseWingetList(stdout: string): WingetListResult {
     clean.push(line);
     const id = slice(line, starts, 1);
     if (!id) continue;
+    if (isFrameworkPackage(id)) continue; // frameworks UWP: no accionables por winget
     pkgs.push({
       name: slice(line, starts, 0),
       id,
