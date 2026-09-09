@@ -80,7 +80,7 @@ export async function getCorrelations(range: string, externalOnly = true): Promi
             maxlevel: { max: { field: 'rule.level' } },
             rulescard: { cardinality: { field: 'rule.id' } },
             agents: { terms: { field: 'agent.name', size: 6 } },
-            forti: { filter: { term: { 'decoder.name': 'fortigate-firewall-v5' } } },
+            forti: { filter: { terms: { 'decoder.name': ['fortigate-firewall-v5', 'sonicwall'] } } },
             firstseen: { min: { field: '@timestamp' } },
             lastseen: { max: { field: '@timestamp' } },
             sample: { top_hits: { size: 1, sort: [{ 'rule.level': { order: 'desc' } }], _source: ['rule.description'] } },
