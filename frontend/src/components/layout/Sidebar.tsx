@@ -38,6 +38,7 @@ import {
   Network,
   Cloud,
   Mail,
+  Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -91,6 +92,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta · FortiGate', icon: ShieldAlert, roles: ['admin', 'analista'] },
+      { to: '/remediacion', label: 'Remediación', icon: Wrench, roles: ['admin'] },
       { to: '/soar', label: 'Automatización (SOAR)', icon: Workflow, roles: ['admin', 'analista'] },
     ],
   },

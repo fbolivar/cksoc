@@ -582,3 +582,22 @@ CREATE TABLE IF NOT EXISTS iface_samples (
     link     BOOLEAN     NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_iface_samples_iface_ts ON iface_samples(iface, ts);
+
+-- Remediación (MVP winget): un registro por acción (scan/apply), auditable.
+CREATE TABLE IF NOT EXISTS remediation_jobs (
+    id          UUID        PRIMARY KEY,
+    host        VARCHAR(120) NOT NULL,
+    client_id   VARCHAR(64)  NOT NULL,
+    flow_id     VARCHAR(64),
+    kind        VARCHAR(16)  NOT NULL,   -- 'scan' | 'apply'
+    package     VARCHAR(160),
+    status      VARCHAR(16)  NOT NULL,   -- 'running' | 'done' | 'error'
+    exit_code   INTEGER,
+    packages    JSONB,
+    output      TEXT,
+    error       TEXT,
+    actor_email VARCHAR(200),
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_remediation_jobs_created ON remediation_jobs(created_at DESC);
