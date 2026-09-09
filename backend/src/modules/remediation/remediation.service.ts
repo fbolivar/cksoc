@@ -159,3 +159,31 @@ export async function getJob(id: string): Promise<RemediationJob | null> {
 export async function recentJobs(limit = 20): Promise<RemediationJob[]> {
   return query<RemediationJob>(`SELECT * FROM remediation_jobs ORDER BY created_at DESC LIMIT $1`, [Math.min(limit, 100)]);
 }
+
+/**
+ * Finalizador en segundo plano: cierra los jobs 'running' aunque nadie tenga el
+ * panel abierto. Sin esto, un escaneo/aplicación que termina en el endpoint queda
+ * 'running' para siempre en la BD si el navegador dejó de sondear (la detección de
+ * fin solo corría en el GET /job/:id). Cada N segundos refresca los jobs en curso;
+ * refreshJob lee la salida, y si terminó parsea + cancela la sesión + persiste, o
+ * expira el job pasado el corte de seguridad.
+ */
+let sweeperStarted = false;
+export function startRemediationSweeper(): void {
+  if (sweeperStarted) return;
+  sweeperStarted = true;
+  const everyMs = Number(process.env.REMEDIATION_SWEEP_SECONDS || 30) * 1000;
+  const tick = async (): Promise<void> => {
+    try {
+      const running = await query<RemediationJob>(`SELECT * FROM remediation_jobs WHERE status='running' ORDER BY created_at DESC LIMIT 20`);
+      for (const j of running) {
+        try { await refreshJob(j); } catch (e) { logger.warn({ e, job: j.id }, 'remediation sweeper: fallo al refrescar job'); }
+      }
+    } catch (e) {
+      logger.warn({ e }, 'remediation sweeper: fallo al listar jobs en curso');
+    }
+  };
+  const t = setInterval(() => { void tick(); }, everyMs);
+  t.unref?.();
+  logger.info({ everyMs }, 'remediation: finalizador en segundo plano activo');
+}

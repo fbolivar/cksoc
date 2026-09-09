@@ -63,6 +63,7 @@ import { playbooksRouter } from './modules/playbooks/playbooks.routes';
 import { riskRouter } from './modules/risk/risk.routes';
 import { velociraptorRouter } from './modules/velociraptor/velociraptor.routes';
 import { remediationRouter } from './modules/remediation/remediation.routes';
+import { startRemediationSweeper } from './modules/remediation/remediation.service';
 import { detectionRouter } from './modules/detection/detection.routes';
 import { threatIntelRouter, startThreatIntelScheduler } from './modules/threatintel/threatintel.routes';
 import { credExpRouter, startCredExpScheduler } from './modules/credexp/credexp.routes';
@@ -233,6 +234,7 @@ startDigestScheduler();
 startReportScheduler();
 startShiftReportScheduler();
 startNetperfPoller();
+startRemediationSweeper();
 
 // Respaldo automatico diario de la base de datos (.pnnc) + retencion
 startBackupScheduler();
