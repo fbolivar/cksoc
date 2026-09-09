@@ -12,7 +12,7 @@ import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
 import { auditFromReq } from '../audit/audit.service';
 import {
-  listRemediationHosts, startScan, startApply, startAutoEnable, getJob, recentJobs, pilotHosts,
+  listRemediationHosts, startScan, startApply, startAutoEnable, getJob, recentJobs, pilotHosts, allowAllHosts,
 } from './remediation.service';
 
 export const remediationRouter = Router();
@@ -21,7 +21,7 @@ remediationRouter.use(authenticate);
 remediationRouter.get('/hosts', requireRole('admin'), async (_req, res) => {
   try {
     const hosts = await listRemediationHosts();
-    res.json({ hosts, pilotHosts: pilotHosts() });
+    res.json({ hosts, pilotHosts: pilotHosts(), allowAll: allowAllHosts() });
   } catch (e) {
     res.status(502).json({ error: (e as Error).message });
   }

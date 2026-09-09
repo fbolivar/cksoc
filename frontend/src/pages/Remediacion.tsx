@@ -33,6 +33,7 @@ export default function Remediacion() {
 
   const [hosts, setHosts] = useState<RemediationHost[] | null>(null);
   const [pilotHosts, setPilotHosts] = useState<string[]>([]);
+  const [allowAll, setAllowAll] = useState<boolean>(false);
   const [selected, setSelected] = useState<string>('');
   const [loadingHosts, setLoadingHosts] = useState(true);
   const [hostErr, setHostErr] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export default function Remediacion() {
     setLoadingHosts(true); setHostErr(null);
     try {
       const d = await remediationApi.hosts();
-      setHosts(d.hosts); setPilotHosts(d.pilotHosts);
+      setHosts(d.hosts); setPilotHosts(d.pilotHosts); setAllowAll(d.allowAll);
       setSelected((prev) => prev || d.hosts.find((h) => h.online && h.isPilot)?.host || d.hosts.find((h) => h.online)?.host || '');
     } catch (e) { setHostErr(errMsg(e, 'No se pudieron cargar los equipos.')); }
     finally { setLoadingHosts(false); }
@@ -190,11 +191,13 @@ export default function Remediacion() {
       <div className="flex items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
         <FlaskConical className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
         <div className="space-y-0.5">
-          <p className="font-semibold text-amber-800 dark:text-amber-300">Modo piloto</p>
+          <p className="font-semibold text-amber-800 dark:text-amber-300">{allowAll ? 'Aplicación habilitada' : 'Modo piloto'}</p>
           <p className="text-amber-700/90 dark:text-amber-200/80">
-            El <b>escaneo (dry-run)</b> funciona en cualquier equipo en línea, sin instalar nada. La
-            <b> aplicación</b> sólo está habilitada en: <b>{pilotHosts.length ? pilotHosts.join(', ') : '(ninguno)'}</b>.
-            En Linux se aplican <b>solo parches de seguridad</b> y nunca se reinicia automáticamente.
+            El <b>escaneo (dry-run)</b> funciona en cualquier equipo en línea, sin instalar nada.{' '}
+            {allowAll
+              ? <>La <b>aplicación</b> está habilitada en <b>todos los equipos</b>. Recomendado: escanea primero (dry-run) y confirma.</>
+              : <>La <b>aplicación</b> sólo está habilitada en: <b>{pilotHosts.length ? pilotHosts.join(', ') : '(ninguno)'}</b>.</>}
+            {' '}En Linux se aplican <b>solo parches de seguridad</b> y nunca se reinicia automáticamente.
           </p>
         </div>
       </div>

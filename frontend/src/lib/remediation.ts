@@ -42,7 +42,7 @@ export interface RemediationJob {
 
 export const remediationApi = {
   hosts: () =>
-    api.get<{ hosts: RemediationHost[]; pilotHosts: string[] }>('/remediation/hosts').then((r) => r.data),
+    api.get<{ hosts: RemediationHost[]; pilotHosts: string[]; allowAll: boolean }>('/remediation/hosts').then((r) => r.data),
   scan: (host: string) =>
     api.post<{ job: RemediationJob }>('/remediation/scan', { host }).then((r) => r.data.job),
   apply: (host: string, packageId: string) =>

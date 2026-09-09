@@ -21,15 +21,19 @@ import { parseAptScan, parseAptApply } from './apt.parse';
 
 type Platform = 'windows' | 'linux';
 
-const PILOT_HOSTS = (process.env.REMEDIATION_PILOT_HOSTS || 'GVMBOGADM01')
+const PILOT_HOSTS = (process.env.REMEDIATION_PILOT_HOSTS || '')
   .split(',').map((h) => h.trim().toUpperCase()).filter(Boolean);
+// Sin lista de piloto (o con '*') = aplicación habilitada en CUALQUIER equipo.
+// Para volver a restringir, poner REMEDIATION_PILOT_HOSTS=host1,host2 en el .env.
+const ALLOW_ALL = PILOT_HOSTS.length === 0 || PILOT_HOSTS.includes('*');
 const JOB_MAX_MIN = Number(process.env.REMEDIATION_JOB_MAX_MIN || 25); // corte de seguridad
 const HOST_RE = /^[A-Za-z0-9._-]{1,120}$/;
 const PKG_RE = /^[A-Za-z0-9._+-]{1,160}$/;
 
 export function isPilotHost(host: string): boolean {
-  return PILOT_HOSTS.includes(String(host || '').toUpperCase());
+  return ALLOW_ALL || PILOT_HOSTS.includes(String(host || '').toUpperCase());
 }
+export function allowAllHosts(): boolean { return ALLOW_ALL; }
 export function pilotHosts(): string[] { return [...PILOT_HOSTS]; }
 
 export interface RemediationHost {
