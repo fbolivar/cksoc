@@ -62,7 +62,7 @@ export async function notifyHealthChange(
   // Correo
   try {
     const { recipients } = await getSettings();
-    if (isEmailConfigured() && recipients.length) {
+    if (process.env.ALERT_EMAIL_ENABLED === 'true' && isEmailConfigured() && recipients.length) {
       await sendEmail(recipients, subject, emailHtml(c, kind, prev), `${subject}\n\n${linea}`);
     }
   } catch {

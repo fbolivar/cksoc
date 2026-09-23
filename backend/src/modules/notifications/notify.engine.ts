@@ -158,6 +158,12 @@ export async function sendCapped(
     await logNotification({ ...meta, recipients: to, status: 'failed', error: 'SMTP no configurado' });
     return false;
   }
+  // El correo queda SOLO para reportes programados; alertas/digest van a Telegram.
+  // Reversible con ALERT_EMAIL_ENABLED=true.
+  if (process.env.ALERT_EMAIL_ENABLED !== 'true') {
+    await logNotification({ ...meta, recipients: to, status: 'skipped', error: 'correo de alertas deshabilitado (solo Telegram)' });
+    return false;
+  }
   const status = await dailyStatus();
   if (status.capReached) {
     // Aviso unico de tope alcanzado
