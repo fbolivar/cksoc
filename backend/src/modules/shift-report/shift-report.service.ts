@@ -84,7 +84,16 @@ Se adjunta el informe completo en PDF.`;
         `Eventos ${data.ventanaLabel}: <b>${new Intl.NumberFormat('es-CO').format(data.eventos12h)}</b> · Incidentes críticos: <b>${data.incidentesCriticos}</b></p>` +
         (internal ? `<p style=\"color:#b45309\"><i>Envío interno de revisión (aún no va al cliente).</i></p>` : '') +
         `<p>Se adjunta el informe completo en PDF.</p></div>`;
-      await sendEmail(emails, subject, html, text, [{ filename, content: pdf, contentType: 'application/pdf' }]);
+      let sent = false;
+      for (let i = 0; i < 3 && !sent; i++) {
+        try {
+          await sendEmail(emails, subject, html, text, [{ filename, content: pdf, contentType: 'application/pdf' }]);
+          sent = true;
+        } catch (e) {
+          if (i === 2) throw e;
+          await new Promise((r) => setTimeout(r, 4000)); // O365 corta a veces (ECONNRESET); reintenta
+        }
+      }
       emailedTo = emails;
       logger.info({ turno: data.turno, emails: emails.length }, 'Parte de estado enviado por correo');
     } catch (err) {

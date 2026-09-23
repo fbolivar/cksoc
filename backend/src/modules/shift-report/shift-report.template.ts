@@ -100,7 +100,9 @@ export function renderShiftReport(d: ShiftReportData): string {
   .hero .big{font-family:var(--disp);font-weight:800;font-size:20px;letter-spacing:-.01em;color:${critOk ? '#0C7A3B' : '#9A5B06'}}
   .hero .small{font-size:12.5px;color:${critOk ? '#3E7355' : '#7A5A2A'}}
   .hero .right{margin-left:auto;text-align:right;font-size:11.5px;color:${critOk ? '#3E7355' : '#7A5A2A'};font-family:var(--mono)}
-  section{padding:6mm 16mm}
+  section{padding:6mm 16mm;break-inside:avoid;page-break-inside:avoid}
+  tr,li,.mk,.chip,.two>div{break-inside:avoid;page-break-inside:avoid}
+  .eyebrow,h4,h5{break-after:avoid;page-break-after:avoid}
   .eyebrow{font-size:11px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin-bottom:11px}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}
   .kpi{border:1px solid var(--line);border-radius:12px;padding:13px 14px;position:relative;overflow:hidden}
