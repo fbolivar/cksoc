@@ -117,7 +117,7 @@ function cleanUser(u: unknown): string | null {
  * positivo. UEBA debe vigilar a los EMPLEADOS reales (nombres de persona), así que
  * estas se excluyen de las anomalías. Editar aquí para ampliar la lista.
  */
-const EXCLUDE_ENTITY_RE = /^(?:soporte|fernando[.\s]?bolivar|admin(?:istrator|istrador)?|root|sistema|system|guest|invitado|hexdesk|backup|gvm.*|svc[-_.].*|hp|usuario|user)$/i;
+const EXCLUDE_ENTITY_RE = /^(?:soporte|fernando[.\s]?bolivar|admin(?:istrator|istrador)?|root|sistema|system|guest|invitado|hexdesk|backup|gvm.*|svc[-_.].*|hp|usuario|user|postgres|velociraptor|wazuh|syslog|fboli.*|dwm[-_].*|umfd[-_].*)$/i;
 /** ¿La entidad es una cuenta de servicio/admin/genérica (no un empleado real)?
  *  Reutilizada por UEBA y por Riesgo por entidad para no priorizar admins/robots. */
 export function isServiceOrAdmin(entity: string): boolean {
@@ -126,6 +126,10 @@ export function isServiceOrAdmin(entity: string): boolean {
 
 const SUCCESS_GROUP = 'authentication_success';
 const FAIL_GROUPS = ['authentication_failed', 'win_authentication_failed'];
+// Rule 67022 "Non network or service local logon" llega por WEF en el grupo
+// `windows` (no en authentication_success): sin esto UEBA era ciego a los logons
+// interactivos reales de los empleados. Se clasifica como exito (no esta en FAIL_GROUPS).
+const SUCCESS_RULE_IDS = ['67022'];
 const USER_FIELDS = ['data.srcuser', 'data.dstuser', 'data.win.eventdata.targetUserName'];
 
 // Painless: ¿el @timestamp del doc cae fuera del horario laboral (hora Colombia)?
@@ -193,7 +197,10 @@ export async function collectLogins(hours: number): Promise<LoginEvent[]> {
       query: { bool: {
         filter: [
           { range: { '@timestamp': { gte: `now-${hours}h` } } },
-          { terms: { 'rule.groups': [SUCCESS_GROUP, ...FAIL_GROUPS] } },
+          { bool: { should: [
+            { terms: { 'rule.groups': [SUCCESS_GROUP, ...FAIL_GROUPS] } },
+            { terms: { 'rule.id': SUCCESS_RULE_IDS } },
+          ], minimum_should_match: 1 } },
         ],
         // Excluir el FP masivo de SMB en red SIN dominio: 4625 con subStatus
         // 0xC0000064 = "el usuario no existe" (una estación pide un recurso con su
@@ -243,7 +250,10 @@ export async function buildBaseline(s: UebaSettings): Promise<Map<string, UserBa
         size: 0,
         query: { bool: { filter: [
           { range: { '@timestamp': { gte: `now-${s.lookback_days}d`, lt: 'now-1d' } } },
-          { term: { 'rule.groups': SUCCESS_GROUP } },
+          { bool: { should: [
+            { term: { 'rule.groups': SUCCESS_GROUP } },
+            { terms: { 'rule.id': SUCCESS_RULE_IDS } },
+          ], minimum_should_match: 1 } },
           { exists: { field } },
         ] } },
         aggs: {
