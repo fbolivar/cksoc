@@ -1,8 +1,14 @@
 /**
  * Recolección de postura del SonicWall (SOLO LECTURA) para el reporte de seguridad.
- * Lee estado + Security Rating nativo de SonicWall + configuración (cmdb) y arma un
- * "snapshot" SANITIZADO (sin secretos: contraseñas, llaves, psk) apto para evaluar
- * con checks deterministas y para el análisis con IA.
+ * Lee versión, interfaces, reglas de acceso, usuarios locales y SNMP vía la API
+ * SonicOS (/api/sonicos) y arma un "snapshot" SANITIZADO (sin secretos: contraseñas,
+ * llaves, psk) apto para evaluar con checks deterministas y para el análisis con IA.
+ *
+ * NOTA de portabilidad: SonicOS no expone un endpoint de "administration" por API en
+ * este firmware (7.3.x devuelve 400), por lo que los ajustes globales de administración
+ * (timeout, telnet, lockout, strong-crypto) quedan sin dato → esos checks salen "na".
+ * Tampoco existe "Security Rating" nativo ni trusted-hosts por usuario (el origen de la
+ * gestión se controla a nivel de interfaz/zona, que sí evaluamos en el check WAN-mgmt).
  */
 import { fgGet } from '../response/fortigate.service';
 import { logger } from '../../config/logger';
@@ -13,93 +19,107 @@ export interface FwIface { name: string; alias: string | null; role: string | nu
 
 export interface FwSnapshot {
   device: { hostname: string; model: string; serial: string; version: string; build: string | number };
-  securityRating: unknown | null;   // resultado nativo de SonicWall (para la IA)
-  global: Record<string, unknown>;  // ajustes clave (sanitizados)
+  securityRating: unknown | null;   // SonicOS no tiene equivalente nativo → null
+  global: Record<string, unknown>;  // ajustes clave (sanitizados); vacío en SonicOS (sin API de administration)
   admins: FwAdmin[];
   interfaces: FwIface[];
   policies: { total: number; enabled: number; anyAnyAccept: number; sinLog: number; sinUtmAccept: number; items: FwPolicy[] };
-  snmpCommunities: number;          // comunidades SNMP v1/v2c configuradas
+  snmpCommunities: number;          // comunidades SNMP v1/v2c activas
   fortiguard: Record<string, unknown> | null;
   collectedAt: string;
 }
 
-const TRUSTHOST_OPEN = /^0\.0\.0\.0[\s/]+0\.0\.0\.0$/;
-function trusthostsOpen(a: Record<string, unknown>): boolean {
-  // Todos los trusthost vacíos o 0.0.0.0/0 → sin restricción de origen.
-  for (let i = 1; i <= 10; i++) {
-    const v = String(a[`trusthost${i}`] ?? '').trim();
-    if (v && !TRUSTHOST_OPEN.test(v)) return false; // hay al menos uno restringido
-  }
-  return true;
-}
+// ---- Formas (parciales) de la API SonicOS que consumimos ----
+interface SwVersion { firmware_version?: string; rom_version?: string; model?: string; serial_number?: string; }
+interface SwMgmt { https?: boolean; ssh?: boolean; ping?: boolean; snmp?: boolean }
+interface SwIfaceRow { ipv4?: { name?: string; comment?: string; ip_assignment?: { zone?: string }; management?: SwMgmt; user_login?: { http?: boolean; https?: boolean } } }
+interface SwAddr { any?: boolean; name?: string; group?: string }
+interface SwRuleRow { ipv4?: { name?: string; action?: string; enable?: boolean; logging?: boolean; source?: { address?: SwAddr }; destination?: { address?: SwAddr }; service?: { any?: boolean; name?: string; group?: string } } }
+interface SwUser { name?: string; comment?: string; one_time_password?: Record<string, unknown>; member_of?: { name?: string }[] }
+interface SwSnmp { enable?: boolean; get_community_name?: string; snmp3?: { mandatory?: boolean } }
 
 async function safe<T>(path: string, fallback: T): Promise<T> {
   try { return await fgGet<T>(path); } catch (err) { logger.warn({ err: err instanceof Error ? err.message : err, path }, 'fwposture: fallo al leer'); return fallback; }
 }
 
+/** ¿El grupo denota rol administrativo del appliance? (no VPN/usuarios normales) */
+const isAdminGroup = (name: string): boolean => /administrator/i.test(name);
+
 export async function collectFwSnapshot(): Promise<FwSnapshot> {
-  const [status, rating, global, adminsR, ifacesR, polR, snmpR, fg] = await Promise.all([
-    safe<{ results?: Record<string, unknown> }>('/api/v2/monitor/system/status', {}),
-    safe<{ results?: unknown }>('/api/v2/monitor/system/security-rating?scope=global', { results: null }),
-    safe<{ results?: Record<string, unknown> }>('/api/v2/cmdb/system/global', {}),
-    safe<{ results?: Record<string, unknown>[] }>('/api/v2/cmdb/system/admin', { results: [] }),
-    safe<{ results?: Record<string, unknown>[] }>('/api/v2/cmdb/system/interface', { results: [] }),
-    safe<{ results?: Record<string, unknown>[] }>('/api/v2/cmdb/firewall/policy', { results: [] }),
-    safe<{ matched_count?: number; results?: unknown[] }>('/api/v2/cmdb/system.snmp/community', { results: [] }),
-    safe<{ results?: Record<string, unknown> }>('/api/v2/monitor/system/fortiguard/server-info', { results: {} }),
-  ]);
+  // SonicOS admite UNA sola sesion de gestion: las lecturas van EN SERIE (no Promise.all),
+  // si no, los auth por cookie concurrentes se invalidan entre si y todo devuelve vacio.
+  const ver = await safe<SwVersion>('/version', {});
+  const ifacesR = await safe<{ interfaces?: SwIfaceRow[] }>('/interfaces/ipv4', { interfaces: [] });
+  const rulesR = await safe<{ access_rules?: SwRuleRow[] }>('/access-rules/ipv4', { access_rules: [] });
+  const usersR = await safe<{ user?: { local?: { user?: SwUser[] } } }>('/user/local/users', { user: { local: { user: [] } } });
+  const snmpR = await safe<{ snmp?: SwSnmp }>('/snmp/base', { snmp: {} });
 
-  const st = (status.results ?? {}) as Record<string, unknown>;
-  const g = (global.results ?? {}) as Record<string, unknown>;
+  // --- Administradores del appliance (miembros de un grupo *Administrators*) ---
+  const localUsers = usersR.user?.local?.user ?? [];
+  const admins: FwAdmin[] = localUsers
+    .filter((u) => (u.member_of ?? []).some((m) => isAdminGroup(String(m?.name ?? ''))))
+    .map((u) => ({
+      name: String(u.name ?? ''),
+      profile: (u.member_of ?? []).map((m) => String(m?.name ?? '')).find(isAdminGroup) ?? '',
+      // OTP configurado (objeto no vacío) => 2FA activo.
+      twoFactor: Object.keys(u.one_time_password ?? {}).length > 0 ? 'enable' : 'disable',
+      // SonicOS no tiene trusted-hosts por usuario; el origen de gestión se controla por
+      // interfaz/zona (evaluado en el check WAN-mgmt), así que no marcamos "abierto" aquí.
+      trusthostOpen: false,
+      sshKey: false,
+    }));
 
-  const admins: FwAdmin[] = (adminsR.results ?? []).map((a) => ({
-    name: String(a.name ?? ''),
-    profile: String(a.accprofile ?? ''),
-    twoFactor: String(a['two-factor'] ?? 'disable'),
-    trusthostOpen: trusthostsOpen(a),
-    sshKey: Boolean(String(a['ssh-public-key1'] ?? '').trim()),
-  }));
+  // --- Interfaces: allowaccess derivado de management + user_login; wan por zona ---
+  const interfaces: FwIface[] = (ifacesR.interfaces ?? []).map((row) => {
+    const i = row.ipv4 ?? {};
+    const zone = String(i.ip_assignment?.zone ?? '');
+    const m = i.management ?? {};
+    const ul = i.user_login ?? {};
+    const acc: string[] = [];
+    if (m.https) acc.push('https');
+    if (m.ssh) acc.push('ssh');
+    if (ul.http) acc.push('http');
+    if (m.ping) acc.push('ping');
+    if (m.snmp) acc.push('snmp');
+    return {
+      name: String(i.name ?? ''),
+      alias: i.comment ? String(i.comment) : null,
+      role: zone || null,
+      allowaccess: acc.join(' '),
+      wan: zone.toUpperCase() === 'WAN',
+    };
+  }).filter((i) => i.name);
 
-  const interfaces: FwIface[] = (ifacesR.results ?? []).map((i) => ({
-    name: String(i.name ?? ''),
-    alias: (i.alias as string) || null,
-    role: (i.role as string) || null,
-    allowaccess: String(i.allowaccess ?? '').trim(),
-    wan: /wan/i.test(String(i.name ?? '')) || String(i.role ?? '') === 'wan',
-  }));
-
-  const pols = (polR.results ?? []);
-  const items: FwPolicy[] = pols.map((p) => {
-    const src = (p.srcaddr as { name: string }[] ?? []).map((x) => x.name);
-    const dst = (p.dstaddr as { name: string }[] ?? []).map((x) => x.name);
-    const svc = (p.service as { name: string }[] ?? []).map((x) => x.name);
-    const action = String(p.action ?? '');
-    const anyAny = src.includes('all') && dst.includes('all') && svc.map((s) => s.toUpperCase()).includes('ALL');
-    const log = ['all', 'utm'].includes(String(p.logtraffic ?? ''));
-    const utm = String(p['utm-status'] ?? '') === 'enable';
-    return { id: Number(p.policyid ?? 0), name: String(p.name ?? ''), action, anyAny, log, utm };
+  // --- Reglas de acceso (SonicOS "allow" ≈ FortiOS "accept") ---
+  const rules = rulesR.access_rules ?? [];
+  const items: FwPolicy[] = rules.map((row, idx) => {
+    const r = row.ipv4 ?? {};
+    const action = String(r.action ?? '') === 'allow' ? 'accept' : String(r.action ?? '');
+    const anyAny = Boolean(r.source?.address?.any) && Boolean(r.destination?.address?.any) && Boolean(r.service?.any);
+    const log = Boolean(r.logging);
+    // SonicOS aplica los Servicios de Seguridad (GAV/IPS/App Control/CFS/DPI-SSL) a nivel
+    // de motor/zona, no como perfil por regla → no hay "regla accept sin UTM" en SonicOS.
+    const utm = true;
+    return { id: idx + 1, name: String(r.name ?? ''), action, anyAny, log, utm };
   });
   const accept = items.filter((p) => p.action === 'accept');
 
-  // Ajustes globales sanitizados (solo postura, ningún secreto).
-  const GLOBAL_KEYS = [
-    'admintimeout', 'admin-lockout-threshold', 'admin-lockout-duration', 'admin-login-max',
-    'strong-crypto', 'admin-https-redirect', 'admin-telnet', 'admin-ssh-v1', 'admin-scp',
-    'admin-https-ssl-versions', 'gui-certificates', 'multi-factor-authentication', 'admin-console-timeout',
-  ];
-  const gClean: Record<string, unknown> = {};
-  for (const k of GLOBAL_KEYS) if (g[k] !== undefined) gClean[k] = g[k];
+  // --- SNMP v1/v2c: comunidad activa solo si SNMP habilitado y v3 no obligatorio ---
+  const snmp = snmpR.snmp ?? {};
+  const snmpCommunities = snmp.enable && !snmp.snmp3?.mandatory && String(snmp.get_community_name ?? '').trim() ? 1 : 0;
+
+  const model = String(ver.model ?? '');
 
   return {
     device: {
-      hostname: String(st.hostname ?? 'SonicWall'),
-      model: String(st.model_name ?? st.model ?? ''),
-      serial: String(st.serial ?? ''),
-      version: String(st.version ?? ''),
-      build: (st.build as number) ?? '',
+      hostname: (model ? `SonicWall ${model}` : 'SonicWall').trim(),
+      model,
+      serial: String(ver.serial_number ?? ''),
+      version: String(ver.firmware_version ?? ''),
+      build: String(ver.rom_version ?? ''),
     },
-    securityRating: rating.results ?? null,
-    global: gClean,
+    securityRating: null,
+    global: {}, // SonicOS: sin API de administration → checks globales quedan "na"
     admins,
     interfaces,
     policies: {
@@ -110,8 +130,8 @@ export async function collectFwSnapshot(): Promise<FwSnapshot> {
       sinUtmAccept: accept.filter((p) => !p.utm).length,
       items,
     },
-    snmpCommunities: Number(snmpR.matched_count ?? (snmpR.results ?? []).length ?? 0),
-    fortiguard: (fg.results as Record<string, unknown>) ?? null,
+    snmpCommunities,
+    fortiguard: null,
     collectedAt: new Date().toISOString(),
   };
 }
