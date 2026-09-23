@@ -10,10 +10,9 @@ import { query } from '../../config/db';
 import { getAssetList } from '../assets/assets.service';
 import { collectLogins } from '../ueba/ueba.service';
 import { enrichIp } from '../enrichment/enrichment.service';
-import { fgGet, isFortigateConfigured } from '../response/fortigate.service';
+import { fgGet } from '../response/fortigate.service';
 
 const RANGE: Record<string, string> = { '1h': 'now-1h', '24h': 'now-24h', '7d': 'now-7d' };
-const SESSION_SUBTYPES = ['app-ctrl', 'forward'];
 
 export interface NdrTalker { ip: string; sessions: number; dstIps: number }
 export interface NdrDomain { domain: string; count: number }
@@ -75,13 +74,12 @@ async function overviewAggs(gte: string) {
     size: 0,
     query: { bool: { filter: [
       { range: { '@timestamp': { gte } } },
-      { match: { 'rule.groups': 'fortigate' } },
-      { terms: { 'data.subtype': SESSION_SUBTYPES } },
+      { match: { 'rule.groups': 'sonicwall' } },
     ] } },
     aggs: {
       domains: { terms: { field: 'data.hostname', size: 15 } },
       talkers: { terms: { field: 'data.srcip', size: 10 }, aggs: { dst: { cardinality: { field: 'data.dstip' } } } },
-      apps: { terms: { field: 'data.app', size: 12 } },
+      apps: { terms: { field: 'data.appName', size: 12 } },
       dstips: { terms: { field: 'data.dstip', size: 10 } },
       cDomains: { cardinality: { field: 'data.hostname' } },
       cDst: { cardinality: { field: 'data.dstip' } },
@@ -108,7 +106,7 @@ async function ipsAlerts(gte: string): Promise<{ count: number; list: NdrIps[] }
       `/${env.WAZUH_ALERTS_INDEX}/_search`,
       {
         size: 25,
-        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'fortigate' } }, { term: { 'data.subtype': 'ips' } }] } },
+        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'sonicwall' } }, { terms: { 'rule.id': ['100206', '100210'] } }] } },
         sort: [{ '@timestamp': { order: 'desc' } }],
         _source: ['@timestamp', 'data.srcip', 'data.dstip', 'data.msg', 'data.action', 'data.severity', 'data.attack'],
       },
@@ -179,7 +177,7 @@ async function dstDomains(ips: string[], gte: string): Promise<Map<string, strin
       `/${env.WAZUH_ALERTS_INDEX}/_search`,
       {
         size: 0,
-        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { term: { 'data.subtype': 'app-ctrl' } }, { terms: { 'data.dstip': ips } }] } },
+        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'sonicwall' } }, { terms: { 'data.dstip': ips } }] } },
         aggs: { d: { terms: { field: 'data.dstip', size: ips.length }, aggs: { h: { terms: { field: 'data.hostname', size: 1 } } } } },
       },
     );
@@ -260,7 +258,7 @@ async function iocHits(gte: string): Promise<NdrIoc[]> {
       dst: { buckets: TermBucket[] }; src: { buckets: TermBucket[] }; dom: { buckets: TermBucket[] };
     } }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
       size: 0,
-      query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'fortigate' } }] } },
+      query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'sonicwall' } }] } },
       aggs: {
         dst: { terms: { field: 'data.dstip', size: 4000 } },
         src: { terms: { field: 'data.srcip', size: 4000 } },
@@ -331,38 +329,39 @@ export interface VpnLive {
   generatedAt: string;
 }
 
-interface FgVpnRow {
-  user_name?: string; group_name?: string; remote_host?: string; duration?: number;
-  two_factor_auth?: boolean; last_login_timestamp?: number;
-  subsessions?: { aip?: string; in_bytes?: number; out_bytes?: number }[];
+interface SwVpnRow {
+  user_name?: string; vpn_protocol?: string; client_virtual_ip?: string; client_wan_ip?: string;
+  login_time?: string; inactivity_time?: string; logged_in?: string; dev_profile?: string; spn?: boolean;
 }
 
+function parseDurationSec(s?: string): number {
+  const m = String(s ?? '').match(/(\d+)\s*(second|minute|hour|day)/i);
+  if (!m) return 0;
+  const n = Number(m[1]); const u = m[2].toLowerCase();
+  return u.startsWith('sec') ? n : u.startsWith('min') ? n * 60 : u.startsWith('hour') ? n * 3600 : n * 86400;
+}
+
+/** Sesiones SSL-VPN activas del SonicWall (reporting API). No expone bytes por sesion. */
 export async function getVpnSessions(): Promise<VpnLive> {
   const empty: VpnLive = { configured: false, count: 0, totalInBytes: 0, totalOutBytes: 0, sessions: [], byGroup: [], generatedAt: new Date().toISOString() };
-  if (!isFortigateConfigured()) return empty;
-  const data = await fgGet<{ results?: FgVpnRow[] }>('/api/v2/monitor/vpn/ssl?scope=global').catch(() => ({ results: [] as FgVpnRow[] }));
-  const rows = data.results ?? [];
-  const sessions: VpnSession[] = rows.map((r) => {
-    const subs = r.subsessions ?? [];
-    const inB = subs.reduce((n, x) => n + Number(x.in_bytes ?? 0), 0);
-    const outB = subs.reduce((n, x) => n + Number(x.out_bytes ?? 0), 0);
+  try {
+    const data = await fgGet<SwVpnRow[]>('/reporting/ssl-vpn/sessions');
+    const rows = Array.isArray(data) ? data : [];
+    const sessions: VpnSession[] = rows.map((r) => ({
+      user: r.user_name ?? '', group: r.dev_profile ?? r.vpn_protocol ?? '', remoteHost: r.client_wan_ip ?? '',
+      aip: r.client_virtual_ip ?? '', durationSec: parseDurationSec(r.login_time),
+      inBytes: 0, outBytes: 0, twoFactor: Boolean(r.spn), lastLogin: Date.parse(r.logged_in ?? '') || 0,
+    })).sort((a, b) => b.durationSec - a.durationSec);
+    const gmap = new Map<string, { group: string; sesiones: number; bytes: number }>();
+    for (const s of sessions) {
+      const e = gmap.get(s.group) ?? { group: s.group || '(sin perfil)', sesiones: 0, bytes: 0 };
+      e.sesiones++; gmap.set(s.group, e);
+    }
     return {
-      user: r.user_name ?? '', group: r.group_name ?? '', remoteHost: r.remote_host ?? '',
-      aip: subs[0]?.aip ?? '', durationSec: Number(r.duration ?? 0),
-      inBytes: inB, outBytes: outB, twoFactor: Boolean(r.two_factor_auth), lastLogin: Number(r.last_login_timestamp ?? 0),
+      configured: true, count: sessions.length, totalInBytes: 0, totalOutBytes: 0,
+      sessions, byGroup: [...gmap.values()].sort((a, b) => b.sesiones - a.sesiones), generatedAt: new Date().toISOString(),
     };
-  }).sort((a, b) => (b.inBytes + b.outBytes) - (a.inBytes + a.outBytes));
-  const gmap = new Map<string, { group: string; sesiones: number; bytes: number }>();
-  for (const s of sessions) {
-    const e = gmap.get(s.group) ?? { group: s.group || '(sin grupo)', sesiones: 0, bytes: 0 };
-    e.sesiones++; e.bytes += s.inBytes + s.outBytes; gmap.set(s.group, e);
-  }
-  return {
-    configured: true, count: sessions.length,
-    totalInBytes: sessions.reduce((n, s) => n + s.inBytes, 0),
-    totalOutBytes: sessions.reduce((n, s) => n + s.outBytes, 0),
-    sessions, byGroup: [...gmap.values()].sort((a, b) => b.bytes - a.bytes), generatedAt: new Date().toISOString(),
-  };
+  } catch { return empty; }
 }
 
 // ==========================================================================
@@ -370,15 +369,24 @@ export async function getVpnSessions(): Promise<VpnLive> {
 // marca de alto riesgo (proxy/anonimizador, acceso remoto, IA generativa, juegos,
 // streaming, redes sociales). Atribución por EQUIPO (el Forti no identifica usuario).
 // ==========================================================================
-const RIESGO_CAT: Record<string, number> = {
-  'Proxy': 5, 'Remote.Access': 3, 'GenAI': 3, 'Game': 2, 'Video/Audio': 1, 'Social.Media': 1,
-};
-const CAT_LABEL: Record<string, string> = {
-  'Proxy': 'Proxy/anonimizador', 'Remote.Access': 'Acceso remoto', 'GenAI': 'IA generativa',
-  'Game': 'Juegos', 'Video/Audio': 'Streaming', 'Social.Media': 'Redes sociales',
-  'Storage.Backup': 'Almacenamiento/backup', 'Collaboration': 'Colaboración', 'Email': 'Correo',
-  'Network.Service': 'Servicios de red', 'General.Interest': 'Interés general', 'Web.Client': 'Web',
-};
+// Riesgo por categoria de SonicWall (App Control / CFS). Los nombres de categoria
+// son cadenas libres del firewall; se puntuan por palabras clave para tolerar variantes.
+function catRisk(cat: string): number {
+  const c = (cat || '').toLowerCase();
+  if (/proxy|anonym|tor/.test(c)) return 5;
+  if (/malware|botnet|phish|command.?and.?control|c2|hack|exploit/.test(c)) return 5;
+  if (/peer.?to.?peer|p2p|torrent/.test(c)) return 4;
+  if (/remote access|remote.?desktop|vnc|rdp|teamviewer|anydesk/.test(c)) return 3;
+  if (/gambl|casino/.test(c)) return 3;
+  if (/porn|adult|nudity|sexual/.test(c)) return 3;
+  if (/personal storage|file storage|file sharing|file transfer|online storage/.test(c)) return 2;
+  if (/game|gaming/.test(c)) return 2;
+  if (/social network/.test(c)) return 1;
+  if (/stream|multimedia|video|audio|entertainment/.test(c)) return 1;
+  if (/instant messag|chat/.test(c)) return 1;
+  return 0;
+}
+const CAT_LABEL: Record<string, string> = {};
 
 export interface DeviceActivity {
   ip: string; host: string | null; total: number;
@@ -394,7 +402,7 @@ export async function getUserActivity(rangeIn: string): Promise<UserActivity> {
     `/${env.WAZUH_ALERTS_INDEX}/_search`,
     {
       size: 0,
-      query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { term: { 'data.subtype': 'app-ctrl' } }, { exists: { field: 'data.srcip' } }] } },
+      query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'sonicwall' } }, { exists: { field: 'data.appcat' } }, { exists: { field: 'data.srcip' } }] } },
       aggs: { dev: { terms: { field: 'data.srcip', size: 25 }, aggs: { cat: { terms: { field: 'data.appcat', size: 10 } } } } },
     }
   );
@@ -403,10 +411,10 @@ export async function getUserActivity(rangeIn: string): Promise<UserActivity> {
   for (const a of assets) if (a.ip) hostByIp.set(a.ip, a.name);
 
   const devs: DeviceActivity[] = (data.aggregations?.dev.buckets ?? []).map((d) => {
-    const cats = (d.cat.buckets ?? []).map((c) => ({ cat: c.key, label: CAT_LABEL[c.key] ?? c.key, sesiones: c.doc_count, riesgo: (RIESGO_CAT[c.key] ?? 0) > 0 }));
-    const riesgoScore = cats.reduce((n, c) => n + c.sesiones * (RIESGO_CAT[c.cat] ?? 0), 0);
+    const cats = (d.cat.buckets ?? []).map((c) => ({ cat: c.key, label: CAT_LABEL[c.key] ?? c.key, sesiones: c.doc_count, riesgo: catRisk(c.key) > 0 }));
+    const riesgoScore = cats.reduce((n, c) => n + c.sesiones * catRisk(c.cat), 0);
     const riesgoSes = cats.filter((c) => c.riesgo).reduce((n, c) => n + c.sesiones, 0);
-    const hasProxy = cats.some((c) => c.cat === 'Proxy');
+    const hasProxy = cats.some((c) => catRisk(c.cat) >= 5);
     const share = d.doc_count ? riesgoSes / d.doc_count : 0;
     const nivel: 'alto' | 'medio' | 'bajo' = hasProxy || share >= 0.4 ? 'alto' : share >= 0.15 ? 'medio' : 'bajo';
     return {

@@ -9,7 +9,7 @@ import { getIndexerClient } from '../wazuh/wazuh.client';
 import { env } from '../../config/env';
 import { geolocate, isPublicIP } from '../geo/geoip.service';
 
-const RANGE: Record<string, string> = { '24h': 'now-24h', '7d': 'now-7d', '30d': 'now-30d' };
+const RANGE: Record<string, string> = { '12h': 'now-12h', '24h': 'now-24h', '7d': 'now-7d', '30d': 'now-30d' };
 const O365_FILTER = { bool: { should: [{ match: { 'rule.groups': 'office365' } }, { exists: { field: 'data.office365' } }], minimum_should_match: 1 } };
 
 export interface NamedCount { key: string; count: number; country?: string; system?: boolean }
@@ -82,7 +82,7 @@ async function search(body: object): Promise<{ hits: { total: { value: number } 
   return data as { hits: { total: { value: number } | number }; aggregations?: Record<string, { buckets?: TermB[]; value?: number }> };
 }
 
-const RANGE_INTERVAL: Record<string, string> = { '24h': '1h', '7d': '1d', '30d': '1d' };
+const RANGE_INTERVAL: Record<string, string> = { '12h': '1h', '24h': '1h', '7d': '1d', '30d': '1d' };
 
 /**
  * Panel "Riesgos M365": corre una sola agregación sobre los eventos O365 de la

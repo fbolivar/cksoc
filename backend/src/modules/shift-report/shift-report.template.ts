@@ -16,6 +16,8 @@ function pct(part: number, total: number): number {
 }
 
 export function renderShiftReport(d: ShiftReportData): string {
+  const ORG = (process.env.REPORT_ORG_NAME || 'Click Solutions').replace(/&/g,'&amp;');
+  const CLIENT = (process.env.REPORT_CLIENT_NAME || 'DG&A ABOGADOS').replace(/&/g,'&amp;');
   const total = d.estaciones || 1;
   const onPct = Math.max(d.wkEnLinea ? 8 : 0, pct(d.wkEnLinea, total));
   const attPct = Math.max(d.wkAtencion ? 8 : 0, pct(d.wkAtencion, total));
@@ -40,6 +42,26 @@ export function renderShiftReport(d: ShiftReportData): string {
         )
         .join('')
     : `<li class="clean"><div class="host">Sin novedades</div><div class="why">Todas las estaciones activas reportan con normalidad.</div></li>`;
+
+  const sevColor: Record<string, string> = { critica: '#dc2626', alta: '#ea580c', media: '#d97706', baja: '#64748b' };
+  const activosHtml = d.equiposActivos.length
+    ? d.equiposActivos.map((e) => `<span class="chip on">${esc(e.name)}</span>`).join('')
+    : '<span class="muted">Ninguno reportando</span>';
+  const inactivosHtml = d.equiposInactivos.length
+    ? d.equiposInactivos.map((e) => `<span class="chip off" title="${esc(e.motivo)}">${esc(e.name)}</span>`).join('')
+    : '<span class="muted">Ninguno · todos en línea</span>';
+  const activasHtml = d.estacionesActivas.length
+    ? d.estacionesActivas.map((e) => `<li><span class="hn">${esc(e.host)}</span><span class="ev">${nf(e.eventos)} eventos</span></li>`).join('')
+    : '<li><span class="hn">Sin actividad relevante en el turno</span></li>';
+  const incidentesHtml = d.topIncidentes.length
+    ? d.topIncidentes.map((i) => `<li><span class="sev" style="background:${sevColor[i.severidad] || '#64748b'}"></span><span class="tt">${esc(i.titulo)}</span><span class="meta">${esc(i.severidad)} · ${esc(i.estado)}</span></li>`).join('')
+    : '<li class="none">Sin incidentes registrados en el periodo 🟢</li>';
+  const amenazasHtml = d.topAmenazas.length
+    ? d.topAmenazas.map((a) => `<li><span class="tt">${esc(a.label)}</span><span class="meta">${nf(a.count)}</span></li>`).join('')
+    : '<li class="none">Sin amenazas de severidad relevante en el turno 🟢</li>';
+  const riesgosCorreoHtml = d.correo.riesgos.length
+    ? d.correo.riesgos.map((r) => `<li><span class="sev" style="background:${sevColor[r.severity] || '#64748b'}"></span><span class="tt">${esc(r.label)}</span><span class="meta">${nf(r.count)}</span></li>`).join('')
+    : '<li class="none">Sin riesgos de correo/M365 en el turno 🟢</li>';
 
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
@@ -108,6 +130,30 @@ export function renderShiftReport(d: ShiftReportData): string {
   footer{margin-top:auto;padding:6mm 16mm;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:14px}
   .sig{font-size:12px;color:var(--muted)} .sig b{color:var(--ink)}
   .next{font-family:var(--mono);font-size:11.5px;color:var(--coral);background:var(--coral-soft);padding:5px 12px;border-radius:8px}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .chip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:6px;border:1px solid var(--line)}
+  .chip.on{background:var(--green-soft);color:var(--green);border-color:transparent}
+  .chip.off{background:#F1F5F9;color:var(--muted)}
+  .muted{color:var(--muted);font-size:11.5px}
+  .hosts-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:16px}
+  .hosts-grid h5,.active-list h5{margin:0 0 3px;font-size:11.5px;font-weight:700}
+  .active-list{margin-top:15px}
+  .active-list ol{list-style:none;counter-reset:a;display:flex;flex-direction:column;gap:5px}
+  .active-list li{counter-increment:a;display:flex;align-items:center;gap:8px;font-size:12px}
+  .active-list li::before{content:counter(a);font-family:var(--mono);font-size:10px;background:#eef2ff;color:#4f46e5;width:16px;height:16px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex:none}
+  .active-list .hn{font-family:var(--mono);font-weight:600}
+  .active-list .ev{margin-left:auto;color:var(--muted);font-size:11px}
+  .tops{list-style:none;counter-reset:t;display:flex;flex-direction:column;gap:7px}
+  .tops li{counter-increment:t;display:flex;align-items:center;gap:8px;font-size:12px;border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+  .tops li.none{color:var(--muted);justify-content:center}
+  .tops .sev{width:9px;height:9px;border-radius:50%;flex:none}
+  .tops .tt{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tops .meta{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted);flex:none}
+  .m365kpi{display:flex;gap:10px}
+  .m365kpi .mk{flex:1;border:1px solid var(--line);border-radius:8px;padding:10px 8px;text-align:center}
+  .m365kpi .mk b{display:block;font-size:20px;font-weight:800;font-family:var(--mono);line-height:1.1}
+  .m365kpi .mk small{color:var(--muted);font-size:10px}
+  .m365kpi .mk.warn b{color:var(--amber)}
 </style></head><body>
 <div class="sheet">
   <header class="head">
@@ -121,7 +167,7 @@ export function renderShiftReport(d: ShiftReportData): string {
     <div class="head-row">
       <div>
         <div class="doc-title">Parte de Estado del Servicio</div>
-        <div class="doc-sub">Estaciones de trabajo y servidores bajo monitoreo · Cliente <b>GVM&nbsp;Corporation</b></div>
+        <div class="doc-sub">Estaciones de trabajo y servidores bajo monitoreo · Cliente <b>${CLIENT}</b></div>
       </div>
       <div class="stamp">
         <span class="shift-pill">${shiftIcon} ${esc(d.turnoLabel)}</span><br>
@@ -184,7 +230,52 @@ export function renderShiftReport(d: ShiftReportData): string {
         <ul>${atencionHtml}</ul>
       </div>
     </div>
+    <div class="hosts-grid">
+      <div class="hcol">
+        <h5>Equipos activos (${d.equiposActivos.length})</h5>
+        <div class="chips">${activosHtml}</div>
+      </div>
+      <div class="hcol">
+        <h5>Equipos no activos (${d.equiposInactivos.length})</h5>
+        <div class="chips">${inactivosHtml}</div>
+      </div>
+    </div>
+    <div class="active-list">
+      <h5>Estaciones más activas del turno</h5>
+      <ol>${activasHtml}</ol>
+    </div>
   </section>
+
+  <section style="padding-top:0">
+    <div class="eyebrow">Resumen de incidentes y amenazas del periodo</div>
+    <div class="two">
+      <div>
+        <h4 style="margin:0 0 9px;font-size:12.5px;font-weight:700">Top 5 incidentes</h4>
+        <ol class="tops">${incidentesHtml}</ol>
+      </div>
+      <div>
+        <h4 style="margin:0 0 9px;font-size:12.5px;font-weight:700">Top 5 amenazas detectadas</h4>
+        <ol class="tops">${amenazasHtml}</ol>
+      </div>
+    </div>
+  </section>
+
+  ${d.correo.configured ? `<section style="padding-top:0">
+    <div class="eyebrow">Microsoft 365 · correo y colaboración</div>
+    <div class="two">
+      <div>
+        <div class="m365kpi">
+          <div class="mk"><b>${nf(d.correo.signIns)}</b><small>inicios de sesión</small></div>
+          <div class="mk ${d.correo.signInsFailed > 0 ? 'warn' : ''}"><b>${nf(d.correo.signInsFailed)}</b><small>logins fallidos</small></div>
+          <div class="mk"><b>${nf(d.correo.usuarios)}</b><small>usuarios activos</small></div>
+        </div>
+      </div>
+      <div>
+        <h4 style="margin:0 0 9px;font-size:12.5px;font-weight:700">Riesgos de correo / M365</h4>
+        <ol class="tops">${riesgosCorreoHtml}</ol>
+      </div>
+    </div>
+  </section>` : ''}
 
   <section class="mgmt">
     <div class="eyebrow">Gestión realizada en el turno</div>
@@ -193,13 +284,13 @@ export function renderShiftReport(d: ShiftReportData): string {
       <li><span class="ic">✓</span><div><b>${nf(d.eventos12h)} eventos</b> analizados; <b>${nf(d.incidentesCriticos)}</b> escalaron a incidente crítico.</div></li>
       <li><span class="ic">✓</span><div>Integridad de archivos y accesos vigilados en las estaciones activas.</div></li>
       <li><span class="ic">✓</span><div><b>${d.wkAtencion} estación${d.wkAtencion === 1 ? '' : 'es'}</b> en seguimiento y verificación.</div></li>
-      <li><span class="ic">✓</span><div>Respuesta automática ante amenazas <b>armada y operativa</b> (FortiGate).</div></li>
+      <li><span class="ic">✓</span><div>Respuesta automática ante amenazas <b>armada y operativa</b> (SonicWall).</div></li>
       <li><span class="ic">✓</span><div>Postura de respaldo y parches <b>bajo revisión</b> continua.</div></li>
     </ul>
   </section>
 
   <footer>
-    <div class="sig">Emitido por <b>HexWatch SOC</b> · Centro de Operaciones de Seguridad — para GVM Corporation</div>
+    <div class="sig">Emitido por <b>${ORG}</b> · Centro de Operaciones de Seguridad — para ${CLIENT}</div>
     <div class="next">${proximo}</div>
   </footer>
 </div>

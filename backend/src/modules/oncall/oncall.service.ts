@@ -96,7 +96,7 @@ export async function notifyOnCall(subject: string, bodyText: string): Promise<E
   }
 
   // 2) Correo al analista de guardia (o admins), si SMTP está configurado.
-  if (isEmailConfigured() && to.length > 0) {
+  if (process.env.ONCALL_EMAIL_ENABLED === 'true' && isEmailConfigured() && to.length > 0) {
     const html = `<p>${bodyText.replace(/\n/g, '<br>')}</p><hr><p style="color:#888;font-size:12px">HexWatch · escalamiento on-call (${reason})</p>`;
     try {
       await sendEmail(to, `[HexWatch] ${subject}`, html, bodyText);

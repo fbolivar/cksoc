@@ -147,3 +147,40 @@ export async function removeAgent(agentId: string): Promise<void> {
   // Wazuh 4.x: DELETE /agents con agents_list + status y older_than requeridos.
   await wazuhApiDelete('/agents', { agents_list: agentId, status: 'all', older_than: '0s' });
 }
+
+// ==========================================================================
+// Filtrado de INFRAESTRUCTURA DEL SOC en reportes del cliente.
+// Las maquinas de la plataforma (Proxmox/Wazuh/Velociraptor/app) no deben
+// aparecer en lo que ve el cliente. Se identifican por prefijo de nombre
+// (cs-soc-*, pmx-soc*, gvm-soc*) + lista opcional en REPORT_EXCLUDE_HOSTS.
+// ==========================================================================
+const SOC_INFRA_RE = /^(cs-soc-|pmx-soc|gvm-soc)/i;
+function reportExcludeHosts(): string[] {
+  return (process.env.REPORT_EXCLUDE_HOSTS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+}
+export function isSocInfra(name: string): boolean {
+  const n = String(name || '').toLowerCase();
+  return SOC_INFRA_RE.test(n) || reportExcludeHosts().includes(n);
+}
+/** Clausulas must_not para excluir la infra del SOC en queries al Indexer (agent.name). */
+export function socInfraMustNot(): unknown[] {
+  const must: unknown[] = [
+    { prefix: { 'agent.name': 'cs-soc-' } },
+    { prefix: { 'agent.name': 'pmx-soc' } },
+    { prefix: { 'agent.name': 'gvm-soc' } },
+  ];
+  const hosts = reportExcludeHosts();
+  if (hosts.length) must.push({ terms: { 'agent.name': hosts } });
+  return must;
+}
+/** getAgents pero SOLO equipos del cliente (excluye la infra del SOC). */
+export async function getClientAgents(limit = 100): Promise<AgentItem[]> {
+  const all = await getAgents(limit);
+  return all.filter((a) => !isSocInfra(a.name));
+}
+/** Resumen de agentes del cliente (excluye infra del SOC). */
+export async function getClientAgentsSummary(): Promise<AgentsSummary> {
+  const items = await getClientAgents(1000);
+  const by = (st: string) => items.filter((a) => a.status === st).length;
+  return { total: items.length, active: by('active'), disconnected: by('disconnected'), neverConnected: by('never_connected'), pending: by('pending') };
+}

@@ -6,9 +6,11 @@
  * que los dashboards para que las cifras muestren señal, no ruido.
  */
 import { getIndexerClient } from '../wazuh/wazuh.client';
-import { getAgents } from '../wazuh/agents.service';
+import { getClientAgents } from '../wazuh/agents.service';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
+import { query } from '../../config/db';
+import { getO365Overview } from '../office365/o365.service';
 
 export type Turno = 'am' | 'pm';
 
@@ -34,6 +36,12 @@ export interface ShiftReportData {
   eventos12h: number;
   incidentesCriticos: number;
   altaSeveridad30d: number;
+  equiposActivos: { name: string; kind: string }[];
+  equiposInactivos: { name: string; kind: string; motivo: string }[];
+  topIncidentes: { titulo: string; severidad: string; estado: string; creado: string }[];
+  topAmenazas: { label: string; count: number }[];
+  estacionesActivas: { host: string; eventos: number }[];
+  correo: { configured: boolean; total: number; signIns: number; signInsFailed: number; usuarios: number; riesgos: { label: string; count: number; severity: string }[] };
   generadoEn: string; // ISO
 }
 
@@ -83,6 +91,14 @@ async function count(body: unknown): Promise<number> {
   }
 }
 
+async function aggTerms(body: unknown): Promise<{ key: string; count: number }[]> {
+  try {
+    const { data } = await getIndexerClient().post<{ aggregations?: { t: { buckets: { key: string; doc_count: number }[] } } }>(
+      `${env.WAZUH_ALERTS_INDEX}/_search`, body);
+    return (data.aggregations?.t?.buckets ?? []).map((b) => ({ key: b.key, count: b.doc_count }));
+  } catch (err) { logger.warn({ err }, 'shift-report: fallo agregacion'); return []; }
+}
+
 function turnoActual(): Turno {
   const h = Number(
     new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: env.DIGEST_TZ }).format(new Date())
@@ -92,7 +108,7 @@ function turnoActual(): Turno {
 
 /** Recolecta todos los datos del parte para el turno indicado. */
 export async function collectShiftData(turno: Turno = turnoActual()): Promise<ShiftReportData> {
-  const agents = await getAgents(500);
+  const agents = await getClientAgents(500);
   const est = agents.filter((a) => a.kind === 'estacion');
   const srv = agents.filter((a) => a.kind === 'servidor');
 
@@ -111,6 +127,65 @@ export async function collectShiftData(turno: Turno = turnoActual()): Promise<Sh
     count({ query: { bool: { filter: [w12, critico, noiseFilter()] } } }),
     count({ query: { bool: { filter: [w30, critico, noiseFilter()] } } }),
   ]);
+
+  // Nombres de equipos activos (reportando) e inactivos (apagados/desconectados/fantasma).
+  const equiposActivos = agents
+    .filter((a) => a.health === 'ok')
+    .map((a) => ({ name: a.name, kind: a.kind }));
+  const equiposInactivos = agents
+    .filter((a) => a.health !== 'ok')
+    .map((a) => ({ name: a.name, kind: a.kind, motivo: a.motivo }));
+
+  // Top 5 incidentes del ultimo mes (por severidad y recencia).
+  const topIncidentes = await query<{ titulo: string; severidad: string; estado: string; creado: string }>(
+    `SELECT titulo, severidad, estado, creado FROM (
+        SELECT title AS titulo, severity AS severidad, status AS estado,
+               to_char(created_at, 'DD/MM HH24:MI') AS creado, created_at,
+               CASE severity WHEN 'critica' THEN 4 WHEN 'alta' THEN 3 WHEN 'media' THEN 2 ELSE 1 END AS sev_ord,
+               ROW_NUMBER() OVER (PARTITION BY COALESCE(source->>'ip', id::text) ORDER BY created_at DESC) AS rn
+          FROM incidents
+         WHERE created_at >= now() - interval '30 days'
+      ) x WHERE rn = 1
+      ORDER BY sev_ord DESC, created_at DESC
+      LIMIT 5`
+  ).catch(() => [] as { titulo: string; severidad: string; estado: string; creado: string }[]);
+
+  // Top 5 amenazas detectadas en el turno (tipos de alerta de mayor severidad, sin ruido).
+  const amenazasRaw = await aggTerms({
+    size: 0,
+    query: { bool: { filter: [w12, { range: { 'rule.level': { gte: 7 } } }, noiseFilter()] } },
+    aggs: { t: { terms: { field: 'rule.description', size: 5 } } },
+  });
+  const topAmenazas = amenazasRaw.map((x) => ({ label: x.key, count: x.count }));
+
+  // Estaciones de trabajo mas activas (mas eventos en 12 h).
+  const estNames = new Set(est.map((a) => a.name));
+  const actRaw = await aggTerms({
+    size: 0,
+    query: { bool: { filter: [w12, { exists: { field: 'agent.name' } }] } },
+    aggs: { t: { terms: { field: 'agent.name', size: 25 } } },
+  });
+  const estacionesActivas = actRaw
+    .filter((x) => estNames.has(x.key))
+    .slice(0, 5)
+    .map((x) => ({ host: x.key, eventos: x.count }));
+
+  // Actividad de Microsoft 365 (correo y colaboracion) del turno.
+  const correo = await (async () => {
+    try {
+      const o = await getO365Overview('12h');
+      return {
+        configured: o.total > 0,
+        total: o.total,
+        signIns: o.signIns,
+        signInsFailed: o.signInsFailed,
+        usuarios: o.users,
+        riesgos: o.risks.items.filter((i) => i.active).map((i) => ({ label: i.label, count: i.count, severity: i.severity })),
+      };
+    } catch {
+      return { configured: false, total: 0, signIns: 0, signInsFailed: 0, usuarios: 0, riesgos: [] as { label: string; count: number; severity: string }[] };
+    }
+  })();
 
   const now = new Date();
   const fecha = new Intl.DateTimeFormat('es-CO', {
@@ -136,6 +211,12 @@ export async function collectShiftData(turno: Turno = turnoActual()): Promise<Sh
     eventos12h,
     incidentesCriticos,
     altaSeveridad30d,
+    equiposActivos,
+    equiposInactivos,
+    topIncidentes,
+    topAmenazas,
+    estacionesActivas,
+    correo,
     generadoEn: now.toISOString(),
   };
 }

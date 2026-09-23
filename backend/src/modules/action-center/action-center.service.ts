@@ -11,6 +11,7 @@ import { getAssetRadar } from '../overview/radar.service';
 import { runHelper } from '../velociraptor/velociraptor.helper';
 import { slaBreachedIncidents } from '../incidents/sla.service';
 import { listEvents } from '../soar/soar.service';
+import { listSuppressions } from '../detection/detection.service';
 
 export type Severity = 'alta' | 'media' | 'baja';
 // `open_vulns` no es una acción del servidor: la resuelve el frontend navegando
@@ -55,14 +56,19 @@ function esPrincipalSistema(id: string): boolean {
 export async function getActionQueue(): Promise<{ generatedAt: string; total: number; bySeverity: Record<Severity, number>; items: ActionItem[] }> {
   const items: ActionItem[] = [];
 
-  const [ident, net, radar, veloList, sla, soar] = await Promise.allSettled([
+  const [ident, net, radar, veloList, sla, soar, supp] = await Promise.allSettled([
     getIdentityRecommendations(),
     getIncidents(24, 20),
     getAssetRadar(),
     runHelper(['list']),
     slaBreachedIncidents(),
     listEvents(200),
+    listSuppressions(),
   ]);
+
+  const suppressedIps = supp.status === 'fulfilled'
+    ? new Set(supp.value.filter((x) => x.field === 'srcip' || x.field === 'data.srcip').map((x) => x.value))
+    : new Set<string>();
 
   // 1) SOAR — acciones automáticas pendientes de aprobación (máxima prioridad).
   if (soar.status === 'fulfilled') {
@@ -86,6 +92,7 @@ export async function getActionQueue(): Promise<{ generatedAt: string; total: nu
   if (net.status === 'fulfilled') {
     for (const inc of net.value) {
       if (inc.blocked) continue;
+      if (suppressedIps.has(inc.ip)) continue;
       const score = inc.reputation?.abuseScore ?? 0;
       const sev: Severity = score >= 90 || inc.severityMax >= 12 ? 'alta' : score >= 40 || inc.severityMax >= 10 ? 'media' : 'baja';
       if (sev === 'baja') continue; // no saturar con ruido leve
@@ -106,6 +113,7 @@ export async function getActionQueue(): Promise<{ generatedAt: string; total: nu
       // No proponer acciones destructivas sobre principales de sistema (artefactos
       // de Microsoft, no usuarios reales que se puedan deshabilitar/eliminar).
       if (esPrincipalSistema(r.upn) || esPrincipalSistema(r.mail || '')) continue;
+      if (r.kind === 'guest' && !r.enabled) continue;
       const acts: ActionButton[] = [];
       if (r.actions.includes('disable')) acts.push({ kind: 'disable_m365', label: 'Deshabilitar', params: { upn: r.upn } });
       if (r.actions.includes('delete')) acts.push({ kind: 'delete_m365', label: 'Eliminar', danger: true, params: { upn: r.upn } });

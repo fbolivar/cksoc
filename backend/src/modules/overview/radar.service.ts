@@ -114,7 +114,7 @@ export async function getAssetRadar(): Promise<AssetRadar> {
       `/${env.WAZUH_ALERTS_INDEX}/_search`,
       {
         size: 0,
-        query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }, { exists: { field: 'agent.name' } }] } },
+        query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }, { exists: { field: 'agent.name' } }], must_not: [{ terms: { 'rule.groups': ['vulnerability-detector', 'sca'] } }] } },
         aggs: {
           ag: {
             terms: { field: 'agent.name', size: 500 },

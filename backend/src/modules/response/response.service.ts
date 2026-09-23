@@ -6,7 +6,7 @@
 import { query } from '../../config/db';
 import { HttpError } from '../auth/auth.service';
 import { canBlock } from './whitelist';
-import { blockIP, unblockIP, listBlocked as fgListBlocked } from './fortigate.service';
+import { blockIP, unblockIP, listBlocked as fgListBlocked } from './sonicwall.service';
 
 export interface ActingUser {
   id: string;

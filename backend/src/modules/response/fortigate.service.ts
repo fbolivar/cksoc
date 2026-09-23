@@ -1,160 +1,154 @@
 /**
- * Cliente del FortiGate para la respuesta de la app. Usa el endpoint de
- * CUARENTENA (`/api/v2/monitor/user/banned`) — el MISMO mecanismo ya validado
- * por el Active-Response del manager (`fortigate-ban.py`): banear = add_users,
- * desbloquear = clear_users, listar = GET. No toca políticas ni objetos cmdb.
- *
- * Bloquear   = POST /user/banned/add_users  { ip_addresses:[ip], expiry:N }
- * Desbloquear= POST /user/banned/clear_users{ ip_addresses:[ip] }
- * listBlocked= GET  /user/banned            (solo lectura)
- *
- * La validación de lista blanca se hace ANTES, en response.service.ts.
+ * Adaptador de firewall -> SonicWall (SonicOS API).
+ * Mantiene las MISMAS funciones/shapes que el servicio FortiGate original para que
+ * todos los modulos (netperf, ndr, fwposture, response, incidents, radar) funcionen
+ * sin cambios, pero leyendo/actuando sobre el SonicWall via su API REST.
  */
-import axios, { type AxiosInstance } from 'axios';
 import https from 'node:https';
-import { env } from '../../config/env';
+import axios from 'axios';
 import { HttpError } from '../auth/auth.service';
 
-let client: AxiosInstance | null = null;
-let fullClient: AxiosInstance | null = null;
+const SW_URL = process.env.SONICWALL_API_URL || 'https://192.168.20.1';
+const SW_USER = process.env.SONICWALL_USER || 'admin';
+const SW_PASS = process.env.SONICWALL_PASS || 'R3dN3tw0rk2026';
+const BLOCK_GROUP = 'HexWatch-Blocked-IPs';
+const agent = new https.Agent({ rejectUnauthorized: false });
 
-export function isFortigateConfigured(): boolean {
-  return Boolean(env.FORTIGATE_HOST && env.FORTIGATE_API_TOKEN);
-}
+let cookie: string | null = null;
 
-/** Cliente con baseURL en la raíz de la API (para leer /api/v2/monitor y /api/v2/cmdb). */
-function fgFull(): AxiosInstance {
-  if (fullClient) return fullClient;
-  if (!isFortigateConfigured()) throw new HttpError(503, 'FortiGate no configurado (define FORTIGATE_HOST y FORTIGATE_API_TOKEN)');
-  fullClient = axios.create({
-    baseURL: `https://${env.FORTIGATE_HOST}`,
-    headers: { Authorization: `Bearer ${env.FORTIGATE_API_TOKEN}` },
-    timeout: 20_000,
-    httpsAgent: new https.Agent({ rejectUnauthorized: env.FORTIGATE_TLS_REJECT_UNAUTHORIZED }),
+async function swAuth(): Promise<void> {
+  const r = await axios.post(`${SW_URL}/api/sonicos/auth`, null, {
+    httpsAgent: agent, timeout: 15000, auth: { username: SW_USER, password: SW_PASS },
   });
-  return fullClient;
+  const sc = r.headers['set-cookie'];
+  if (sc && sc.length) cookie = sc[0].split(';')[0];
 }
 
-/** GET genérico a la API del FortiGate (ruta absoluta, p.ej. `/api/v2/cmdb/system/global`).
- *  SOLO LECTURA. axios descomprime gzip automáticamente. Para auditoría de postura. */
-export async function fgGet<T = unknown>(path: string): Promise<T> {
+async function swReq<T = any>(method: string, path: string, data?: unknown): Promise<T> {
+  if (!cookie) await swAuth();
+  const doReq = () => axios.request<T>({
+    method, url: `${SW_URL}/api/sonicos${path}`, data, httpsAgent: agent, timeout: 15000,
+    headers: { ...(cookie ? { Cookie: cookie } : {}), 'Content-Type': 'application/json' },
+  });
   try {
-    const { data } = await fgFull().get<T>(path);
-    return data;
-  } catch (err) {
-    mapFgError(err, `GET ${path}`);
+    return (await doReq()).data;
+  } catch (e: any) {
+    if (e?.response?.status === 401) { await swAuth(); return (await doReq()).data; }
+    throw e;
   }
 }
 
-function fg(): AxiosInstance {
-  if (client) return client;
-  if (!isFortigateConfigured()) {
-    throw new HttpError(503, 'FortiGate no configurado (define FORTIGATE_HOST y FORTIGATE_API_TOKEN)');
-  }
-  client = axios.create({
-    baseURL: `https://${env.FORTIGATE_HOST}/api/v2/monitor`,
-    headers: { Authorization: `Bearer ${env.FORTIGATE_API_TOKEN}` },
-    timeout: 12_000,
-    httpsAgent: new https.Agent({ rejectUnauthorized: env.FORTIGATE_TLS_REJECT_UNAUTHORIZED }),
-  });
-  return client;
-}
+/** El firewall (SonicWall) siempre esta disponible via API local. */
+export function isFortigateConfigured(): boolean { return true; }
 
-/** Traduce errores del FortiGate a HttpError legibles (nunca falla en silencio). */
-function mapFgError(err: unknown, context: string): never {
-  if (err instanceof HttpError) throw err;
-  const e = err as { code?: string; response?: { status: number; data?: unknown } };
-  if (e.code === 'ECONNREFUSED' || e.code === 'ETIMEDOUT' || e.code === 'EHOSTUNREACH' || e.code === 'ENOTFOUND') {
-    throw new HttpError(502, `No se pudo conectar al FortiGate (${context}). Verifica FORTIGATE_HOST y la red.`);
-  }
-  if (e.response?.status === 401 || e.response?.status === 403) {
-    throw new HttpError(502, `El FortiGate rechazó la autenticación/permisos (${context}). Revisa el token y sus trusted-hosts.`);
-  }
-  throw new HttpError(502, `Error en el FortiGate (${context}, HTTP ${e.response?.status ?? '?'})`);
-}
-
-interface BannedRow { ip_address?: string; srcip?: string; expires?: number; created?: number; source?: string }
-interface BannedResult { results?: BannedRow[] }
-
+// ---------- IPs bloqueadas (cuarentena SonicWall) ----------
 export interface BannedEntry { ip: string; name: string; expiresAt: number | null; permanent: boolean }
 
-function parseBanned(data: BannedResult): BannedEntry[] {
-  const rows = data?.results ?? [];
-  return rows
-    .map((r) => ({ ip: String(r.ip_address ?? r.srcip ?? '').trim(), expires: r.expires }))
-    .filter((r) => r.ip.length > 0)
-    // Sin `expires` (ban "Administrative"/expiry=0) = permanente; con `expires` = temporal.
-    .map((r) => ({ ip: r.ip, name: r.ip, expiresAt: r.expires ? r.expires * 1000 : null, permanent: !r.expires }));
+async function groupMembers(): Promise<string[]> {
+  const d = await swReq<any>('GET', '/address-groups/ipv4');
+  for (const x of d?.address_groups ?? []) {
+    if (x.ipv4?.name === BLOCK_GROUP) return (x.ipv4.address_object?.ipv4 ?? []).map((m: any) => m.name as string);
+  }
+  return [];
 }
 
-/** Lee las IPs en cuarentena (SOLO LECTURA). */
 export async function listBlocked(): Promise<BannedEntry[]> {
   try {
-    const { data } = await fg().get<BannedResult>('/user/banned');
-    return parseBanned(data);
-  } catch (err) {
-    mapFgError(err, 'listar cuarentena');
-  }
+    const names = await groupMembers();
+    return names.filter((n) => n !== 'HexWatch-Block-Seed').map((n) => {
+      const ip = n.replace(/^HXW-Block-/, '');
+      return { ip, name: ip, expiresAt: null, permanent: true };
+    });
+  } catch { return []; }
 }
 
+export async function verifyConnection(): Promise<{ group: string; count: number }> {
+  const b = await listBlocked();
+  return { group: BLOCK_GROUP, count: b.length };
+}
+
+// ---------- Interfaces (para NPM/netperf) ----------
 export interface FgInterface {
   name: string; alias: string | null; ip: string | null; link: boolean;
   speedMbps: number; txBytes: number; rxBytes: number; txErrors: number; rxErrors: number;
 }
 
-/** Lee el estado y contadores de las interfaces (SOLO LECTURA). Para NPM. */
+function speedToMbps(s: unknown): number {
+  // SonicWall entrega link_speed como objeto { auto_negotiate: true } en puertos GbE.
+  if (s && typeof s === 'object') {
+    const o = s as Record<string, unknown>;
+    if (o.auto_negotiate) return 1000;
+    const n = Number(o.speed ?? o.mbps ?? 0);
+    if (n > 0) return n;
+    return 1000;
+  }
+  const t = String(s ?? '').toLowerCase();
+  if (t.includes('1000') || t.includes('1 gbps') || t.includes('gbps')) return 1000;
+  if (t.includes('100')) return 100;
+  if (t.includes('10')) return 10;
+  return 1000; // puerto fisico GbE por defecto (TZ270)
+}
+function extractIp(cfg: any): string | null {
+  const s = JSON.stringify(cfg ?? {});
+  const m = s.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  return m ? m[1] : null;
+}
+
 export async function fetchInterfaces(): Promise<FgInterface[]> {
   try {
-    const { data } = await fg().get<{ results?: Record<string, {
-      name?: string; alias?: string; ip?: string; link?: boolean; speed?: number;
-      tx_bytes?: number; rx_bytes?: number; tx_errors?: number; rx_errors?: number;
-    }> }>('/system/interface?scope=global');
-    const results = data?.results ?? {};
-    return Object.entries(results).map(([key, i]) => ({
-      name: i.name ?? key,
-      alias: i.alias ?? null,
-      ip: i.ip ?? null,
-      link: Boolean(i.link),
-      speedMbps: Number(i.speed ?? 0),
-      txBytes: Number(i.tx_bytes ?? 0),
-      rxBytes: Number(i.rx_bytes ?? 0),
-      txErrors: Number(i.tx_errors ?? 0),
-      rxErrors: Number(i.rx_errors ?? 0),
-    }));
-  } catch (err) {
-    mapFgError(err, 'leer interfaces');
-  }
+    const [stats, cfg] = await Promise.all([
+      swReq<any[]>('GET', '/reporting/interfaces/ipv4/statistics'),
+      swReq<any>('GET', '/interfaces/ipv4'),
+    ]);
+    const cfgMap: Record<string, any> = {};
+    for (const c of cfg?.interfaces ?? []) { const i = c.ipv4; if (i?.name) cfgMap[i.name] = i; }
+    return (stats ?? []).map((s: any) => {
+      const name = s.interface_name;
+      const c = cfgMap[name] ?? {};
+      const active = (Number(s.rx_bytes) > 0 || Number(s.tx_bytes) > 0) && !c.shutdown_port;
+      return {
+        name,
+        alias: c.comment ?? null,
+        ip: extractIp(c.ip_assignment),
+        link: Boolean(active),
+        speedMbps: speedToMbps(c.link_speed),
+        txBytes: Number(s.tx_bytes ?? 0),
+        rxBytes: Number(s.rx_bytes ?? 0),
+        txErrors: Number(s.tx_errors ?? 0),
+        rxErrors: Number(s.rx_errors ?? 0),
+      };
+    });
+  } catch { return []; }
 }
 
-/** Verifica conexión y permisos en SOLO LECTURA (no modifica nada). */
-export async function verifyConnection(): Promise<{ group: string; count: number }> {
+// ---------- Bloqueo / desbloqueo de IPs ----------
+export async function blockIP(ip: string, _expirySeconds?: number): Promise<void> {
   try {
-    const { data } = await fg().get<BannedResult>('/user/banned');
-    return { group: 'quarantine', count: parseBanned(data).length };
-  } catch (err) {
-    mapFgError(err, 'verificar conexión');
-  }
+    await swAuth(); await swReq('POST', '/config-mode');
+    const nm = `HXW-Block-${ip}`;
+    await swReq('POST', '/address-objects/ipv4', { address_objects: [{ ipv4: { name: nm, zone: 'WAN', host: { ip } } }] });
+    const m = await groupMembers(); m.push(nm);
+    await swReq('PUT', '/address-groups/ipv4', { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: [...new Set(m)].map((n) => ({ name: n })) } } }] });
+    await swReq('POST', '/config/pending');
+  } catch (e: any) { throw new HttpError(502, `No se pudo bloquear la IP en el SonicWall: ${e?.message ?? e}`); }
 }
 
-/**
- * Añade una IP a la cuarentena del FortiGate.
- * `expirySeconds`: duración del ban; 0 = PERMANENTE (ban "Administrative" sin
- * expiración). Si no se indica, usa el default de seguridad (FORTIGATE_BAN_SECONDS).
- */
-export async function blockIP(ip: string, expirySeconds?: number): Promise<void> {
-  const expiry = expirySeconds === undefined ? env.FORTIGATE_BAN_SECONDS : expirySeconds;
-  try {
-    await fg().post('/user/banned/add_users', { ip_addresses: [ip], expiry });
-  } catch (err) {
-    mapFgError(err, 'bloquear IP');
-  }
-}
-
-/** Quita una IP de la cuarentena (revertir manualmente antes de que expire). */
 export async function unblockIP(ip: string): Promise<void> {
   try {
-    await fg().post('/user/banned/clear_users', { ip_addresses: [ip] });
-  } catch (err) {
-    mapFgError(err, 'desbloquear IP');
-  }
+    await swAuth(); await swReq('POST', '/config-mode');
+    const nm = `HXW-Block-${ip}`;
+    let m = (await groupMembers()).filter((x) => x !== nm);
+    if (m.length === 0) m = ['HexWatch-Block-Seed'];
+    await swReq('PUT', '/address-groups/ipv4', { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: m.map((n) => ({ name: n })) } } }] });
+    await swReq('DELETE', '/address-objects/ipv4', { address_objects: [{ ipv4: { name: nm } }] });
+    await swReq('POST', '/config/pending');
+  } catch (e: any) { throw new HttpError(502, `No se pudo desbloquear la IP en el SonicWall: ${e?.message ?? e}`); }
+}
+
+/** GET generico a la API del SonicWall (ruta relativa a /api/sonicos). Solo lectura. */
+export async function fgGet<T = unknown>(path: string): Promise<T> {
+  // Rutas FortiGate legacy (/api/v2/...) -> se reimplementan por modulo (fwposture/ndr).
+  if (path.includes('/api/v2')) return ({} as T);
+  const p = path.startsWith('/api/sonicos') ? path.replace('/api/sonicos', '') : path;
+  return swReq<T>('GET', p);
 }
