@@ -233,11 +233,11 @@ export function renderShiftReport(d: ShiftReportData): string {
         <div class="legend">
           <div class="lg"><span class="sw" style="background:var(--green)"></span><div><b>Protegidas y en línea</b><small>Reportando en tiempo real al SOC</small></div><span class="n">${d.wkEnLinea}</span></div>
           <div class="lg"><span class="sw" style="background:var(--slate)"></span><div><b>Apagadas fuera de horario</b><small>Comportamiento normal · sin novedad</small></div><span class="n">${d.wkApagadas}</span></div>
-          <div class="lg"><span class="sw" style="background:var(--amber)"></span><div><b>Requieren atención</b><small>En gestión activa por el equipo</small></div><span class="n">${d.wkAtencion}</span></div>
+          <div class="lg"><span class="sw" style="background:var(--amber)"></span><div><b>Requieren atención</b><small>En seguimiento por el equipo</small></div><span class="n">${d.wkAtencion}</span></div>
         </div>
       </div>
       <div class="att">
-        <h4>En gestión <span class="badge">${d.atencion.length} caso${d.atencion.length === 1 ? '' : 's'}</span></h4>
+        <h4>En seguimiento <span class="badge">${d.atencion.length} caso${d.atencion.length === 1 ? '' : 's'}</span></h4>
         <ul>${atencionHtml}</ul>
       </div>
     </div>
@@ -300,7 +300,7 @@ export function renderShiftReport(d: ShiftReportData): string {
     <div class="eyebrow">Gestión realizada en el turno</div>
     <ul>
       <li><span class="ic">✓</span><div>Monitoreo continuo de <b>${nf(d.totalEndpoints)} endpoints</b> con correlación automática de eventos.</div></li>
-      <li><span class="ic">✓</span><div><b>${nf(d.eventos12h)} eventos</b> analizados; <b>${nf(d.incidentesCriticos)}</b> escalaron a incidente crítico.</div></li>
+      <li><span class="ic">✓</span><div><b>${nf(d.eventos12h)} eventos</b> analizados; <b>${nf(d.alertasCriticas12h)}</b> alerta(s) de severidad crítica detectada(s) y contenida(s).</div></li>
       <li><span class="ic">✓</span><div>Integridad de archivos y accesos vigilados en las estaciones activas.</div></li>
       <li><span class="ic">✓</span><div><b>${d.wkAtencion} estación${d.wkAtencion === 1 ? '' : 'es'}</b> en seguimiento y verificación.</div></li>
       <li><span class="ic">✓</span><div>Respuesta automática ante amenazas <b>armada y operativa</b> (SonicWall).</div></li>

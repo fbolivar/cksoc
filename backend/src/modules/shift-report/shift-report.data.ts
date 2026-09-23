@@ -34,7 +34,9 @@ export interface ShiftReportData {
   wkAtencion: number;
   atencion: AtencionItem[];
   eventos12h: number;
-  incidentesCriticos: number;
+  alertasCriticas12h: number;   // volumen de alertas nivel>=12 detectadas y contenidas (throughput)
+  incidentesCriticos: number;  // incidentes CRITICOS realmente abiertos/en curso (tabla incidents)
+  incidentesAbiertos: number;  // incidentes abiertos/en curso de cualquier severidad
   altaSeveridad30d: number;
   equiposActivos: { name: string; kind: string }[];
   equiposInactivos: { name: string; kind: string; motivo: string }[];
@@ -123,11 +125,22 @@ export async function collectShiftData(turno: Turno = turnoActual()): Promise<Sh
   const w30 = { range: { '@timestamp': { gte: 'now-30d' } } };
   const critico = { range: { 'rule.level': { gte: 12 } } };
 
-  const [eventos12h, incidentesCriticos, altaSeveridad30d] = await Promise.all([
+  const [eventos12h, alertasCriticas12h, altaSeveridad30d] = await Promise.all([
     count({ query: w12 }), // throughput total (no se de-ruidea: es volumen procesado)
     count({ query: { bool: { filter: [w12, critico, noiseFilter()] } } }),
     count({ query: { bool: { filter: [w30, critico, noiseFilter()] } } }),
   ]);
+
+  // Incidentes realmente EN GESTION: los que estan abiertos/en curso en la tabla incidents
+  // (NO las alertas crudas nivel>=12, que pueden ser ataques ya bloqueados y auto-reconocidos).
+  const incRows = await query<{ criticos: number; abiertos: number }>(
+    `SELECT COUNT(*) FILTER (WHERE severity = 'critica')::int AS criticos,
+            COUNT(*)::int AS abiertos
+       FROM incidents
+      WHERE status IN ('abierto', 'en_curso')`
+  ).catch(() => [] as { criticos: number; abiertos: number }[]);
+  const incidentesCriticos = Number(incRows[0]?.criticos ?? 0);
+  const incidentesAbiertos = Number(incRows[0]?.abiertos ?? 0);
 
   // Nombres de equipos activos (reportando) e inactivos (apagados/desconectados/fantasma).
   const equiposActivos = agents
@@ -247,7 +260,9 @@ export async function collectShiftData(turno: Turno = turnoActual()): Promise<Sh
     wkAtencion: atencion.length,
     atencion,
     eventos12h,
+    alertasCriticas12h,
     incidentesCriticos,
+    incidentesAbiertos,
     altaSeveridad30d,
     equiposActivos,
     equiposInactivos,
