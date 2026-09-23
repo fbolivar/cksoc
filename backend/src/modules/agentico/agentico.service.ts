@@ -66,12 +66,12 @@ async function esCount(queryBody: unknown): Promise<number> {
 }
 
 /** Persona de Agentico para la narrativa (Telegram, texto plano, español). */
-const PERSONA = `Eres "Agentico", consultor especialista de un SOC gestionado (marca Click Solutions) asignado al cliente DG&A Abogados. Escribes un parte OPERATIVO breve para el equipo por Telegram.
+const PERSONA = `Eres "Agentico", especialista de SOC asignado al cliente DG&A Abogados (servicio gestionado por Click Solutions). Escribes un breve análisis para el equipo por Telegram con un trato CORDIAL, cercano y de servicio —como un consultor que de verdad aprecia atender al cliente— pero con criterio técnico senior y tranquilizador.
 Reglas:
-- Español, tono profesional y tranquilo de analista senior. Sin markdown, sin asteriscos, sin comillas invertidas.
+- Español, tono gentil, respetuoso y humano (habla en "nosotros / desde el SOC"). Nada de markdown, asteriscos ni comillas invertidas.
 - Usa EXCLUSIVAMENTE los datos que se te entregan. NO inventes IPs, cifras ni hallazgos.
-- 2 a 4 frases: lectura experta de la situación y por qué las acciones tomadas mantienen la postura sin afectar la operación.
-- No repitas la lista de acciones (ya va aparte); aporta el CRITERIO, no el listado.`;
+- 2 a 4 frases: una lectura clara y tranquila de la situación, explicando en lenguaje amable por qué la postura del cliente se mantiene estable y cómo cuidamos que la operación del despacho no se vea afectada.
+- Transmite calma y confianza. Aporta el CRITERIO; no repitas la lista de acciones (va aparte).`;
 
 async function narrativa(datos: Record<string, unknown>): Promise<string> {
   if (!isCopilotConfigured()) return '';
@@ -161,44 +161,55 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
     topAtacantes: threats.slice(0, 5).map((o) => ({ pais: o.country, clasif: o.clasificacion, ip: o.ips[0] })),
   });
 
+  const hBogota = Number(new Intl.DateTimeFormat('en-US', { hour: '2-digit', hour12: false, timeZone: 'America/Bogota' }).format(new Date()));
+  const saludo = hBogota < 12 ? 'Buenos días' : hBogota < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const despedida = hBogota < 12 ? 'Feliz día' : hBogota < 19 ? 'Feliz tarde' : 'Feliz noche';
+
   const L: string[] = [];
-  L.push('🛡️ Agentico · Consultor SOC — Click Solutions / DG&A');
-  L.push(`⏱️ Turno automático · ventana ${lookback} h · ${ahora}${dryRun ? ' · (SIMULACIÓN)' : ''}`);
+  L.push(`👋 ${saludo}. Soy Agentico, su especialista de SOC asignado para DG&A.`);
+  L.push(`Me permito compartir el parte de este turno (últimas ${lookback} h · ${ahora})${dryRun ? ' — SIMULACIÓN' : ''}:`);
   if (lectura) { L.push(''); L.push(lectura); }
   L.push('');
-  L.push('📊 Situación');
+  L.push('📊 Cómo está la operación');
   L.push(`• Amenazas externas activas: ${threats.length}`);
-  L.push(`• Alertas críticas: ${criticas30m} (30 min) / ${criticas6h} (${lookback} h)`);
-  L.push(`• Eventos procesados (30 min): ${eventos30m.toLocaleString('es-CO')}`);
+  L.push(`• Alertas críticas: ${criticas30m} (últimos 30 min) / ${criticas6h} (${lookback} h)`);
+  L.push(`• Eventos analizados (30 min): ${eventos30m.toLocaleString('es-CO')}`);
   L.push(`• Incidentes abiertos: ${incAbiertos} (críticos: ${incCriticosAbiertos})`);
-  L.push(`• Anomalías UEBA abiertas: ${uebaOpen.length}`);
-  L.push(`• IPs en cuarentena (firewall): ${blockedList.length}`);
+  L.push(`• Anomalías de comportamiento (UEBA): ${uebaOpen.length}`);
+  L.push(`• IPs en cuarentena en el firewall: ${blockedList.length}`);
   L.push('');
   const bloqueadas = acciones.filter((a) => a.estado === 'bloqueada');
-  if (bloqueadas.length || acciones.length) {
-    L.push('✅ Acciones ejecutadas');
+  if (bloqueadas.length) {
+    L.push('🛡️ Con su permiso, desde el SOC ya contuvimos lo confirmado:');
     for (const a of acciones) {
-      const icono = a.estado === 'bloqueada' ? '🚫 Contenida' : a.estado === 'rechazada' ? '⚠️ No bloqueada (regla de seguridad)' : '❌ Error';
-      L.push(`• ${icono}: ${a.ip} (${a.pais}) — ${a.motivo}${a.detalle && a.estado !== 'bloqueada' ? ` [${a.detalle}]` : ''}`);
+      if (a.estado === 'bloqueada') { L.push(`• 🚫 ${a.ip} (${a.pais}) — ${a.motivo}`); }
+      else if (a.estado === 'rechazada') { L.push(`• ⚠️ ${a.ip} (${a.pais}): por prudencia preferimos NO bloquearla${a.detalle ? ` (${a.detalle})` : ''}`); }
+      else { L.push(`• ❌ ${a.ip} (${a.pais}): no se pudo aplicar${a.detalle ? ` (${a.detalle})` : ''}`); }
     }
-    if (incidentesReconocidos) L.push(`• 📌 ${incidentesReconocidos} incidente(s) reconocido(s) tras contener al atacante`);
+    if (incidentesReconocidos) L.push(`• 📌 Dejamos reconocidos ${incidentesReconocidos} incidente(s) cuyo atacante ya quedó contenido.`);
+  } else if (acciones.length) {
+    L.push('🛡️ Revisamos a los posibles atacantes y, por prudencia, este turno no bloqueamos ninguno:');
+    for (const a of acciones) L.push(`• ⚠️ ${a.ip} (${a.pais})${a.detalle ? ` — ${a.detalle}` : ''}`);
   } else {
-    L.push('✅ Sin contención automática: no hay atacantes externos confirmados nuevos. La operación sigue normal.');
+    L.push('🛡️ Buenas noticias: no hubo atacantes confirmados nuevos que contener. La operación del despacho sigue tranquila y protegida.');
   }
 
   const recomendaciones: string[] = [];
-  if (uebaOpen.length) recomendaciones.push(`Revisar ${uebaOpen.length} anomalía(s) de comportamiento (UEBA).`);
-  if (incCriticosAbiertos) recomendaciones.push(`Atender ${incCriticosAbiertos} incidente(s) crítico(s) abierto(s).`);
+  if (uebaOpen.length) recomendaciones.push(`Revisar con calma ${uebaOpen.length} anomalía(s) de comportamiento de usuarios (UEBA).`);
+  if (incCriticosAbiertos) recomendaciones.push(`Dar seguimiento a ${incCriticosAbiertos} incidente(s) crítico(s) abierto(s).`);
   const sospechososSinBloquear = threats.filter((o) => o.clasificacion === 'sospechoso' && !blockedSet.has(o.ips[0]) && !o.ioc && o.abuseScore < env.AGENTICO_MIN_ABUSE).length;
-  if (sospechososSinBloquear) recomendaciones.push(`${sospechososSinBloquear} origen(es) sospechoso(s) en observación (no cumplen umbral de bloqueo automático).`);
+  if (sospechososSinBloquear) recomendaciones.push(`Mantenemos ${sospechososSinBloquear} origen(es) sospechoso(s) en observación (aún no ameritan bloqueo automático).`);
   if (recomendaciones.length) {
     L.push('');
-    L.push('📝 Recomendaciones (para el analista)');
-    recomendaciones.forEach((r) => L.push(`• ${r}`));
+    L.push('🤝 Para cuando el equipo pueda apoyarnos:');
+    const nums = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
+    recomendaciones.forEach((r, i) => L.push(`${nums[i] ?? '•'} ${r}`));
   }
 
   L.push('');
-  L.push('— Agentico opera bajo el principio de NO afectar la operación: solo contiene atacantes externos confirmados; el bloqueo es reversible en cualquier momento desde el módulo de Respuesta y nunca toca IPs internas, del cliente ni legítimas.');
+  L.push('Todo lo hacemos cuidando que la operación del despacho nunca se vea afectada: solo contenemos atacantes externos confirmados y cualquier bloqueo es reversible cuando ustedes lo indiquen.');
+  L.push('');
+  L.push(`Quedamos atentos y a su disposición para lo que necesiten. ¡Es un placer atenderlos! ${despedida} 🙌`);
   const mensaje = L.join('\n');
 
   let telegram: AgenticoSummary['telegram'] = 'omitido';
