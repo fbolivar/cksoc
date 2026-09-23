@@ -40,6 +40,29 @@ export interface AttackOrigin {
 // atacantes, nunca de un empleado normal navegando.
 const HOSTING_RE = /hosting|data\s*center|datacenter|colo|vps|server|cloud|transit/i;
 
+// --- Exclusion de origenes que NO son ataques (IP propia WAN, CDNs, SaaS) ---
+const EXCLUDE_IPS = new Set((env.ATTACKS_EXCLUDE_IPS || '').split(',').map((x) => x.trim()).filter(Boolean));
+const EXCLUDE_CIDRS = (env.ATTACKS_EXCLUDE_CIDRS || '').split(',').map((x) => x.trim()).filter(Boolean);
+function ipToLong(ip: string): number | null {
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return null;
+  return (((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3]) >>> 0;
+}
+function inCidr(ip: string, cidr: string): boolean {
+  const [net, bitsRaw] = cidr.split('/');
+  const bits = Number(bitsRaw);
+  const ipL = ipToLong(ip), netL = ipToLong(net);
+  if (ipL === null || netL === null || !(bits >= 0 && bits <= 32)) return false;
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+  return (ipL & mask) === (netL & mask);
+}
+/** IP excluida del mapa (no es un atacante: propia WAN, CDN, SaaS conocido). */
+function isExcludedOrigin(ip: string): boolean {
+  if (EXCLUDE_IPS.has(ip)) return true;
+  for (const c of EXCLUDE_CIDRS) if (inCidr(ip, c)) return true;
+  return false;
+}
+
 function classify(
   rep: { configured: boolean; abuseScore: number; usageType: string | null },
   threshold: number
@@ -126,7 +149,7 @@ export async function getAttackGeo(hours: number, threatsOnly = true): Promise<A
   // Agrega por ubicacion (isoCode + ciudad + coordenadas redondeadas)
   const byLoc = new Map<string, AttackOrigin>();
   for (const b of buckets) {
-    if (!isPublicIP(b.key)) continue;
+    if (!isPublicIP(b.key) || isExcludedOrigin(b.key)) continue;
     const geo = geolocate(b.key);
     if (!geo) continue;
     const locKey = `${geo.isoCode}|${geo.city}|${geo.lat.toFixed(2)},${geo.lon.toFixed(2)}`;

@@ -88,6 +88,10 @@ const schema = z.object({
   // --- Geolocalizacion / Mapa de ataques ---
   GEOIP_DB_PATH: z.string().default('/opt/soc-app/data/GeoLite2-City.mmdb'),
   ATTACKS_CACHE_SECONDS: z.coerce.number().default(30),
+  // Mapa de ataques: IPs/rangos que NO son atacantes y no deben pintarse como origen.
+  // Por defecto: IP WAN del propio cliente + CDNs/SaaS que el firewall loguea como ruido.
+  ATTACKS_EXCLUDE_IPS: z.string().default('190.26.210.18'),
+  ATTACKS_EXCLUDE_CIDRS: z.string().default('199.232.0.0/16,146.75.0.0/16,57.144.0.0/14,157.240.0.0/16,31.13.24.0/21'),
 
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
