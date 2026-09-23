@@ -41,6 +41,7 @@ export interface ShiftReportData {
   topIncidentes: { titulo: string; severidad: string; estado: string; creado: string }[];
   topAmenazas: { label: string; count: number }[];
   estacionesActivas: { host: string; eventos: number }[];
+  equiposSesiones: { host: string; kind: string; conecto: string | null; desconecto: string | null; enLinea: boolean }[];
   correo: { configured: boolean; total: number; signIns: number; signInsFailed: number; usuarios: number; riesgos: { label: string; count: number; severity: string }[] };
   generadoEn: string; // ISO
 }
@@ -136,6 +137,43 @@ export async function collectShiftData(turno: Turno = turnoActual()): Promise<Sh
     .filter((a) => a.health !== 'ok')
     .map((a) => ({ name: a.name, kind: a.kind, motivo: a.motivo }));
 
+  // Estado por EQUIPO (estacion): a que hora se conecto y desconecto hoy (hora Bogota).
+  // Fuente: eventos de ciclo de vida del agente Wazuh (503 arranque; 504/506 parada).
+  const equiposSesiones = await (async (): Promise<ShiftReportData['equiposSesiones']> => {
+    const names = est.map((a) => a.name);
+    if (!names.length) return [];
+    const fmt = (v: string | null | undefined): string | null =>
+      v ? new Date(v).toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit', hour12: false }) : null;
+    try {
+      const { data } = await getIndexerClient().post<{ aggregations?: { ag: { buckets: Array<{
+        key: string; firstAny: { value_as_string?: string }; lastAny: { value_as_string?: string };
+        conn: { t: { value_as_string?: string } }; disc: { t: { value_as_string?: string } };
+      }> } } }>(`${env.WAZUH_ALERTS_INDEX}/_search`, {
+        size: 0,
+        query: { bool: { filter: [
+          { range: { '@timestamp': { gte: 'now/d', time_zone: 'America/Bogota' } } },
+          { terms: { 'agent.name': names } },
+        ] } },
+        aggs: { ag: { terms: { field: 'agent.name', size: names.length }, aggs: {
+          firstAny: { min: { field: '@timestamp' } },
+          lastAny: { max: { field: '@timestamp' } },
+          conn: { filter: { term: { 'rule.id': '503' } }, aggs: { t: { min: { field: '@timestamp' } } } },
+          disc: { filter: { terms: { 'rule.id': ['504', '506'] } }, aggs: { t: { max: { field: '@timestamp' } } } },
+        } } },
+      });
+      const byName = new Map((data.aggregations?.ag?.buckets ?? []).map((b) => [b.key, b]));
+      return est.map((a) => {
+        const b = byName.get(a.name);
+        const enLinea = a.health === 'ok';
+        const conecto = fmt(b?.conn.t.value_as_string ?? b?.firstAny.value_as_string);
+        const desconecto = enLinea ? null : fmt(b?.disc.t.value_as_string ?? b?.lastAny.value_as_string);
+        return { host: a.name, kind: a.kind, conecto, desconecto, enLinea };
+      }).sort((x, y) => (x.conecto ?? '99').localeCompare(y.conecto ?? '99'));
+    } catch {
+      return est.map((a) => ({ host: a.name, kind: a.kind, conecto: null, desconecto: null, enLinea: a.health === 'ok' }));
+    }
+  })();
+
   // Top 5 incidentes del ultimo mes (por severidad y recencia).
   const topIncidentes = await query<{ titulo: string; severidad: string; estado: string; creado: string }>(
     `SELECT titulo, severidad, estado, creado FROM (
@@ -216,6 +254,7 @@ export async function collectShiftData(turno: Turno = turnoActual()): Promise<Sh
     topIncidentes,
     topAmenazas,
     estacionesActivas,
+    equiposSesiones,
     correo,
     generadoEn: now.toISOString(),
   };

@@ -62,6 +62,9 @@ export function renderShiftReport(d: ShiftReportData): string {
   const riesgosCorreoHtml = d.correo.riesgos.length
     ? d.correo.riesgos.map((r) => `<li><span class="sev" style="background:${sevColor[r.severity] || '#64748b'}"></span><span class="tt">${esc(r.label)}</span><span class="meta">${nf(r.count)}</span></li>`).join('')
     : '<li class="none">Sin riesgos de correo/M365 en el turno 🟢</li>';
+  const sesionesHtml = d.equiposSesiones.length
+    ? d.equiposSesiones.map((e) => `<tr><td class="hn">${esc(e.host)}</td><td>${e.conecto ? esc(e.conecto) : '—'}</td><td>${e.enLinea ? '<span class="on2">en línea</span>' : (e.desconecto ? esc(e.desconecto) : '—')}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="snone">Sin actividad de estaciones hoy</td></tr>';
 
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
@@ -154,6 +157,12 @@ export function renderShiftReport(d: ShiftReportData): string {
   .m365kpi .mk b{display:block;font-size:20px;font-weight:800;font-family:var(--mono);line-height:1.1}
   .m365kpi .mk small{color:var(--muted);font-size:10px}
   .m365kpi .mk.warn b{color:var(--amber)}
+  .sess{width:100%;border-collapse:collapse;font-size:11px;margin-top:2mm}
+  .sess th{text-align:left;color:var(--muted);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:.04em;padding:3px 6px;border-bottom:1px solid var(--line)}
+  .sess td{padding:4px 6px;border-bottom:1px solid var(--line)}
+  .sess td.hn{font-weight:700}
+  .sess .on2{color:#16a34a;font-weight:700}
+  .sess td.snone{color:var(--muted);text-align:center;padding:8px}
 </style></head><body>
 <div class="sheet">
   <header class="head">
@@ -244,6 +253,14 @@ export function renderShiftReport(d: ShiftReportData): string {
       <h5>Estaciones más activas del turno</h5>
       <ol>${activasHtml}</ol>
     </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="eyebrow">Conexión de equipos hoy · horario Bogotá</div>
+    <table class="sess">
+      <thead><tr><th>Equipo</th><th>Se conectó</th><th>Se desconectó</th></tr></thead>
+      <tbody>${sesionesHtml}</tbody>
+    </table>
   </section>
 
   <section style="padding-top:0">
