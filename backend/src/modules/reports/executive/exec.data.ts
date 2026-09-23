@@ -12,7 +12,7 @@ import { getIndexerClient } from '../../wazuh/wazuh.client';
 import { env } from '../../../config/env';
 import { query } from '../../../config/db';
 import { geolocate, isPublicIP } from '../../geo/geoip.service';
-import { getAgentsSummary } from '../../wazuh/agents.service';
+import { getAgentsSummary, socInfraMustNot, isSocInfra } from '../../wazuh/agents.service';
 import { getVulnerabilities } from '../../vulnerabilities/vuln.service';
 import { getSca } from '../../sca/sca.service';
 import { getCompliance } from '../../compliance/compliance.service';
@@ -164,6 +164,7 @@ function reglasExcluidas(): unknown[] {
   return [{
     bool: {
       must_not: [
+        ...socInfraMustNot(), // no contar la infra del SOC (cs-soc-*, pmx-soc, gvm-soc) en el reporte del cliente
         { terms: { 'rule.id': noiseRuleIds } },
         { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
         // 100600 benigno: exfil interna (egress RFC1918), DVR (srcip) y relays HexDesk. El externo real se conserva.
@@ -490,7 +491,7 @@ export async function collectMetrics(entrada: Periodo | string): Promise<ReportM
       aggregations: {
         remip: { buckets: { key: string }[] };
         srcip: { buckets: { key: string }[] };
-        topr: { buckets: { key: string; doc_count: number }[] };
+        topr: { d: { buckets: { key: string; doc_count: number }[] } };
         agente: { buckets: { key: string; doc_count: number }[] };
       };
     }>(`${idx}/_search`, {
@@ -499,7 +500,7 @@ export async function collectMetrics(entrada: Periodo | string): Promise<ReportM
       aggs: {
         remip: { terms: { field: 'data.remip', size: 200 } },
         srcip: { terms: { field: 'data.srcip', size: 200 } },
-        topr: { terms: { field: 'rule.description', size: 8 } },
+        topr: { filter: { range: { 'rule.level': { gte: 7 } } }, aggs: { d: { terms: { field: 'rule.description', size: 8 } } } },
         agente: { terms: { field: 'agent.name', size: 8 } },
       },
     });
@@ -520,7 +521,7 @@ export async function collectMetrics(entrada: Periodo | string): Promise<ReportM
     bruteForceOrigenes = new Set(
       aggData.aggregations.remip.buckets.map((b) => b.key).filter(isPublicIP)
     ).size;
-    topAmenazas = aggData.aggregations.topr.buckets.map((b) => ({ tipo: b.key, conteo: b.doc_count }));
+    topAmenazas = aggData.aggregations.topr.d.buckets.map((b) => ({ tipo: b.key, conteo: b.doc_count }));
     equiposMasAfectados = aggData.aggregations.agente.buckets.map((b) => ({ equipo: b.key, conteo: b.doc_count }));
   } catch {
     /* el informe se genera igual, sin panorama externo */
@@ -547,15 +548,20 @@ export async function collectMetrics(entrada: Periodo | string): Promise<ReportM
     getSca().catch(() => null),
     getCompliance(720).catch(() => null),
   ]);
+  // Vulnerabilidades SOLO de equipos del cliente (excluye la infra del SOC: cs-soc-*, etc.)
+  const vulnCliente = (vuln?.porAgente ?? []).filter((a) => !isSocInfra(a.agent));
+  const vCrit = vulnCliente.reduce((n, a) => n + (a.critical ?? 0), 0);
+  const vHigh = vulnCliente.reduce((n, a) => n + (a.high ?? 0), 0);
+  const vTotal = vulnCliente.reduce((n, a) => n + (a.total ?? 0), 0);
   let postura: PosturaEndpoints | null = null;
   if (vuln || sca || comp) {
     postura = {
-      vulnTotal: vuln?.resumen.total ?? 0,
-      vulnTotalAprox: (vuln?.resumen.total ?? 0) >= 10_000,
-      vulnCriticas: vuln?.resumen.critical ?? 0,
-      vulnAltas: vuln?.resumen.high ?? 0,
+      vulnTotal: vTotal,
+      vulnTotalAprox: vTotal >= 10_000,
+      vulnCriticas: vCrit,
+      vulnAltas: vHigh,
       vulnKev: vuln?.resumen.kev ?? 0,
-      equiposConVuln: vuln?.resumen.agentes ?? 0,
+      equiposConVuln: vulnCliente.filter((a) => (a.total ?? 0) > 0).length,
       topCves: (vuln?.topCve ?? []).slice(0, 5).map((c) => ({
         cve: c.cve, severity: c.severity, inKev: Boolean(c.inKev),
       })),
