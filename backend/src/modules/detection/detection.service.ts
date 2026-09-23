@@ -24,7 +24,7 @@ export const ALLOWED_FIELDS = [
   'data.win.eventdata.objectName', 'data.win.eventdata.subjectUserName',
   'data.win.eventdata.targetUserName', 'data.win.system.computer', 'data.id',
 ];
-const STATIC_IP_FIELDS = new Set(['srcip', 'dstip']);
+const STATIC_IP_FIELDS = new Set(['srcip', 'dstip', 'data.srcip', 'data.dstip']);
 
 export interface NoisyRule {
   ruleId: string;
