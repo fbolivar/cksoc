@@ -152,7 +152,7 @@ async function findDuplicateIncident(dedupKey: string): Promise<string | null> {
 }
 
 export async function createIncident(
-  data: { title: string; description?: string; severity: Severity; source?: IncidentSource; dedupKey?: string },
+  data: { title: string; description?: string; severity: Severity; source?: IncidentSource; dedupKey?: string; autoAck?: boolean },
   userId: string
 ): Promise<IncidentDetail> {
   // Dedup solo en creación automática (SOAR/playbooks pasan dedupKey). Manual siempre crea.
@@ -173,12 +173,12 @@ export async function createIncident(
   // Guarda la firma dentro de source para deduplicar recurrencias futuras.
   const source: IncidentSource & { dedupKey?: string } = { ...(data.source ?? {}), ...(data.dedupKey ? { dedupKey: data.dedupKey } : {}) };
   const rows = await query<{ id: string }>(
-    `INSERT INTO incidents (title, description, severity, created_by, source)
-     VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id`,
-    [data.title, data.description ?? null, data.severity, userId, JSON.stringify(source)]
+    `INSERT INTO incidents (title, description, severity, created_by, source, acknowledged_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING id`,
+    [data.title, data.description ?? null, data.severity, userId, JSON.stringify(source), data.autoAck ? new Date() : null]
   );
   const id = rows[0].id;
-  await addSystemNote(id, userId, 'Incidente creado.');
+  await addSystemNote(id, userId, data.autoAck ? 'Incidente creado y reconocido automaticamente (generado por automatizacion SOAR; ya contenido/notificado). No arranca el SLA de reconocimiento humano.' : 'Incidente creado.');
   // Escala al analista de guardia si nace crítico/alto (solo la PRIMERA vez, no en recurrencias).
   if (data.severity === 'critica' || data.severity === 'alta') {
     escalate(`Nuevo incidente ${data.severity}: ${data.title}`,

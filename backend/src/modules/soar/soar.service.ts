@@ -171,6 +171,7 @@ async function executeAction(action: ActionType, entity: string, rule?: Automati
         description: `Incidente creado automáticamente por la regla SOAR "${rule?.name}" sobre ${entity}.`,
         severity: 'alta',
         source: { ip: entity },
+        autoAck: true, // auto-generado por SOAR: no debe incumplir el SLA de ACK humano
         // Firma para deduplicar: misma regla SOAR sobre la misma entidad = un solo caso.
         dedupKey: `soar:${rule?.id ?? rule?.name ?? 'rule'}:${entity}`,
       }, actorId);
