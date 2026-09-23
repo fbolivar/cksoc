@@ -79,10 +79,11 @@ export function renderShiftReport(d: ShiftReportData): string {
     --disp:'Bricolage Grotesque',system-ui,sans-serif; --body:'Inter Tight',system-ui,sans-serif;
     --mono:'IBM Plex Mono',ui-monospace,monospace;
   }
-  @page{size:A4;margin:0}
+  @page{size:A4;margin:13mm 0}
+  @page:first{margin-top:0}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{background:#fff;color:var(--ink);font-family:var(--body);line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .sheet{width:210mm;min-height:297mm;margin:0 auto;padding:0;display:flex;flex-direction:column}
+  .sheet{width:210mm;margin:0 auto;padding:0}
   .head{position:relative;padding:16mm 16mm 7mm;background:radial-gradient(120% 140% at 100% 0%, #FFF3EF 0%, #FFFFFF 46%);border-bottom:1px solid var(--line)}
   .head::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--coral)}
   .brand{display:flex;align-items:center;gap:10px}
@@ -100,8 +101,8 @@ export function renderShiftReport(d: ShiftReportData): string {
   .hero .big{font-family:var(--disp);font-weight:800;font-size:20px;letter-spacing:-.01em;color:${critOk ? '#0C7A3B' : '#9A5B06'}}
   .hero .small{font-size:12.5px;color:${critOk ? '#3E7355' : '#7A5A2A'}}
   .hero .right{margin-left:auto;text-align:right;font-size:11.5px;color:${critOk ? '#3E7355' : '#7A5A2A'};font-family:var(--mono)}
-  section{padding:6mm 16mm;break-inside:avoid;page-break-inside:avoid}
-  tr,li,.mk,.chip,.two>div{break-inside:avoid;page-break-inside:avoid}
+  section{padding:6mm 16mm}
+  tr,li,.mk,.chip,.two>div,.kpi,.att li,.tops li,.hosts-grid>div,.mgmt li,.legend .lg{break-inside:avoid;page-break-inside:avoid}
   .eyebrow,h4,h5{break-after:avoid;page-break-after:avoid}
   .eyebrow{font-size:11px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin-bottom:11px}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}
@@ -113,6 +114,7 @@ export function renderShiftReport(d: ShiftReportData): string {
   .kpi.good .num{color:var(--green)}
   .kpi .spark{position:absolute;right:11px;top:12px;font-size:15px}
   .two{display:grid;grid-template-columns:1.15fr .85fr;gap:24px}
+  .two>div{min-width:0}
   .bar{height:34px;display:flex;border-radius:9px;overflow:hidden;border:1px solid var(--line)}
   .bar span{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:12px;font-weight:600;color:#fff}
   .seg-on{background:var(--green)} .seg-off{background:var(--slate)} .seg-att{background:var(--amber)}
@@ -132,7 +134,7 @@ export function renderShiftReport(d: ShiftReportData): string {
   .mgmt ul{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}
   .mgmt li{display:flex;gap:10px;font-size:12.5px;align-items:flex-start}
   .mgmt li .ic{width:19px;height:19px;border-radius:6px;background:var(--green-soft);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;margin-top:1px}
-  footer{margin-top:auto;padding:6mm 16mm;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:14px}
+  footer{margin-top:8mm;padding:6mm 16mm;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:14px}
   .sig{font-size:12px;color:var(--muted)} .sig b{color:var(--ink)}
   .next{font-family:var(--mono);font-size:11.5px;color:var(--coral);background:var(--coral-soft);padding:5px 12px;border-radius:8px}
   .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
@@ -152,7 +154,7 @@ export function renderShiftReport(d: ShiftReportData): string {
   .tops li{counter-increment:t;display:flex;align-items:center;gap:8px;font-size:12px;border:1px solid var(--line);border-radius:8px;padding:7px 10px}
   .tops li.none{color:var(--muted);justify-content:center}
   .tops .sev{width:9px;height:9px;border-radius:50%;flex:none}
-  .tops .tt{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tops .tt{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .tops .meta{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted);flex:none}
   .m365kpi{display:flex;gap:10px}
   .m365kpi .mk{flex:1;border:1px solid var(--line);border-radius:8px;padding:10px 8px;text-align:center}

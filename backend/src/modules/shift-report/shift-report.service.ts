@@ -39,7 +39,7 @@ export interface ShiftResult {
 export async function buildShiftReport(turno?: Turno): Promise<ShiftResult & { html: string }> {
   const data = await collectShiftData(turno);
   const html = renderShiftReport(data);
-  const pdf = await htmlToPdf(html);
+  const pdf = await htmlToPdf(html, { cssPage: true });
   const fechaCorta = data.generadoEn.slice(0, 10);
   const filename = `HexWatch_Parte_${data.turno === 'am' ? 'Manana' : 'Tarde'}_${fechaCorta}.pdf`;
   return { data, pdf, filename, html };

@@ -18,16 +18,20 @@ async function getBrowser(): Promise<Browser> {
 }
 
 /** Renderiza HTML a un Buffer PDF (A4, con margenes). */
-export async function htmlToPdf(html: string): Promise<Buffer> {
+export async function htmlToPdf(html: string, opts?: { cssPage?: boolean }): Promise<Buffer> {
   const b = await getBrowser();
   const page = await b.newPage();
   try {
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 30_000 });
-    const pdf = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '0', bottom: '0', left: '0', right: '0' },
-    });
+    const pdfOpts: Parameters<typeof page.pdf>[0] = { format: 'A4', printBackground: true };
+    if (opts?.cssPage) {
+      // Deja que el CSS @page controle tamano y MARGENES (permite @page:first y
+      // margenes superior/inferior por pagina -> saltos de pagina profesionales).
+      pdfOpts.preferCSSPageSize = true;
+    } else {
+      pdfOpts.margin = { top: '0', bottom: '0', left: '0', right: '0' };
+    }
+    const pdf = await page.pdf(pdfOpts);
     return Buffer.from(pdf);
   } finally {
     await page.close();
