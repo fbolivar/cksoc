@@ -49,7 +49,7 @@ export interface ShiftReportData {
 // Exclusión de ruido benigno estándar (consistente con Reportes/dashboards).
 function noiseFilter(): unknown {
   const envIds = (env.REPORT_EXCLUDE_RULES || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const noiseRuleIds = ['81633', '80792', '550', '752', '91578', ...envIds];
+  const noiseRuleIds = ['81633', '80792', '550', '752', '91578', '100205', '100207', '100700', '5501', ...envIds];
   return {
     bool: {
       must_not: [

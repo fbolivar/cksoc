@@ -25,7 +25,7 @@ export type ComplianceData = { hours: number; frameworks: Record<string, Framewo
 // que en los demás módulos). Sin esto, "revisión de logs/auditoría" (AU.6, PCI
 // 10.6.1, HIPAA 164.312.b) suma ~900k de tráfico benigno y el conteo miente.
 const COMPLIANCE_NOISE = [
-  { terms: { 'rule.id': ['81633', '80792', '550', '752', '91578'] } }, // Forti app-passed, audit systemd, FIM checksum, registry, O365 MailItemsAccessed
+  { terms: { 'rule.id': ['81633', '80792', '550', '752', '91578', '100205', '100207', '100700', '5501'] } }, // Forti app-passed, audit systemd, FIM checksum, registry, O365 MailItemsAccessed
   { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
   // 100600 benigno (exfil interna/DVR): egress a RFC1918. El externo real se conserva.
   { bool: { filter: [{ term: { 'rule.id': '100600' } }, { bool: { should: [{ prefix: { 'data.dstip': '192.168.' } }, { prefix: { 'data.dstip': '10.' } }, { prefix: { 'data.dstip': '172.' } }], minimum_should_match: 1 } }] } },
