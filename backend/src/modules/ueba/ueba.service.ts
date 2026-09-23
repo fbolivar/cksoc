@@ -355,15 +355,28 @@ function detect(logins: LoginEvent[], baseline: Map<string, UserBaseline>, s: Ue
   }
 
   // --- auth_failure_spike (por usuario) ---
+  // Distingue ataques de RED (con IP de origen pública -> fuerza bruta/spray real)
+  // de fallos LOCALES/interactivos sin IP (típicamente errores de contraseña al
+  // iniciar/desbloquear sesión). Solo los de red son "alta"; los locales se degradan
+  // a "media" y exigen el DOBLE de umbral, para no inundar el panel con falsas
+  // "altas" benignas (typos repartidos entre muchos usuarios/estaciones).
   for (const [user, fails] of failByUser) {
     if (fails.length < s.fail_threshold) continue;
     const hosts = [...new Set(fails.map((f) => f.host))];
+    const netFails = fails.filter((f) => f.srcip);
+    const ips = [...new Set(netFails.map((f) => f.srcip))].filter(Boolean) as string[];
+    const network = netFails.length >= s.fail_threshold;
+    // Local puro (sin IP): solo se reporta si dobla el umbral, y como "media".
+    if (!network && fails.length < s.fail_threshold * 2) continue;
     anomalies.push({
-      detector: 'auth_failure_spike', entity: user, severity: 'alta',
-      score: 60 + Math.min(30, fails.length),
+      detector: 'auth_failure_spike', entity: user,
+      severity: network ? 'alta' : 'media',
+      score: (network ? 60 : 35) + Math.min(30, fails.length),
       title: `Ráfaga de fallos de autenticación para ${user} (${fails.length})`,
-      summary: `Se registraron ${fails.length} fallos de autenticación para ${user} en las últimas ${s.recent_hours} h sobre ${hosts.length} host(s). Posible fuerza bruta o password spraying.`,
-      evidence: { count: fails.length, hosts: hosts.slice(0, 12), firstTs: fails[0].ts, lastTs: fails[fails.length - 1].ts },
+      summary: network
+        ? `Se registraron ${netFails.length} fallos de autenticación DESDE RED para ${user} (IP: ${ips.slice(0, 5).join(', ')}) en las últimas ${s.recent_hours} h sobre ${hosts.length} host(s). Posible fuerza bruta o password spraying.`
+        : `Se registraron ${fails.length} fallos de inicio de sesión LOCAL para ${user} en las últimas ${s.recent_hours} h sobre ${hosts.length} host(s), sin IP de origen. Probables errores de contraseña al iniciar/desbloquear; revisar si persiste o se concentra en una cuenta.`,
+      evidence: { count: fails.length, networkFails: netFails.length, ips: ips.slice(0, 12), hosts: hosts.slice(0, 12), firstTs: fails[0].ts, lastTs: fails[fails.length - 1].ts },
       source: fails[0].source, dedupKey: `auth_failure_spike|${user}|${dayKey(fails[fails.length - 1].ts)}`,
     });
   }
