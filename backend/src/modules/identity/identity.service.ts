@@ -226,7 +226,7 @@ export interface IdentityRec {
 
 interface IdxSearch { hits: { total: { value: number } | number }; aggregations?: { last?: { value_as_string?: string } } }
 interface TermBucket { key: string; doc_count: number }
-interface SignInUserBucket { key: string; doc_count: number; fail: { doc_count: number }; ok: { doc_count: number }; ips: { buckets: TermBucket[] }; last: { value_as_string?: string } }
+interface SignInUserBucket { key: string; doc_count: number; fail: { doc_count: number }; ok: { doc_count: number; ips: { buckets: TermBucket[] } }; last: { value_as_string?: string } }
 interface SignInAgg { aggregations?: { users?: { buckets: SignInUserBucket[] } } }
 
 export async function getIdentityRecommendations(): Promise<{ configured: boolean; generatedAt: string; items: IdentityRec[] }> {
@@ -330,8 +330,8 @@ export async function getIdentityRecommendations(): Promise<{ configured: boolea
       ] } },
       aggs: { users: { terms: { field: 'data.office365.UserId', size: 80 }, aggs: {
         fail: { filter: { term: { 'data.office365.Operation': 'UserLoginFailed' } } },
-        ok: { filter: { term: { 'data.office365.Operation': 'UserLoggedIn' } } },
-        ips: { terms: { field: 'data.office365.ActorIpAddress', size: 12 } },
+        ok: { filter: { term: { 'data.office365.Operation': 'UserLoggedIn' } },
+          aggs: { ips: { terms: { field: 'data.office365.ActorIpAddress', size: 12 } } } },
         last: { max: { field: '@timestamp' } },
       } } },
     });
@@ -341,7 +341,7 @@ export async function getIdentityRecommendations(): Promise<{ configured: boolea
       const failed = b.fail.doc_count; const ok = b.ok.doc_count;
       const countries = new Set<string>();
       let foreignSuccessIps = 0;
-      for (const ib of b.ips.buckets ?? []) {
+      for (const ib of b.ok.ips.buckets ?? []) {
         if (!isPublicIP(ib.key)) continue;
         const g = geolocate(ib.key);
         if (g?.country) {
@@ -357,7 +357,7 @@ export async function getIdentityRecommendations(): Promise<{ configured: boolea
       const meta = [
         { label: 'fallidos 7d', value: String(failed) },
         { label: 'exitosos 7d', value: String(ok) },
-        { label: 'IPs', value: String((b.ips.buckets ?? []).length) },
+        { label: 'IPs de inicio', value: String((b.ok.ips.buckets ?? []).length) },
         { label: 'países', value: [...countries].join(' / ') || '—' },
       ];
       if (foreignSuccess) {
