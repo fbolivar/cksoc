@@ -6,7 +6,7 @@
  * resultado por Telegram con la voz de "Agentico", consultor especialista del SOC.
  *
  * PRINCIPIO RECTOR: no afectar la operación. La ÚNICA acción automática de contención es
- * el bloqueo TEMPORAL (auto-expira) de IPs EXTERNAS, públicas y CONFIRMADAS maliciosas
+ * el bloqueo (persistente y reversible) de IPs EXTERNAS, públicas y CONFIRMADAS maliciosas
  * (en el feed de IOCs o con reputación AbuseIPDB alta). Nunca toca IPs internas, la WAN
  * del propio cliente, CDNs/SaaS ni la lista blanca (varias barreras: getAttackGeo ya las
  * excluye, y block() revalida canBlock()). Tope de bloqueos por ciclo. Todo queda en la
@@ -134,7 +134,7 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
       continue;
     }
     try {
-      await block({ ip, motivo, user: actor, expirySeconds: env.AGENTICO_BAN_SECONDS });
+      await block({ ip, motivo, user: actor });
       acciones.push({ ip, pais: o.country, motivo, estado: 'bloqueada' });
       // Reconocer incidentes cuyo atacante acabamos de contener.
       const acked = await query<{ id: string }>(
@@ -198,7 +198,7 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
   }
 
   L.push('');
-  L.push('— Agentico opera bajo el principio de NO afectar la operación: solo contiene atacantes externos confirmados de forma temporal (24 h, reversible); nunca IPs internas, del cliente ni legítimas.');
+  L.push('— Agentico opera bajo el principio de NO afectar la operación: solo contiene atacantes externos confirmados; el bloqueo es reversible en cualquier momento desde el módulo de Respuesta y nunca toca IPs internas, del cliente ni legítimas.');
   const mensaje = L.join('\n');
 
   let telegram: AgenticoSummary['telegram'] = 'omitido';
