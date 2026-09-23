@@ -70,6 +70,7 @@ import { credExpRouter, startCredExpScheduler } from './modules/credexp/credexp.
 import { correlationRouter } from './modules/correlation/correlation.routes';
 import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
 import { uebaRouter, startUebaScheduler } from './modules/ueba/ueba.routes';
+import { agenticoRouter, startAgenticoScheduler } from './modules/agentico/agentico.routes';
 import { copilotRouter } from './modules/copilot/copilot.routes';
 import { actionCenterRouter } from './modules/action-center/action-center.routes';
 import { startActionDigestScheduler } from './modules/action-center/action-center.scheduler';
@@ -159,6 +160,7 @@ app.use('/api/credential-exposure', credExpRouter);
 app.use('/api/correlation', correlationRouter);
 app.use('/api/soar', soarRouter);
 app.use('/api/ueba', uebaRouter);
+app.use('/api/agentico', agenticoRouter);
 app.use('/api/copilot', copilotRouter);
 app.use('/api/action-center', actionCenterRouter);
 
@@ -251,6 +253,7 @@ startCredExpScheduler();
 
 // SOAR: motor de respuesta automatizada (evalúa reglas cada 3 min)
 startSoarScheduler();
+startAgenticoScheduler();
 
 // Digest periódico del Centro de Acción por Telegram (pendientes de todos los módulos)
 startActionDigestScheduler();

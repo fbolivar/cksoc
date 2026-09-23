@@ -12,7 +12,7 @@ export function isTelegramConfigured(): boolean {
 const apiUrl = () => `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
 /** Envia un mensaje (Markdown) a uno o varios chats. */
-export async function sendTelegram(chatIds: string[], text: string): Promise<void> {
+export async function sendTelegram(chatIds: string[], text: string, opts?: { plain?: boolean }): Promise<void> {
   if (!isTelegramConfigured()) {
     throw new Error('Telegram no configurado (define TELEGRAM_BOT_TOKEN en el .env)');
   }
@@ -20,7 +20,7 @@ export async function sendTelegram(chatIds: string[], text: string): Promise<voi
     await axios.post(`${apiUrl()}/sendMessage`, {
       chat_id: chatId,
       text,
-      parse_mode: 'Markdown',
+      ...(opts?.plain ? {} : { parse_mode: 'Markdown' }),
       disable_web_page_preview: true,
     });
   }
