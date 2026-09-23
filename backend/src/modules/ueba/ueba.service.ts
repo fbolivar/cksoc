@@ -117,7 +117,7 @@ function cleanUser(u: unknown): string | null {
  * positivo. UEBA debe vigilar a los EMPLEADOS reales (nombres de persona), así que
  * estas se excluyen de las anomalías. Editar aquí para ampliar la lista.
  */
-const EXCLUDE_ENTITY_RE = /^(?:soporte|fernando[.\s]?bolivar|admin(?:istrator|istrador)?|root|sistema|system|guest|invitado|hexdesk|backup|gvm.*|svc[-_.].*|hp|usuario|user|postgres|velociraptor|wazuh|syslog|fboli.*|dwm[-_].*|umfd[-_].*)$/i;
+const EXCLUDE_ENTITY_RE = /^(?:soporte|fernando[.\s]?bolivar|admin(?:istrator|istrador)?|root|sistema|system|guest|invitado|hexdesk|backup|gvm.*|svc[-_.].*|hp|usuario|user|postgres|velociraptor|wazuh|syslog|fboli.*|dwm[-_].*|umfd[-_].*|.*[_-]tmp[_-].*)$/i;
 /** ¿La entidad es una cuenta de servicio/admin/genérica (no un empleado real)?
  *  Reutilizada por UEBA y por Riesgo por entidad para no priorizar admins/robots. */
 export function isServiceOrAdmin(entity: string): boolean {
@@ -526,4 +526,37 @@ export async function entityProfile(user: string): Promise<{ user: string; basel
     baseline: b ? { hosts: [...b.hosts], countries: [...b.countries], total: b.total, offRatio: b.total ? Number((b.off / b.total).toFixed(3)) : 0 } : null,
     anomalies,
   };
+}
+
+// ==========================================================================
+// Entidades monitoreadas: los EMPLEADOS reales que UEBA vigila y su patron de
+// acceso reciente. Da contenido util al panel aunque no haya anomalias (que es
+// lo normal/deseable). Excluye cuentas de servicio/admin/sistema.
+// ==========================================================================
+export interface MonitoredEntity {
+  user: string;
+  logins: number;
+  fails: number;
+  hosts: string[];
+  lastSeen: string;
+  countries: string[];
+  srcips: string[];
+}
+
+export async function listEntities(days = 7): Promise<MonitoredEntity[]> {
+  const logins = await collectLogins(days * 24);
+  const map = new Map<string, MonitoredEntity>();
+  for (const l of logins) {
+    if (isServiceOrAdmin(l.user)) continue;
+    const e = map.get(l.user) ?? { user: l.user, logins: 0, fails: 0, hosts: [], lastSeen: l.ts, countries: [], srcips: [] };
+    e.logins += 1;
+    if (l.outcome === 'fail') e.fails += 1;
+    if (l.host && l.host !== '(desconocido)' && !e.hosts.includes(l.host)) e.hosts.push(l.host);
+    if (l.srcip && !e.srcips.includes(l.srcip)) e.srcips.push(l.srcip);
+    const country = l.geo?.country ?? null;
+    if (country && !e.countries.includes(country)) e.countries.push(country);
+    if (l.ts > e.lastSeen) e.lastSeen = l.ts;
+    map.set(l.user, e);
+  }
+  return [...map.values()].sort((a, b) => b.logins - a.logins);
 }

@@ -38,6 +38,16 @@ export interface EntityProfile {
   anomalies: Anomaly[];
 }
 
+export interface MonitoredEntity {
+  user: string;
+  logins: number;
+  fails: number;
+  hosts: string[];
+  lastSeen: string;
+  countries: string[];
+  srcips: string[];
+}
+
 export const DETECTOR_ES: Record<Detector, string> = {
   new_host: 'Host nuevo',
   off_hours: 'Fuera de horario',
@@ -54,5 +64,6 @@ export const uebaApi = {
     api.post<Anomaly>(`/ueba/anomalies/${id}/${decision}`).then((r) => r.data),
   settings: () => api.get<UebaSettings>('/ueba/settings').then((r) => r.data),
   updateSettings: (body: Partial<UebaSettings>) => api.put<UebaSettings>('/ueba/settings', body).then((r) => r.data),
+  entities: () => api.get<{ entities: MonitoredEntity[] }>('/ueba/entities').then((r) => r.data),
   scan: () => api.post<{ logins: number; users: number; anomalies: number; byDetector: Record<string, number> }>('/ueba/scan').then((r) => r.data),
 };

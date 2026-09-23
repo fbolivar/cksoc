@@ -10,7 +10,7 @@ import {
   Plane, Globe, Clock, MonitorSmartphone, ShieldAlert,
 } from 'lucide-react';
 import {
-  uebaApi, DETECTOR_ES, type Anomaly, type Detector, type Severity, type UebaSettings,
+  uebaApi, DETECTOR_ES, type Anomaly, type Detector, type Severity, type UebaSettings, type MonitoredEntity,
 } from '@/lib/ueba';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
@@ -94,6 +94,7 @@ export default function Ueba() {
   const [note, setNote] = useState<string | null>(null);
   const [showCfg, setShowCfg] = useState(false);
   const [cfg, setCfg] = useState<UebaSettings | null>(null);
+  const [entities, setEntities] = useState<MonitoredEntity[]>([]);
 
   const seq = useRef(0);
   const load = useCallback(async () => {
@@ -102,6 +103,7 @@ export default function Ueba() {
     try {
       const res = await uebaApi.anomalies({ status, detector: detector || undefined, days: 30 });
       if (my === seq.current) setData(res);
+      uebaApi.entities().then((r) => { if (my === seq.current) setEntities(r.entities); }).catch(() => undefined);
     } catch (e) {
       if (my === seq.current) setError((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudieron cargar las anomalías');
     } finally {
@@ -252,6 +254,45 @@ export default function Ueba() {
           })}
         </div>
       )}
+      {/* Entidades monitoreadas */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="hw-mono text-[11px] uppercase tracking-wider text-muted-foreground">Entidades monitoreadas · últimos 7 días</p>
+            <span className="text-[11px] text-muted-foreground">{entities.length} empleados</span>
+          </div>
+          {entities.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">Sin actividad de logins de empleados en la ventana.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                    <th className="py-1.5 pr-3 font-medium">Usuario</th>
+                    <th className="py-1.5 pr-3 font-medium">Logins</th>
+                    <th className="py-1.5 pr-3 font-medium">Fallos</th>
+                    <th className="py-1.5 pr-3 font-medium">Equipos</th>
+                    <th className="py-1.5 pr-3 font-medium">Países</th>
+                    <th className="py-1.5 font-medium">Último acceso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entities.map((e) => (
+                    <tr key={e.user} className="border-b border-border/50 last:border-0">
+                      <td className="py-1.5 pr-3 font-medium">{e.user}</td>
+                      <td className="py-1.5 pr-3 tabular-nums">{e.logins}</td>
+                      <td className={`py-1.5 pr-3 tabular-nums ${e.fails > 0 ? 'text-amber-600' : ''}`}>{e.fails}</td>
+                      <td className="py-1.5 pr-3 text-muted-foreground">{e.hosts.join(', ') || '—'}</td>
+                      <td className="py-1.5 pr-3 text-muted-foreground">{e.countries.join(', ') || '—'}</td>
+                      <td className="py-1.5 text-muted-foreground">{timeAgo(e.lastSeen)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

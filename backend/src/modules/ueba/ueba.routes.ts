@@ -12,8 +12,7 @@ import { HttpError } from '../auth/auth.service';
 import { logger } from '../../config/logger';
 import {
   scan, listAnomalies, countOpen, setStatus, entityProfile,
-  getSettings, updateSettings,
-} from './ueba.service';
+  getSettings, updateSettings, listEntities } from './ueba.service';
 
 export const uebaRouter = Router();
 uebaRouter.use(authenticate);
@@ -23,6 +22,10 @@ function handle(err: unknown, res: Response): void {
   logger.error({ err }, 'Error en UEBA');
   res.status(500).json({ error: 'Error interno del servidor' });
 }
+
+uebaRouter.get('/entities', requireRole('admin', 'analista'), async (_req: Request, res: Response) => {
+  try { res.json({ entities: await listEntities(7) }); } catch (err) { handle(err, res); }
+});
 
 uebaRouter.get('/anomalies', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
   try {
