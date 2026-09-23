@@ -73,7 +73,7 @@ export default function AttackMap() {
     try {
       await responseApi.block(ip, motivo.trim() || 'Bloqueo manual desde mapa de ataques');
       setBlockedIps((prev) => new Map(prev).set(ip, true)); // manual = permanente
-      flash('ok', `IP ${ip} bloqueada permanentemente en FortiGate`);
+      flash('ok', `IP ${ip} bloqueada permanentemente en SonicWall`);
       setBlockTarget(null);
     } catch (e) {
       flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo bloquear la IP');
@@ -321,13 +321,13 @@ export default function AttackMap() {
                       <span className="tabular-nums text-sm font-medium">{o.count}</span>
                       {canBlock && (
                         blockedIps.has(o.ips[0]) ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400" title={blockedIps.get(o.ips[0]) ? 'Bloqueada en FortiGate · permanente' : 'Bloqueada en FortiGate · temporal (24 h)'}>
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400" title={blockedIps.get(o.ips[0]) ? 'Bloqueada en SonicWall · permanente' : 'Bloqueada en SonicWall · temporal (24 h)'}>
                             <ShieldCheck className="h-3 w-3" /> Bloqueada · {blockedIps.get(o.ips[0]) ? 'permanente' : '24h'}
                           </span>
                         ) : (
                           <button
                             onClick={() => openBlock(o)}
-                            title={`Bloquear ${o.ips[0]} en FortiGate`}
+                            title={`Bloquear ${o.ips[0]} en SonicWall`}
                             className="inline-flex shrink-0 items-center gap-1 rounded-full border border-red-500/30 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-400"
                           >
                             <ShieldBan className="h-3 w-3" /> Bloquear
@@ -362,7 +362,7 @@ export default function AttackMap() {
           <div className="w-full max-w-md rounded-lg border border-border/70 bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 border-b border-border/60 px-5 py-4">
               <ShieldBan className="h-5 w-5 text-red-400" />
-              <h3 className="font-semibold">Bloquear IP en FortiGate</h3>
+              <h3 className="font-semibold">Bloquear IP en SonicWall</h3>
             </div>
             <div className="space-y-3 p-5">
               <div className="rounded-md border border-border/60 bg-secondary/40 p-3 text-sm">
@@ -394,7 +394,7 @@ export default function AttackMap() {
               </div>
 
               <p className="text-[11px] text-muted-foreground">
-                Se añadirá a la lista de bloqueo del FortiGate. La lista blanca y la auditoría se aplican en el servidor.
+                Se añadirá a la lista de bloqueo del SonicWall. La lista blanca y la auditoría se aplican en el servidor.
               </p>
 
               <div className="flex justify-end gap-2">

@@ -25,7 +25,7 @@ const COMMANDS: Cmd[] = [
   { label: 'Threat Intelligence', to: '/threat-intel', sec: 'INVESTIGAR' },
   { label: 'Velociraptor · DFIR', to: '/velociraptor', sec: 'INVESTIGAR' },
   { label: 'Incidentes', to: '/incidentes', sec: 'RESPONDER' },
-  { label: 'Respuesta · FortiGate', to: '/respuesta', sec: 'RESPONDER' },
+  { label: 'Respuesta · SonicWall', to: '/respuesta', sec: 'RESPONDER' },
   { label: 'Automatización · SOAR', to: '/soar', sec: 'RESPONDER' },
   { label: 'Activos', to: '/activos', sec: 'POSTURA' },
   { label: 'Vulnerabilidades', to: '/vulnerabilidades', sec: 'POSTURA' },

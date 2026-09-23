@@ -1,7 +1,7 @@
 /**
  * Respuesta a incidentes (human-in-the-loop).
  * Cola de incidentes -> investigar -> bloquear (con confirmacion) -> auditoria.
- * El bloqueo lo ejecuta la app en el FortiGate SOLO tras confirmacion de un admin.
+ * El bloqueo lo ejecuta la app en el SonicWall SOLO tras confirmacion de un admin.
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
@@ -85,7 +85,7 @@ export default function Response() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight">
-            <ShieldAlert className="h-6 w-6 text-neon" /> Respuesta · FortiGate
+            <ShieldAlert className="h-6 w-6 text-neon" /> Respuesta · SonicWall
           </h1>
           <p className="text-sm text-muted-foreground">
             Bloqueo de IPs con confirmación humana · el analista decide, queda registrado
@@ -96,7 +96,7 @@ export default function Response() {
         </Button>
       </div>
 
-      {/* Estado FortiGate */}
+      {/* Estado SonicWall */}
       {status && <FortiStatus status={status} />}
 
       {msg && (
@@ -164,7 +164,7 @@ function FortiStatus({ status }: { status: ResponseStatus }) {
     <Card>
       <CardContent className="flex flex-wrap items-center gap-4 p-4 text-sm">
         <span className="flex items-center gap-2">
-          <Server className="h-4 w-4 text-neon" /> FortiGate
+          <Server className="h-4 w-4 text-neon" /> SonicWall
         </span>
         {ok ? (
           <Badge variant="success"><CheckCircle2 className="h-3 w-3" /> Conectado</Badge>

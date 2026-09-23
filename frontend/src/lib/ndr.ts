@@ -1,4 +1,4 @@
-/** Cliente NDR (visibilidad de red vía FortiGate). */
+/** Cliente NDR (visibilidad de red vía SonicWall). */
 import { api } from './api';
 
 export interface NdrTalker { ip: string; sessions: number; dstIps: number }
@@ -54,7 +54,7 @@ export const ndrApi = {
   userActivity: (range: string) => api.get<UserActivity>('/ndr/user-activity', { params: { range } }).then((r) => r.data),
 };
 
-// --- NPM: rendimiento de interfaces (FortiGate) ---
+// --- NPM: rendimiento de interfaces (SonicWall) ---
 export interface NetIface {
   name: string; alias: string | null; ip: string | null; link: boolean; speedMbps: number;
   inBps: number; outBps: number; utilPct: number; peakUtilPct: number; flaps: number;

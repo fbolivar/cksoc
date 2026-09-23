@@ -1,6 +1,6 @@
 /**
  * Correlación multi-fuente: casos agrupados por IP de origen. Reduce la fatiga de
- * alertas mostrando UN caso por IP (con todas sus alertas de FortiGate + Wazuh),
+ * alertas mostrando UN caso por IP (con todas sus alertas de SonicWall + Wazuh),
  * priorizado por riesgo, con acción de crear un incidente unificado o bloquear.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -63,7 +63,7 @@ export default function CorrelationPage() {
     setAct((a) => ({ ...a, [c.srcip]: { ...a[c.srcip], incBusy: true, err: undefined } }));
     try {
       const desc = `Caso correlacionado por IP ${c.srcip}: ${c.count} alertas, ${c.distinctRules} reglas distintas, ${c.agents.length} host(s)`
-        + `${c.crossSource ? ', multi-fuente (FortiGate + Wazuh)' : ''}${c.iocSource ? `, IOC conocido (${c.iocSource})` : ''}.`
+        + `${c.crossSource ? ', multi-fuente (SonicWall + Wazuh)' : ''}${c.iocSource ? `, IOC conocido (${c.iocSource})` : ''}.`
         + ` Regla representativa: ${c.sampleRule}.`;
       await incidentsApi.create({
         title: `Actividad correlacionada de ${c.srcip} (${c.count} alertas)`.slice(0, 180),
@@ -139,7 +139,7 @@ export default function CorrelationPage() {
                       <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
                         <span><strong className="text-foreground">{c.count}</strong> alertas</span>
                         <span><strong className="text-foreground">{c.distinctRules}</strong> reglas</span>
-                        <span>FortiGate: {c.fortiCount} · Wazuh: {c.wazuhCount}</span>
+                        <span>SonicWall: {c.fortiCount} · Wazuh: {c.wazuhCount}</span>
                         <span>hosts: {c.agents.join(', ') || '—'}</span>
                         {c.mitre.length > 0 && <span className="text-neon">{c.mitre.join(', ')}</span>}
                         <span>último: {c.lastSeen ? new Date(c.lastSeen).toLocaleString('es-CO') : '—'}</span>

@@ -162,7 +162,7 @@ export const shiftApi = {
       .then((r) => r.data),
 };
 
-// ----------------- Postura de seguridad del Firewall (FortiGate + IA) -----------------
+// ----------------- Postura de seguridad del Firewall (SonicWall + IA) -----------------
 export const fwpostureApi = {
   /** Genera el informe de postura en PDF y dispara la descarga. El análisis IA
    *  tarda ~20-30 s → timeout 90 s (el global de 15 s abortaría la petición). */

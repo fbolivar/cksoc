@@ -126,7 +126,7 @@ export default function Incidents() {
     } finally { setEscBusy(null); }
   }
 
-  // Bloquea en el FortiGate la IP de origen del incidente (enlazada a la alerta
+  // Bloquea en el SonicWall la IP de origen del incidente (enlazada a la alerta
   // origen si existe). El backend aplica la lista blanca y rechaza IPs protegidas.
   async function bloquearIp(ip: string) {
     setBlockBusy(true);
@@ -472,11 +472,11 @@ export default function Incidents() {
               </div>
               {canManage && detail.source?.ip && (
                 <div className="space-y-1.5 border-t border-border/40 pt-3">
-                  <label className="text-xs text-muted-foreground">Contención · FortiGate</label>
+                  <label className="text-xs text-muted-foreground">Contención · SonicWall</label>
                   <Button size="sm" variant="destructive" className="w-full justify-center" disabled={blockBusy || blockResult?.ok}
                     onClick={() => { const ip = detail.source?.ip; if (ip) void bloquearIp(ip); }}
-                    title={`Bloquea ${detail.source.ip} en el FortiGate`}>
-                    {blockBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear IP en FortiGate
+                    title={`Bloquea ${detail.source.ip} en el SonicWall`}>
+                    {blockBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear IP en SonicWall
                   </Button>
                   {blockResult && (blockResult.error ? (
                     <span className="block text-[11px] text-destructive">{blockResult.error}</span>

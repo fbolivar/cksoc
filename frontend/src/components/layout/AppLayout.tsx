@@ -45,7 +45,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <div className="flex items-center gap-2.5">
                   <img
                     src="/logo-emblem.png"
-                    alt="HexWatch"
+                    alt="Click Solutions"
                     className="h-8 w-auto object-contain"
                   />
                   <span className="text-lg font-bold tracking-tight">HexWatch</span>

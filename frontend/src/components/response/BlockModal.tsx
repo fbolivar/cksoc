@@ -55,14 +55,14 @@ export function BlockModal({
           <ShieldX className="h-6 w-6 text-red-400" />
           <div>
             <h3 className="font-semibold text-red-200">Confirmar bloqueo de IP</h3>
-            <p className="text-xs text-muted-foreground">Acción sobre el FortiGate · quedará registrada</p>
+            <p className="text-xs text-muted-foreground">Acción sobre el SonicWall · quedará registrada</p>
           </div>
         </div>
 
         <form onSubmit={submit} className="space-y-4 p-5">
           <div className="rounded-md border border-border/60 bg-background/40 p-3 text-sm">
             <p>
-              Vas a bloquear la IP <span className="font-bold text-red-600">{ip}</span> en el FortiGate
+              Vas a bloquear la IP <span className="font-bold text-red-600">{ip}</span> en el SonicWall
               {group ? <> (grupo <span className="font-mono text-xs">{group}</span>)</> : ''}.
             </p>
             <p className="mt-1 text-xs text-muted-foreground">

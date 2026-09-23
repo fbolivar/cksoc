@@ -25,7 +25,7 @@ export interface PlaybookInput {
 }
 
 export const ACTION_LABELS: Record<ActionType, string> = {
-  block_ip: 'Bloquear IP (FortiGate)',
+  block_ip: 'Bloquear IP (SonicWall)',
   create_incident: 'Crear incidente',
   notify: 'Notificar (in-app)',
 };

@@ -178,7 +178,7 @@ export default function Reports() {
       await fwpostureApi.download();
       flash('ok', 'Postura del firewall generada · PDF descargado.');
     } catch (e) {
-      flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar la postura del firewall (revisa la conexión con el FortiGate).');
+      flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar la postura del firewall (revisa la conexión con el SonicWall).');
     } finally { setFwBusy(false); }
   }
 
@@ -278,7 +278,7 @@ export default function Reports() {
         </div>
       )}
 
-      {/* Postura de seguridad del Firewall (FortiGate + IA) */}
+      {/* Postura de seguridad del Firewall (SonicWall + IA) */}
       {canManage && (
         <div className="hud">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -287,8 +287,8 @@ export default function Reports() {
                 <ShieldCheck className="h-[18px] w-[18px] text-primary" /> Postura de seguridad del Firewall
               </h3>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                Audita la configuración del FortiGate contra mejores prácticas (CIS/hardening) y el Security
-                Rating de Fortinet, y la IA redacta un informe con calificación, hallazgos priorizados y remediación.
+                Audita la configuración del SonicWall contra mejores prácticas (CIS/hardening) y el Security
+                Rating de SonicWall, y la IA redacta un informe con calificación, hallazgos priorizados y remediación.
               </p>
               <p className="hw-mono mt-2 text-[10px] text-muted-foreground/70">Solo lectura · sin secretos · genera un PDF (~20-30 s por el análisis IA)</p>
             </div>

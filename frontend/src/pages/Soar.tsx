@@ -18,7 +18,7 @@ const TRIGGER_LABEL: Record<TriggerType, string> = {
   rule_id: 'Regla específica dispara',
 };
 const ACTION_LABEL: Record<ActionType, string> = {
-  block_ip: 'Bloquear IP (FortiGate)',
+  block_ip: 'Bloquear IP (SonicWall)',
   isolate_host: 'Aislar host (Velociraptor)',
   create_incident: 'Crear incidente',
   disable_ad_user: 'Deshabilitar cuenta AD (LDAP)',
@@ -270,7 +270,7 @@ function RuleModal({ onClose, onCreated }: { onClose: () => void; onCreated: () 
           <div className="space-y-1.5">
             <label className="text-xs text-muted-foreground">Acción (ENTONCES…)</label>
             <select value={action} onChange={(e) => setAction(e.target.value as ActionType)} className="h-9 w-full rounded-md border border-input bg-background/60 px-2 text-sm">
-              <option value="block_ip">Bloquear la IP en FortiGate</option>
+              <option value="block_ip">Bloquear la IP en SonicWall</option>
               <option value="isolate_host">Aislar el host en Velociraptor</option>
               <option value="create_incident">Crear un incidente</option>
               <option value="disable_ad_user">Deshabilitar la cuenta en AD (LDAP)</option>

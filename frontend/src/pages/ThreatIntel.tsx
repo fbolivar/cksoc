@@ -1,7 +1,7 @@
 /**
  * Threat Intelligence: catálogo de IOCs (feeds públicos + manuales) y, lo más
  * accionable, las COINCIDENCIAS de IPs maliciosas conocidas contra las alertas
- * (Wazuh + FortiGate) de las últimas 24 h, con bloqueo directo en el FortiGate.
+ * (Wazuh + SonicWall) de las últimas 24 h, con bloqueo directo en el SonicWall.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -53,7 +53,7 @@ export default function ThreatIntel() {
 
   useEffect(() => { void loadAll(); }, [loadAll]);
   useEffect(() => { void loadIocs(); }, [loadIocs]);
-  // IPs ya bloqueadas en FortiGate → marcarlas al entrar (persistente entre recargas).
+  // IPs ya bloqueadas en SonicWall → marcarlas al entrar (persistente entre recargas).
   useEffect(() => {
     if (!canManage) return;
     responseApi.blocked()
@@ -155,7 +155,7 @@ export default function ThreatIntel() {
                               <Link to={m.type === 'ip' ? `/alertas?srcip=${encodeURIComponent(m.value)}` : `/alertas?q=${encodeURIComponent(m.value)}`} className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-neon hover:underline"><ExternalLink className="h-3 w-3" /> ver</Link>
                               {canManage && m.type === 'ip' && (
                                 st?.ok ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600" title={st.permanent ? 'Bloqueada en FortiGate · permanente' : 'Bloqueada en FortiGate · temporal (24 h)'}>
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-600" title={st.permanent ? 'Bloqueada en SonicWall · permanente' : 'Bloqueada en SonicWall · temporal (24 h)'}>
                                     <ShieldCheck className="h-3.5 w-3.5" /> Bloqueada · {st.permanent ? 'permanente' : '24h'}
                                   </span>
                                 ) : (

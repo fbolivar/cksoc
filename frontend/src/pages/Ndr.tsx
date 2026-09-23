@@ -1,5 +1,5 @@
 /**
- * NDR · Visibilidad de red. Construido sobre la telemetría del FortiGate
+ * NDR · Visibilidad de red. Construido sobre la telemetría del SonicWall
  * (Application Control / IPS) que llega a Wazuh: top talkers, dominios (SNI),
  * aplicaciones, cruce con IOCs y alertas IPS.
  */
@@ -151,7 +151,7 @@ export default function Ndr() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 hw-mono text-2xl font-bold tracking-tight"><Network className="h-6 w-6 text-neon" /> NDR · Red</h1>
-          <p className="text-sm text-muted-foreground">Visibilidad de red desde el FortiGate: quién habla con quién, dominios, apps e IPS</p>
+          <p className="text-sm text-muted-foreground">Visibilidad de red desde el SonicWall: quién habla con quién, dominios, apps e IPS</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex overflow-hidden rounded-md border border-input">
@@ -176,7 +176,7 @@ export default function Ndr() {
             <Kpi label="Transferencias sospechosas" value={fmt(d.largeTransferCount)} danger={d.largeTransferCount > 0} />
           </div>
 
-          {/* Interfaces / ancho de banda (NPM en vivo, FortiGate) */}
+          {/* Interfaces / ancho de banda (NPM en vivo, SonicWall) */}
           {net && net.interfaces.length > 0 && (
             <Card><CardContent className="p-4">
               <p className="mb-3 flex items-center gap-2 text-sm font-semibold"><Activity className="h-4 w-4 text-neon" /> Enlaces · utilización en vivo
@@ -187,7 +187,7 @@ export default function Ndr() {
             </CardContent></Card>
           )}
 
-          {/* VPN · sesiones activas (tiempo real, FortiGate SSL-VPN) */}
+          {/* VPN · sesiones activas (tiempo real, SonicWall SSL-VPN) */}
           {vpn && vpn.configured && (
             <Card><CardContent className="p-4">
               <p className="mb-3 flex flex-wrap items-center gap-2 text-sm font-semibold"><Lock className="h-4 w-4 text-neon" /> VPN · sesiones activas
@@ -229,7 +229,7 @@ export default function Ndr() {
           {activity && activity.dispositivos.length > 0 && (
             <Card><CardContent className="p-4">
               <p className="mb-1 flex items-center gap-2 text-sm font-semibold"><Users className="h-4 w-4 text-neon" /> Actividad en Internet por equipo</p>
-              <p className="mb-3 text-[11px] text-muted-foreground">Categorías del App Control por equipo (atribución por IP; el FortiGate no identifica usuario). Resalta alto riesgo: proxy/anonimizador, acceso remoto, IA generativa, juegos, streaming, redes sociales.</p>
+              <p className="mb-3 text-[11px] text-muted-foreground">Categorías del App Control por equipo (atribución por IP; el SonicWall no identifica usuario). Resalta alto riesgo: proxy/anonimizador, acceso remoto, IA generativa, juegos, streaming, redes sociales.</p>
               <div className="space-y-2">
                 {activity.dispositivos.slice(0, 12).map((dv) => {
                   const cc = nivelColor(dv.nivel);
@@ -356,7 +356,7 @@ export default function Ndr() {
           </div>
 
           <p className="text-center text-[11px] text-muted-foreground/60">
-            Fuente: FortiGate (Application Control + IPS) vía Wazuh. Nota: el DNS va cifrado (DoH/DoT) en los equipos, por eso los dominios se ven por el SNI del tráfico TLS. Actualizado {new Date(d.generatedAt).toLocaleTimeString('es-CO')}.
+            Fuente: SonicWall (Application Control + IPS) vía Wazuh. Nota: el DNS va cifrado (DoH/DoT) en los equipos, por eso los dominios se ven por el SNI del tráfico TLS. Actualizado {new Date(d.generatedAt).toLocaleTimeString('es-CO')}.
           </p>
         </>
       )}

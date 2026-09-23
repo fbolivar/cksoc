@@ -91,7 +91,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     title: 'Responder',
     items: [
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
-      { to: '/respuesta', label: 'Respuesta · FortiGate', icon: ShieldAlert, roles: ['admin', 'analista'] },
+      { to: '/respuesta', label: 'Respuesta · SonicWall', icon: ShieldAlert, roles: ['admin', 'analista'] },
       { to: '/remediacion', label: 'Remediación', icon: Wrench, roles: ['admin'] },
       { to: '/soar', label: 'Automatización (SOAR)', icon: Workflow, roles: ['admin', 'analista'] },
     ],
@@ -180,14 +180,14 @@ export function Sidebar() {
       <div className="flex items-center gap-2.5 px-5 h-16 border-b border-border">
         <img
           src="/logo-emblem.png"
-          alt="HexWatch"
+          alt="Click Solutions"
           className="h-8 w-auto object-contain"
         />
         <span className="text-lg font-bold tracking-tight">HexWatch</span>
       </div>
       <SidebarNav />
       <div className="px-5 py-4 border-t border-border text-[11px] leading-relaxed text-muted-foreground/70">
-        HexWatch · BC Security
+        Click Solutions
       </div>
     </aside>
   );

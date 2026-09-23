@@ -112,7 +112,7 @@ export default function Alerts() {
     } finally { setAiBusy(null); }
   }
 
-  // Bloquea en el FortiGate la IP origen del evento (crea la regla y registra la
+  // Bloquea en el SonicWall la IP origen del evento (crea la regla y registra la
   // accion enlazada a la alerta). Solo admin/analista; la lista blanca la aplica
   // el backend, que rechazara IPs protegidas.
   async function bloquearIp(hit: AlertHit) {
@@ -449,8 +449,8 @@ export default function Alerts() {
                       </Button>
                       {detail.hit.srcip && (
                         <Button size="sm" variant="destructive" onClick={() => void bloquearIp(detail.hit)} disabled={blockBusy || blockResult?.ok}
-                          title={`Bloquea ${detail.hit.srcip} en el FortiGate`}>
-                          {blockBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear IP en FortiGate
+                          title={`Bloquea ${detail.hit.srcip} en el SonicWall`}>
+                          {blockBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Bloquear IP en SonicWall
                         </Button>
                       )}
                     </div>
@@ -462,7 +462,7 @@ export default function Alerts() {
                     {blockResult && (blockResult.error ? (
                       <span className="text-[11px] text-destructive">{blockResult.error}</span>
                     ) : blockResult.ok ? (
-                      <span className="text-[11px] text-emerald-600 inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> IP {detail.hit.srcip} bloqueada en el FortiGate</span>
+                      <span className="text-[11px] text-emerald-600 inline-flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> IP {detail.hit.srcip} bloqueada en el SonicWall</span>
                     ) : null)}
                   </div>
                 )}

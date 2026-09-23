@@ -69,8 +69,8 @@ export default function Login() {
         {/* Marca */}
         <div className="flex flex-col items-center text-center mb-7">
           <img
-            src="/logo-pnnc.png"
-            alt="HexWatch"
+            src="/logo-cs-lockup.png"
+            alt="Click Solutions"
             className="h-14 w-auto object-contain mb-3"
             onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
           />
