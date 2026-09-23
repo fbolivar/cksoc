@@ -137,7 +137,7 @@ export default function Hunt() {
           </select>
           <button
             onClick={() => setSignal((s) => !s)}
-            title={signal ? 'Lente señal activo: oculta telemetría benigna de alto volumen (Forti app-passed, FIM, registry, auditoría O365). Clic para ver TODO.' : 'Viendo todo (búsqueda cruda). Clic para volver al lente señal.'}
+            title={signal ? 'Lente señal activo: oculta telemetría benigna de alto volumen (SonicWall app-passed, FIM, registry, auditoría O365). Clic para ver TODO.' : 'Viendo todo (búsqueda cruda). Clic para volver al lente señal.'}
             className={`flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm ${signal ? 'border-brand/50 bg-brand/15 text-brand' : 'border-input bg-background text-muted-foreground'}`}
           >
             {signal ? <Sparkles className="h-4 w-4" /> : <Layers className="h-4 w-4" />} {signal ? 'Solo señal' : 'Ver todo'}

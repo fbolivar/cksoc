@@ -1,6 +1,6 @@
 /**
  * Feeds públicos de Threat Intelligence (gratuitos, sin API key). Cubren IPs,
- * dominios, URLs y hashes, que cruzan contra los eventos de Wazuh/FortiGate/FIM.
+ * dominios, URLs y hashes, que cruzan contra los eventos de Wazuh/SonicWall/FIM.
  * Fuentes: familia abuse.ch (Feodo, SSLBL, URLhaus, ThreatFox, MalwareBazaar).
  */
 import axios from 'axios';

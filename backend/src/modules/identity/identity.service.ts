@@ -5,7 +5,7 @@
  *  - (Cuarentena de correo por Graph: quarantineSenderInMailbox — para #5.)
  *
  * Todo es INERTE hasta configurar credenciales (LDAP_* / GRAPH_*): sin ellas cada
- * función lanza HttpError 503 "no configurado", igual que el cliente de FortiGate.
+ * función lanza HttpError 503 "no configurado", igual que el cliente de SonicWall.
  * El paquete `ldapts` se carga de forma diferida: no hace falta instalarlo hasta
  * que se use realmente el bloqueo de AD.
  */

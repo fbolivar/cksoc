@@ -101,7 +101,7 @@ export async function getReputation(req: Request, res: Response): Promise<void> 
   }
 }
 
-/** Estado del FortiGate y lista blanca (para la vista de respuesta). */
+/** Estado del SonicWall y lista blanca (para la vista de respuesta). */
 export async function getStatus(req: Request, res: Response): Promise<void> {
   const configured = isFortigateConfigured();
   let connection: { ok: boolean; group?: string; count?: number; error?: string } = { ok: false };

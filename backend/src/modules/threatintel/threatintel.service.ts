@@ -1,6 +1,6 @@
 /**
  * Threat Intelligence: catálogo de IOCs (feeds + manual) y cruce automático
- * contra las IPs vistas en las alertas (Wazuh + FortiGate) del Indexer.
+ * contra las IPs vistas en las alertas (Wazuh + SonicWall) del Indexer.
  */
 import { query } from '../../config/db';
 import { getIndexerClient } from '../wazuh/wazuh.client';
@@ -258,7 +258,7 @@ export async function getMatches(): Promise<IocMatch[]> {
     }
   }
 
-  // Dominios (incluye el SNI/hostname del FortiGate — Application Control).
+  // Dominios (incluye el SNI/hostname del SonicWall — Application Control).
   // Se descartan IOCs de dominio sobre plataformas de hosting compartido legítimas
   // (github/google/etc.): los feeds URLhaus/ThreatFox las listan por una URL puntual,
   // pero el dominio en sí es benigno y no accionable (mismo criterio que NDR).

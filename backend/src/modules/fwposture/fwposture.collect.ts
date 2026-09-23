@@ -1,6 +1,6 @@
 /**
- * Recolección de postura del FortiGate (SOLO LECTURA) para el reporte de seguridad.
- * Lee estado + Security Rating nativo de Fortinet + configuración (cmdb) y arma un
+ * Recolección de postura del SonicWall (SOLO LECTURA) para el reporte de seguridad.
+ * Lee estado + Security Rating nativo de SonicWall + configuración (cmdb) y arma un
  * "snapshot" SANITIZADO (sin secretos: contraseñas, llaves, psk) apto para evaluar
  * con checks deterministas y para el análisis con IA.
  */
@@ -13,7 +13,7 @@ export interface FwIface { name: string; alias: string | null; role: string | nu
 
 export interface FwSnapshot {
   device: { hostname: string; model: string; serial: string; version: string; build: string | number };
-  securityRating: unknown | null;   // resultado nativo de Fortinet (para la IA)
+  securityRating: unknown | null;   // resultado nativo de SonicWall (para la IA)
   global: Record<string, unknown>;  // ajustes clave (sanitizados)
   admins: FwAdmin[];
   interfaces: FwIface[];
@@ -92,7 +92,7 @@ export async function collectFwSnapshot(): Promise<FwSnapshot> {
 
   return {
     device: {
-      hostname: String(st.hostname ?? 'FortiGate'),
+      hostname: String(st.hostname ?? 'SonicWall'),
       model: String(st.model_name ?? st.model ?? ''),
       serial: String(st.serial ?? ''),
       version: String(st.version ?? ''),

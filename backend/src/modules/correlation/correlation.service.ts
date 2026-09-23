@@ -1,6 +1,6 @@
 /**
  * Correlación multi-fuente: agrupa las alertas por IP de origen y detecta cuando
- * la misma IP la ven varias fuentes (FortiGate IPS + Wazuh) o varios hosts, para
+ * la misma IP la ven varias fuentes (SonicWall IPS + Wazuh) o varios hosts, para
  * presentar UN caso en vez de N alertas sueltas. Enriquecido con IOCs.
  */
 import { getIndexerClient } from '../wazuh/wazuh.client';

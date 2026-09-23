@@ -1,12 +1,12 @@
 /**
- * NPM ligero: rendimiento de red por interfaz del FortiGate.
+ * NPM ligero: rendimiento de red por interfaz del SonicWall.
  * Sondea la API de interfaces cada N segundos y calcula, a partir de los deltas
  * de los contadores de bytes, el throughput (bps) y la % de utilización frente a
  * la velocidad del enlace. Guarda una muestra por interfaz en `iface_samples`
  * (serie para el reporte) y mantiene una ventana en memoria para el panel en vivo.
  *
  * Estabilidad = link up/down + errores; velocidad = capacidad del enlace;
- * rendimiento = throughput y % de utilización. Fuente única: FortiGate.
+ * rendimiento = throughput y % de utilización. Fuente única: SonicWall.
  */
 import { fetchInterfaces, isFortigateConfigured, type FgInterface } from '../response/fortigate.service';
 import { sendTelegram, isTelegramConfigured } from '../notifications/telegram.service';
@@ -139,13 +139,13 @@ async function notify(text: string): Promise<void> {
 
 export function startNetperfPoller(): void {
   if (!isFortigateConfigured()) {
-    logger.info('netperf: FortiGate no configurado; el sondeo de interfaces no arranca.');
+    logger.info('netperf: SonicWall no configurado; el sondeo de interfaces no arranca.');
     return;
   }
   const tick = () => void pollOnce().then(prune).catch(() => undefined);
   void tick();
   setInterval(tick, POLL_SECONDS * 1000);
-  logger.info({ POLL_SECONDS }, 'netperf: sondeo de interfaces del FortiGate iniciado');
+  logger.info({ POLL_SECONDS }, 'netperf: sondeo de interfaces del SonicWall iniciado');
 }
 
 /** Estado en vivo por interfaz (para el panel). */

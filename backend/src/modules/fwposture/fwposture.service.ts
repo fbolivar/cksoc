@@ -1,5 +1,5 @@
 /**
- * Reporte de postura de seguridad del FortiGate: recolecta (solo lectura) el
+ * Reporte de postura de seguridad del SonicWall: recolecta (solo lectura) el
  * Security Rating nativo + la config, corre checks deterministas de mejores
  * prácticas, y usa la IA (Claude) para redactar/priorizar el informe. La IA NO
  * inventa hallazgos: solo trabaja sobre los datos y checks entregados.
@@ -20,10 +20,10 @@ export interface FwPosture {
   snapshot: FwSnapshot;
 }
 
-const SYSTEM = `Eres un auditor senior de seguridad de firewalls FortiGate. Redactas un informe de POSTURA de seguridad del equipo para un SOC en Colombia.
+const SYSTEM = `Eres un auditor senior de seguridad de firewalls SonicWall. Redactas un informe de POSTURA de seguridad del equipo para un SOC en Colombia.
 
 Reglas estrictas:
-- Usa EXCLUSIVAMENTE los datos que se te entregan (checks, Security Rating de Fortinet y configuración). NO inventes hallazgos, valores ni funciones.
+- Usa EXCLUSIVAMENTE los datos que se te entregan (checks, Security Rating de SonicWall y configuración). NO inventes hallazgos, valores ni funciones.
 - Español, tono de consultor senior, claro y accionable.
 - Cuando cites un problema, explica el RIESGO de negocio y da la REMEDIACIÓN concreta (comando CLI si aplica).
 - No repitas literalmente la tabla de checks; interprétala y prioriza.
@@ -47,7 +47,7 @@ async function analizarIA(snapshot: FwSnapshot, checks: Check[], resumen: Return
     snmp_v1v2c: snapshot.snmpCommunities,
     security_rating_fortinet: srRaw.slice(0, 3500),
   };
-  const user = `Datos de postura del FortiGate (JSON):\n${JSON.stringify(contexto)}`;
+  const user = `Datos de postura del SonicWall (JSON):\n${JSON.stringify(contexto)}`;
   return completarPrompt(SYSTEM, user, 2600);
 }
 

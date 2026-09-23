@@ -118,7 +118,7 @@ export interface SaludTelemetria {
 }
 
 export interface RedData {
-  totalSesiones: number;           // sesiones observadas por el FortiGate (app-ctrl + forward)
+  totalSesiones: number;           // sesiones observadas por el SonicWall (app-ctrl + forward)
   ipsEventos: number;              // eventos IPS del periodo
   volumenBytes: number;            // volumen total (sent+rcvd) del periodo, en bytes
   subtipos: { nombre: string; conteo: number }[];
@@ -179,7 +179,7 @@ export interface TechMetrics {
   bloqueos: BloqueoAplicado[];
   salud: SaludTelemetria;
 
-  // Red / ancho de banda (FortiGate: App Control + tráfico)
+  // Red / ancho de banda (SonicWall: App Control + tráfico)
   red: RedData;
 }
 
@@ -733,12 +733,12 @@ async function saludTelemetria(
 // --------------------------------------------------------------------------
 
 /**
- * Red / ancho de banda: patrones de tráfico + VOLUMEN observados por el FortiGate
+ * Red / ancho de banda: patrones de tráfico + VOLUMEN observados por el SonicWall
  * (App Control + forward) en el periodo — apps por uso y por consumo, categorías,
  * top consumidores (host/destino) y dominios (SNI).
  * Los contadores de bytes (`data.sentbyte`/`rcvdbyte`) son keyword (texto) en el
  * índice, así que se suman con un script en la agregación (esta versión de
- * OpenSearch no soporta runtime_mappings). Solo cuenta lo que el FortiGate
+ * OpenSearch no soporta runtime_mappings). Solo cuenta lo que el SonicWall
  * registró con bytes; para volumen completo hace falta "log all sessions".
  */
 const BYTES_SCRIPT = {
@@ -747,7 +747,7 @@ const BYTES_SCRIPT = {
 };
 
 async function redDelPeriodo(p: Periodo): Promise<RedData> {
-  const forti = [{ match: { 'rule.groups': 'fortigate' } }];
+  const forti = [{ match: { 'rule.groups': 'sonicwall' } }];
   const sesion = [...forti, { terms: { 'data.subtype': ['app-ctrl', 'forward'] } }];
   const vol = { sum: { script: BYTES_SCRIPT } };
   type B = { key: string; doc_count: number };

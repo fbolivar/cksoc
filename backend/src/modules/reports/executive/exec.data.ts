@@ -160,7 +160,7 @@ function minutosEntre(desde: string, hasta: string): number {
 // (es throughput). Las severidades sí, para que el informe cuente la misma verdad.
 function reglasExcluidas(): unknown[] {
   const envIds = env.REPORT_EXCLUDE_RULES.split(',').map((s) => s.trim()).filter(Boolean);
-  const noiseRuleIds = ['81633', '80792', '550', '752', '91578', '100205', '100207', '100700', '5501', '60227', ...envIds]; // Forti app-passed, audit systemd, FIM checksum, registry, O365 MailItemsAccessed, 60227 reconocimiento de periferico (DLP/UEBA, no titular ejecutivo)
+  const noiseRuleIds = ['81633', '80792', '550', '752', '91578', '100205', '100207', '100700', '5501', '60227', ...envIds]; // SonicWall app-passed, audit systemd, FIM checksum, registry, O365 MailItemsAccessed, 60227 reconocimiento de periferico (DLP/UEBA, no titular ejecutivo)
   return [{
     bool: {
       must_not: [

@@ -103,7 +103,7 @@ const schema = z.object({
   // Maximo de origenes a enriquecer con reputacion por consulta (cuota free ~1000/dia).
   ATTACKS_ENRICH_MAX: z.coerce.number().default(60),
 
-  // --- Respuesta semi-automatica (FortiGate) ---
+  // --- Respuesta semi-automatica (SonicWall) ---
   // HOST incluye puerto si no es 443, ej: 192.168.2.1:12443
   FORTIGATE_HOST: z.string().optional(),
   FORTIGATE_API_TOKEN: z.string().optional(),

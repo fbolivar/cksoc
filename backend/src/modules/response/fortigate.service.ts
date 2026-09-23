@@ -1,6 +1,6 @@
 /**
  * Adaptador de firewall -> SonicWall (SonicOS API).
- * Mantiene las MISMAS funciones/shapes que el servicio FortiGate original para que
+ * Mantiene las MISMAS funciones/shapes que el servicio SonicWall original para que
  * todos los modulos (netperf, ndr, fwposture, response, incidents, radar) funcionen
  * sin cambios, pero leyendo/actuando sobre el SonicWall via su API REST.
  */
@@ -147,7 +147,7 @@ export async function unblockIP(ip: string): Promise<void> {
 
 /** GET generico a la API del SonicWall (ruta relativa a /api/sonicos). Solo lectura. */
 export async function fgGet<T = unknown>(path: string): Promise<T> {
-  // Rutas FortiGate legacy (/api/v2/...) -> se reimplementan por modulo (fwposture/ndr).
+  // Rutas SonicWall legacy (/api/v2/...) -> se reimplementan por modulo (fwposture/ndr).
   if (path.includes('/api/v2')) return ({} as T);
   const p = path.startsWith('/api/sonicos') ? path.replace('/api/sonicos', '') : path;
   return swReq<T>('GET', p);

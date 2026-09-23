@@ -49,14 +49,14 @@ function bandOf(risk: number, disconnected: boolean): RiskBand {
 interface AgAgg { key: string; doc_count: number; max: { value: number | null }; crit: { doc_count: number }; high: { doc_count: number } }
 
 /**
- * FortiGate como activo de RED en el radar. No es un agente Wazuh (manda syslog),
+ * SonicWall como activo de RED en el radar. No es un agente Wazuh (manda syslog),
  * así que se construye aparte: riesgo desde sus eventos reales del SIEM (grupo
  * `fortigate`) y estado por heartbeat (¿emitió syslog hace poco?). Si el firewall
  * no está configurado o el indexer no responde, devuelve null (no se inventa).
  */
 async function getFortigateAsset(): Promise<RadarAsset | null> {
   if (!isFortigateConfigured()) return null;
-  const host = (env.FORTIGATE_HOST || '').split(':')[0];
+  const host = (process.env.SONICWALL_API_URL || '').replace(/^https?:\/\//, '').split('/')[0].split(':')[0] || '192.168.20.1';
   try {
     const client = getIndexerClient();
     const { data } = await client.post<{
@@ -65,7 +65,7 @@ async function getFortigateAsset(): Promise<RadarAsset | null> {
     }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
       size: 0,
       track_total_hits: true,
-      query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }, { match: { 'rule.groups': 'fortigate' } }] } },
+      query: { bool: { filter: [{ range: { '@timestamp': { gte: 'now-24h' } } }, { match: { 'rule.groups': 'sonicwall' } }] } },
       aggs: {
         last: { max: { field: '@timestamp' } },
         mx: { max: { field: 'rule.level' } },
@@ -89,9 +89,9 @@ async function getFortigateAsset(): Promise<RadarAsset | null> {
     let risk = Math.round(alertScore + sevScore + blind);
     risk = Math.max(disconnected ? 12 : 2, Math.min(100, risk));
     return {
-      name: 'FW-FortiGate', category: 'net', risk, band: bandOf(risk, disconnected),
+      name: 'FW-SonicWall', category: 'net', risk, band: bandOf(risk, disconnected),
       criticalVulns: 0, highVulns: 0, alerts24h: count, critAlerts: crit, maxLevel: max,
-      status: disconnected ? 'disconnected' : 'active', os: 'FortiOS · firewall perimetral', ip: host,
+      status: disconnected ? 'disconnected' : 'active', os: 'SonicOS · firewall perimetral', ip: host,
     };
   } catch {
     return null; // sin datos del indexer: no se dibuja un punto inventado
@@ -130,7 +130,7 @@ export async function getAssetRadar(): Promise<AssetRadar> {
     for (const b of data.aggregations?.ag?.buckets ?? []) amap.set(b.key, { count: b.doc_count, crit: b.crit.doc_count, high: b.high.doc_count, max: Math.round(b.max.value ?? 0) });
   } catch { /* sin alertas: se degrada a solo vulns/estado */ }
 
-  // FortiGate (activo de red) en paralelo — no es un agente Wazuh.
+  // SonicWall (activo de red) en paralelo — no es un agente Wazuh.
   const fortiP = getFortigateAsset();
 
   const assets: RadarAsset[] = agents.map((a) => {
@@ -153,7 +153,7 @@ export async function getAssetRadar(): Promise<AssetRadar> {
     };
   });
 
-  // Añade el FortiGate (si está) y ordena/recorta el conjunto completo.
+  // Añade el SonicWall (si está) y ordena/recorta el conjunto completo.
   const forti = await fortiP;
   const all = (forti ? [...assets, forti] : assets).sort((x, y) => y.risk - x.risk).slice(0, 300);
 

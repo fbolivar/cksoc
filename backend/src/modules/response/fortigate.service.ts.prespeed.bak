@@ -1,0 +1,146 @@
+/**
+ * Adaptador de firewall -> SonicWall (SonicOS API).
+ * Mantiene las MISMAS funciones/shapes que el servicio FortiGate original para que
+ * todos los modulos (netperf, ndr, fwposture, response, incidents, radar) funcionen
+ * sin cambios, pero leyendo/actuando sobre el SonicWall via su API REST.
+ */
+import https from 'node:https';
+import axios from 'axios';
+import { HttpError } from '../auth/auth.service';
+
+const SW_URL = process.env.SONICWALL_API_URL || 'https://192.168.20.1';
+const SW_USER = process.env.SONICWALL_USER || 'admin';
+const SW_PASS = process.env.SONICWALL_PASS || 'R3dN3tw0rk2026';
+const BLOCK_GROUP = 'HexWatch-Blocked-IPs';
+const agent = new https.Agent({ rejectUnauthorized: false });
+
+let cookie: string | null = null;
+
+async function swAuth(): Promise<void> {
+  const r = await axios.post(`${SW_URL}/api/sonicos/auth`, null, {
+    httpsAgent: agent, timeout: 15000, auth: { username: SW_USER, password: SW_PASS },
+  });
+  const sc = r.headers['set-cookie'];
+  if (sc && sc.length) cookie = sc[0].split(';')[0];
+}
+
+async function swReq<T = any>(method: string, path: string, data?: unknown): Promise<T> {
+  if (!cookie) await swAuth();
+  const doReq = () => axios.request<T>({
+    method, url: `${SW_URL}/api/sonicos${path}`, data, httpsAgent: agent, timeout: 15000,
+    headers: { ...(cookie ? { Cookie: cookie } : {}), 'Content-Type': 'application/json' },
+  });
+  try {
+    return (await doReq()).data;
+  } catch (e: any) {
+    if (e?.response?.status === 401) { await swAuth(); return (await doReq()).data; }
+    throw e;
+  }
+}
+
+/** El firewall (SonicWall) siempre esta disponible via API local. */
+export function isFortigateConfigured(): boolean { return true; }
+
+// ---------- IPs bloqueadas (cuarentena SonicWall) ----------
+export interface BannedEntry { ip: string; name: string; expiresAt: number | null; permanent: boolean }
+
+async function groupMembers(): Promise<string[]> {
+  const d = await swReq<any>('GET', '/address-groups/ipv4');
+  for (const x of d?.address_groups ?? []) {
+    if (x.ipv4?.name === BLOCK_GROUP) return (x.ipv4.address_object?.ipv4 ?? []).map((m: any) => m.name as string);
+  }
+  return [];
+}
+
+export async function listBlocked(): Promise<BannedEntry[]> {
+  try {
+    const names = await groupMembers();
+    return names.filter((n) => n !== 'HexWatch-Block-Seed').map((n) => {
+      const ip = n.replace(/^HXW-Block-/, '');
+      return { ip, name: ip, expiresAt: null, permanent: true };
+    });
+  } catch { return []; }
+}
+
+export async function verifyConnection(): Promise<{ group: string; count: number }> {
+  const b = await listBlocked();
+  return { group: BLOCK_GROUP, count: b.length };
+}
+
+// ---------- Interfaces (para NPM/netperf) ----------
+export interface FgInterface {
+  name: string; alias: string | null; ip: string | null; link: boolean;
+  speedMbps: number; txBytes: number; rxBytes: number; txErrors: number; rxErrors: number;
+}
+
+function speedToMbps(s: unknown): number {
+  const t = String(s ?? '').toLowerCase();
+  if (t.includes('1000') || t.includes('1 gbps') || t.includes('gbps')) return 1000;
+  if (t.includes('100')) return 100;
+  if (t.includes('10')) return 10;
+  return 0;
+}
+function extractIp(cfg: any): string | null {
+  const s = JSON.stringify(cfg ?? {});
+  const m = s.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  return m ? m[1] : null;
+}
+
+export async function fetchInterfaces(): Promise<FgInterface[]> {
+  try {
+    const [stats, cfg] = await Promise.all([
+      swReq<any[]>('GET', '/reporting/interfaces/ipv4/statistics'),
+      swReq<any>('GET', '/interfaces/ipv4'),
+    ]);
+    const cfgMap: Record<string, any> = {};
+    for (const c of cfg?.interfaces ?? []) { const i = c.ipv4; if (i?.name) cfgMap[i.name] = i; }
+    return (stats ?? []).map((s: any) => {
+      const name = s.interface_name;
+      const c = cfgMap[name] ?? {};
+      const active = (Number(s.rx_bytes) > 0 || Number(s.tx_bytes) > 0) && !c.shutdown_port;
+      return {
+        name,
+        alias: c.comment ?? null,
+        ip: extractIp(c.ip_assignment),
+        link: Boolean(active),
+        speedMbps: speedToMbps(c.link_speed),
+        txBytes: Number(s.tx_bytes ?? 0),
+        rxBytes: Number(s.rx_bytes ?? 0),
+        txErrors: Number(s.tx_errors ?? 0),
+        rxErrors: Number(s.rx_errors ?? 0),
+      };
+    });
+  } catch { return []; }
+}
+
+// ---------- Bloqueo / desbloqueo de IPs ----------
+export async function blockIP(ip: string, _expirySeconds?: number): Promise<void> {
+  try {
+    await swAuth(); await swReq('POST', '/config-mode');
+    const nm = `HXW-Block-${ip}`;
+    await swReq('POST', '/address-objects/ipv4', { address_objects: [{ ipv4: { name: nm, zone: 'WAN', host: { ip } } }] });
+    const m = await groupMembers(); m.push(nm);
+    await swReq('PUT', '/address-groups/ipv4', { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: [...new Set(m)].map((n) => ({ name: n })) } } }] });
+    await swReq('POST', '/config/pending');
+  } catch (e: any) { throw new HttpError(502, `No se pudo bloquear la IP en el SonicWall: ${e?.message ?? e}`); }
+}
+
+export async function unblockIP(ip: string): Promise<void> {
+  try {
+    await swAuth(); await swReq('POST', '/config-mode');
+    const nm = `HXW-Block-${ip}`;
+    let m = (await groupMembers()).filter((x) => x !== nm);
+    if (m.length === 0) m = ['HexWatch-Block-Seed'];
+    await swReq('PUT', '/address-groups/ipv4', { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: m.map((n) => ({ name: n })) } } }] });
+    await swReq('DELETE', '/address-objects/ipv4', { address_objects: [{ ipv4: { name: nm } }] });
+    await swReq('POST', '/config/pending');
+  } catch (e: any) { throw new HttpError(502, `No se pudo desbloquear la IP en el SonicWall: ${e?.message ?? e}`); }
+}
+
+/** GET generico a la API del SonicWall (ruta relativa a /api/sonicos). Solo lectura. */
+export async function fgGet<T = unknown>(path: string): Promise<T> {
+  // Rutas FortiGate legacy (/api/v2/...) -> se reimplementan por modulo (fwposture/ndr).
+  if (path.includes('/api/v2')) return ({} as T);
+  const p = path.startsWith('/api/sonicos') ? path.replace('/api/sonicos', '') : path;
+  return swReq<T>('GET', p);
+}

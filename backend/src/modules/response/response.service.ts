@@ -1,6 +1,6 @@
 /**
  * Orquestacion de la respuesta semi-automatica.
- * SIEMPRE: valida lista blanca -> ejecuta en FortiGate -> registra en auditoria.
+ * SIEMPRE: valida lista blanca -> ejecuta en SonicWall -> registra en auditoria.
  * Ninguna accion ocurre sin pasar por aqui.
  */
 import { query } from '../../config/db';
@@ -50,7 +50,7 @@ export async function block(opts: {
    *  usan los bloqueos automáticos (SOAR). El bloqueo MANUAL pasa 0 (permanente). */
   expirySeconds?: number;
 }): Promise<void> {
-  // 1) Validacion de seguridad (lista blanca) — ANTES de tocar el FortiGate
+  // 1) Validacion de seguridad (lista blanca) — ANTES de tocar el SonicWall
   const check = canBlock(opts.ip, opts.adminIp);
   if (!check.allowed) {
     await logAction(opts.ip, 'block', opts.motivo, opts.user, 'rejected', check.reason ?? null, opts.alertaOrigenId);
@@ -79,7 +79,7 @@ export async function unblock(opts: { ip: string; user: ActingUser }): Promise<v
   }
 }
 
-/** Lista las IPs bloqueadas por la app (lee el FortiGate) enriquecidas con auditoria. */
+/** Lista las IPs bloqueadas por la app (lee el SonicWall) enriquecidas con auditoria. */
 export async function listBlocked(): Promise<BlockedItem[]> {
   const blocked = await fgListBlocked();
   const result: BlockedItem[] = [];

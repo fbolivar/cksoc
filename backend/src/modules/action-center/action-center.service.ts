@@ -102,7 +102,7 @@ export async function getActionQueue(): Promise<{ generatedAt: string; total: nu
         subject: inc.ip,
         reason: `${inc.attempts} eventos${score ? `, reputación AbuseIPDB ${score}/100` : ''}${inc.country ? `, ${inc.country}` : ''}. ${inc.ruleDescription || 'Actividad ofensiva'}.`,
         meta: [{ label: 'intentos', value: String(inc.attempts) }, { label: 'reputación', value: String(score) }, { label: 'país', value: inc.country }],
-        actions: [{ kind: 'block_ip', label: 'Bloquear en FortiGate', danger: true, params: { ip: inc.ip } }],
+        actions: [{ kind: 'block_ip', label: 'Bloquear en SonicWall', danger: true, params: { ip: inc.ip } }],
       });
     }
   }

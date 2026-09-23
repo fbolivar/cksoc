@@ -1,6 +1,6 @@
 /**
  * Lista blanca y validaciones de bloqueo (capa de seguridad critica).
- * Se evalua SIEMPRE antes de cualquier accion de bloqueo en el FortiGate.
+ * Se evalua SIEMPRE antes de cualquier accion de bloqueo en el SonicWall.
  *
  * Reglas (en orden):
  *  1. Debe ser una IPv4 valida.

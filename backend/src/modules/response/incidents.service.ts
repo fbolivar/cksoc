@@ -27,7 +27,7 @@ export interface Incident {
   blocked: boolean;
   // Clasificación de amenaza: por qué (o por qué no) es candidato real a bloquear.
   ioc: boolean;          // aparece en el feed de IOCs (malicioso conocido)
-  attack: boolean;       // grupo attack/ids/ips/web del FortiGate/Wazuh
+  attack: boolean;       // grupo attack/ids/ips/web del SonicWall/Wazuh
   threat: boolean;       // hay señal real de amenaza (IOC | attack | nivel alto | mala reputación)
   whitelisted: boolean;  // infraestructura crítica: nunca bloquear
   threatScore: number;
@@ -121,14 +121,14 @@ export async function getIncidents(hours: number, top = 15, threatsOnly = true):
   candidates.sort((a, b) => b.score - a.score || b.b.doc_count - a.b.doc_count);
   candidates = candidates.slice(0, top);
 
-  // Estado de bloqueo actual (lee el FortiGate una sola vez)
+  // Estado de bloqueo actual (lee el SonicWall una sola vez)
   let blockedSet = new Set<string>();
   if (isFortigateConfigured()) {
     try {
       const blocked = await listBlocked();
       blockedSet = new Set(blocked.map((x) => x.ip));
     } catch {
-      /* si el FortiGate no responde, mostramos los incidentes sin estado */
+      /* si el SonicWall no responde, mostramos los incidentes sin estado */
     }
   }
 

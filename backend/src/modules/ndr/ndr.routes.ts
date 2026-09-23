@@ -1,5 +1,5 @@
 /**
- * NDR (visibilidad de red vía FortiGate).
+ * NDR (visibilidad de red vía SonicWall).
  *   GET /api/ndr?range=1h|24h|7d
  */
 import { Router, type Request, type Response } from 'express';

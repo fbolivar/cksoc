@@ -9,7 +9,7 @@ import { geolocate, isPublicIP } from '../geo/geoip.service';
 import { checkReputation, isThreatIntelConfigured } from '../threatintel/abuseipdb.service';
 import { query } from '../../config/db';
 
-// Grupos de regla que denotan un ATAQUE (no tráfico normal): IPS/IDS del FortiGate,
+// Grupos de regla que denotan un ATAQUE (no tráfico normal): IPS/IDS del SonicWall,
 // intrusiones, ataques web. Se usan para el modo "Solo amenazas".
 const ATTACK_GROUPS = ['attack', 'ids', 'intrusion_detection', 'web_attack', 'ips'];
 const THREAT_MIN_LEVEL = 8;

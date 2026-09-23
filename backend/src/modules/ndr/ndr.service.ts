@@ -1,5 +1,5 @@
 /**
- * NDR (Network Detection & Response) sobre la telemetría de red del FortiGate
+ * NDR (Network Detection & Response) sobre la telemetría de red del SonicWall
  * (Application Control / Forward Traffic / IPS) que ya llega a Wazuh por syslog.
  * Da visibilidad de: quién habla con quién (top talkers), dominios/SNI más
  * visitados, aplicaciones, cruce de dominios/IPs con IOCs conocidos, y alertas IPS.
@@ -316,7 +316,7 @@ export async function getNdrOverview(rangeIn: string): Promise<NdrOverview> {
 }
 
 // ==========================================================================
-// VPN en tiempo real (sesiones SSL-VPN activas del FortiGate)
+// VPN en tiempo real (sesiones SSL-VPN activas del SonicWall)
 // ==========================================================================
 export interface VpnSession {
   user: string; group: string; remoteHost: string; aip: string;
@@ -367,7 +367,7 @@ export async function getVpnSessions(): Promise<VpnLive> {
 // ==========================================================================
 // Actividad en Internet por equipo, clasificada por categoría (App Control) +
 // marca de alto riesgo (proxy/anonimizador, acceso remoto, IA generativa, juegos,
-// streaming, redes sociales). Atribución por EQUIPO (el Forti no identifica usuario).
+// streaming, redes sociales). Atribución por EQUIPO (el SonicWall no identifica usuario).
 // ==========================================================================
 // Riesgo por categoria de SonicWall (App Control / CFS). Los nombres de categoria
 // son cadenas libres del firewall; se puntuan por palabras clave para tolerar variantes.

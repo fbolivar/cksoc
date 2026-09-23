@@ -48,7 +48,7 @@ const MAX_WINDOW = 10000; // límite de la ventana from+size de OpenSearch (pagi
 // (medido en vivo: estas 5 reglas = ~1.0M de 1.24M eventos/7d). El texto libre y
 // los filtros por técnica siguen abiertos; el toggle "ver todo" las trae de vuelta.
 const NOISE_RULE_IDS = ['81633', '80792', '550', '752', '91578', '100205', '100207', '100700', '5501'];
-//  81633 Forti "App passed" · 80792 audit systemd · 550 FIM checksum · 752 registry value · 91578 O365 MailItemsAccessed
+//  81633 SonicWall "App passed" · 80792 audit systemd · 550 FIM checksum · 752 registry value · 91578 O365 MailItemsAccessed
 const NOISE_GROUPS = ['sca', 'vulnerability-detector'];
 
 /** Convierte texto libre en wildcards case-insensitive sobre rule.description (que es keyword). */

@@ -1,4 +1,4 @@
-/** Rendimiento de red (NPM): estado en vivo de las interfaces del FortiGate. */
+/** Rendimiento de red (NPM): estado en vivo de las interfaces del SonicWall. */
 import { Router, type Request, type Response } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { getInterfacesLive } from './netperf.service';

@@ -1,4 +1,4 @@
-/** Plantilla HTML del reporte de postura del FortiGate (vista previa + PDF A4). */
+/** Plantilla HTML del reporte de postura del SonicWall (vista previa + PDF A4). */
 import type { FwPosture } from './fwposture.service';
 import type { Check, Estado, Sev } from './fwposture.checks';
 
@@ -83,7 +83,7 @@ export function buildFwPostureHtml(p: FwPosture): string {
   <div class="head">
     <div>
       <h1>Postura de Seguridad · Firewall</h1>
-      <div class="sub">${esc(d.hostname)}${d.model ? ` · ${esc(d.model)}` : ''}${d.version ? ` · FortiOS ${esc(d.version)}` : ''}${d.serial ? ` · ${esc(d.serial)}` : ''}</div>
+      <div class="sub">${esc(d.hostname)}${d.model ? ` · ${esc(d.model)}` : ''}${d.version ? ` · SonicOS ${esc(d.version)}` : ''}${d.serial ? ` · ${esc(d.serial)}` : ''}</div>
     </div>
     <div class="badge"><div class="g" style="color:${color}">${g}</div><div class="s">${p.resumen.score}/100</div></div>
   </div>
@@ -96,7 +96,7 @@ export function buildFwPostureHtml(p: FwPosture): string {
   </div>
 
   <h2>Análisis del auditor</h2>
-  ${p.ia ? `<div class="ia">${richText(p.ia)}</div>` : `<div class="ia meta">Análisis con IA no disponible (Copiloto sin configurar). El informe presenta los checks deterministas y el Security Rating de Fortinet.</div>`}
+  ${p.ia ? `<div class="ia">${richText(p.ia)}</div>` : `<div class="ia meta">Análisis con IA no disponible (Copiloto sin configurar). El informe presenta los checks deterministas y el Security Rating de SonicWall.</div>`}
 
   <h2>Controles evaluados (${p.checks.length})</h2>
   <table>
@@ -108,8 +108,8 @@ export function buildFwPostureHtml(p: FwPosture): string {
     <tbody>${checks.map(checkRow).join('')}</tbody>
   </table>
 
-  <p class="meta" style="margin-top:12px">Controles alineados a las mejores prácticas de hardening de FortiGate (CIS FortiGate). El puntaje pondera conformes (100%) y a-revisar (50%) sobre los controles evaluables. Complementa —no reemplaza— el Security Rating nativo de Fortinet.</p>
+  <p class="meta" style="margin-top:12px">Controles alineados a las mejores prácticas de hardening de SonicWall (hardening SonicWall). El puntaje pondera conformes (100%) y a-revisar (50%) sobre los controles evaluables. Complementa —no reemplaza— el Security Rating nativo de SonicWall.</p>
 
-  <div class="foot">Generado por HexWatch · ${esc(fecha)} · Datos leídos en solo-lectura de la API del FortiGate. No se incluyen secretos (contraseñas, llaves).</div>
+  <div class="foot">Generado por HexWatch · ${esc(fecha)} · Datos leídos en solo-lectura de la API del SonicWall. No se incluyen secretos (contraseñas, llaves).</div>
 </div></body></html>`;
 }

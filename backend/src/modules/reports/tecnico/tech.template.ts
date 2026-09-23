@@ -677,12 +677,12 @@ function seccionRed(m: TechMetrics): string {
   const r = m.red;
   if (!r || r.totalSesiones === 0) {
     return nota(
-      'No se observaron sesiones de red en el periodo. El FortiGate es la fuente de red; ' +
+      'No se observaron sesiones de red en el periodo. El SonicWall es la fuente de red; ' +
       'para poblar esta sección debe estar activo el App Control y el registro de sesiones en sus políticas.'
     );
   }
   let out = rich(
-    'Tráfico observado por el FortiGate (App Control y reenvío) durante el periodo: patrones de uso ' +
+    'Tráfico observado por el SonicWall (App Control y reenvío) durante el periodo: patrones de uso ' +
     '(por número de sesiones) y consumo de ancho de banda (por volumen en bytes registrado en las sesiones).', 11
   );
   out += kpiGrid([
@@ -706,10 +706,10 @@ function seccionRed(m: TechMetrics): string {
       ]),
       { anchos: ['20%', '18%', '15%', '15%', '16%', '16%'] }
     );
-    out += nota('Disponibilidad = % de muestras con el enlace activo (estabilidad). La utilización es frente a la velocidad del enlace. Muestreo cada 60 s desde el FortiGate.');
+    out += nota('Disponibilidad = % de muestras con el enlace activo (estabilidad). La utilización es frente a la velocidad del enlace. Muestreo cada 60 s desde el SonicWall.');
   } else {
     out += h3('Utilización y estabilidad de los enlaces');
-    out += nota('El monitoreo de interfaces (NPM) se activó recientemente; las estadísticas de utilización por enlace aparecerán a medida que se acumulen muestras del periodo (sondeo cada 60 s al FortiGate).');
+    out += nota('El monitoreo de interfaces (NPM) se activó recientemente; las estadísticas de utilización por enlace aparecerán a medida que se acumulen muestras del periodo (sondeo cada 60 s al SonicWall).');
   }
 
   if (r.topTalkers.length) {
@@ -761,7 +761,7 @@ function seccionRed(m: TechMetrics): string {
     );
   }
   out += nota(
-    'El volumen es el que el FortiGate registró en las sesiones (enviado+recibido); refleja el tráfico ' +
+    'El volumen es el que el SonicWall registró en las sesiones (enviado+recibido); refleja el tráfico ' +
     'con logging de sesión activo, no necesariamente el 100 % del enlace. Los dominios provienen del SNI ' +
     'del App Control (los equipos usan DNS cifrado, por lo que el filtro DNS no los registra).'
   );

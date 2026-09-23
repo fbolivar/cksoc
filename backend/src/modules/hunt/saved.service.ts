@@ -93,7 +93,7 @@ async function due(): Promise<SavedHunt[]> {
 }
 
 // -------------------- Biblioteca de hipótesis de caza (semilla) --------------------
-// Cacerías curadas para un entorno Windows + M365 + FortiGate, mapeadas a ATT&CK.
+// Cacerías curadas para un entorno Windows + M365 + SonicWall, mapeadas a ATT&CK.
 // Se siembran una sola vez (idempotente por nombre); arrancan con alerta apagada
 // para no generar ruido — el analista activa las que quiera como detección permanente.
 // Las que usan `mitre`/`q` de una técnica concreta corren en crudo (sin lente señal).

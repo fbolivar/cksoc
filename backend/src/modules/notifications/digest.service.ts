@@ -26,7 +26,7 @@ interface DigestData {
 // Ruido benigno consistente con los dashboards: sin esto el digest diario a Telegram
 // lo encabeza "Integrity checksum changed ×17.423" (FIM 550) y sepulta la señal real.
 const DIGEST_NOISE: unknown[] = [
-  { terms: { 'rule.id': ['81633', '80792', '550', '752', '91578', '100205', '100207', '100700', '5501'] } }, // Forti app-passed, audit systemd, FIM checksum, registry, O365 MailItemsAccessed
+  { terms: { 'rule.id': ['81633', '80792', '550', '752', '91578', '100205', '100207', '100700', '5501'] } }, // SonicWall app-passed, audit systemd, FIM checksum, registry, O365 MailItemsAccessed
   { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
   // 100600 benigno (exfil interna/DVR/relays HexDesk). El externo real se conserva.
   {

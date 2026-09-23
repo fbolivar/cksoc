@@ -1,5 +1,5 @@
 /**
- * Reporte de postura del FortiGate.
+ * Reporte de postura del SonicWall.
  *   GET /api/fwposture/preview  HTML del informe (admin|analista)
  *   GET /api/fwposture/pdf      PDF del informe (admin|analista)
  */
@@ -17,7 +17,7 @@ fwpostureRouter.use(authenticate);
 const canRun = requireRole('admin', 'analista');
 
 fwpostureRouter.get('/preview', canRun, async (req: Request, res: Response) => {
-  if (!isFortigateConfigured()) { res.status(503).json({ error: 'FortiGate no configurado' }); return; }
+  if (!isFortigateConfigured()) { res.status(503).json({ error: 'SonicWall no configurado' }); return; }
   try {
     const { posture, html } = await generateFwPostureHtml();
     void auditFromReq(req, { actorId: req.user?.id, actorEmail: req.user?.email, action: 'fwposture_generate', target: posture.device.hostname, result: 'ok', detail: { score: posture.resumen.score, fail: posture.resumen.fail } });
@@ -28,7 +28,7 @@ fwpostureRouter.get('/preview', canRun, async (req: Request, res: Response) => {
 });
 
 fwpostureRouter.get('/pdf', canRun, async (req: Request, res: Response) => {
-  if (!isFortigateConfigured()) { res.status(503).json({ error: 'FortiGate no configurado' }); return; }
+  if (!isFortigateConfigured()) { res.status(503).json({ error: 'SonicWall no configurado' }); return; }
   try {
     const { posture, html } = await generateFwPostureHtml();
     const pdf = await htmlToPdf(html);
