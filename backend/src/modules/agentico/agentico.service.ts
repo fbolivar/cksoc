@@ -22,8 +22,40 @@ import { sendTelegram, isTelegramConfigured } from '../notifications/telegram.se
 import { completarPrompt, isConfigured as isCopilotConfigured } from '../copilot/copilot.service';
 import { listAnomalies } from '../ueba/ueba.service';
 import { getIndexerClient } from '../wazuh/wazuh.client';
+import { updateIncident } from '../incidents/incidents.service';
+import { isWhitelisted } from '../response/whitelist';
+import { isPublicIP } from '../geo/geoip.service';
 
 const CHAT_IDS = (env.TELEGRAM_CHAT_ID || '').split(',').map((s) => s.trim()).filter(Boolean);
+
+// --- Deteccion de origen benigno (para resolver incidentes-FP automaticamente) ---
+const BENIGN_CIDRS = [
+  ...(env.ATTACKS_EXCLUDE_CIDRS || '').split(',').map((s) => s.trim()).filter(Boolean),
+  '13.107.0.0/16', '40.92.0.0/14', '40.107.0.0/16', '52.100.0.0/14', '104.47.0.0/16', // Microsoft 365 / EOP
+  '104.16.0.0/12', '172.64.0.0/13', '131.0.72.0/22', // Cloudflare
+  '100.64.0.0/10', // CGNAT
+];
+const BENIGN_IPS = new Set((env.ATTACKS_EXCLUDE_IPS || '').split(',').map((s) => s.trim()).filter(Boolean));
+function ipToLong(ip: string): number | null {
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return null;
+  return (((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3]) >>> 0;
+}
+function inCidr(ip: string, cidr: string): boolean {
+  const [net, bitsRaw] = cidr.split('/'); const bits = Number(bitsRaw);
+  const ipL = ipToLong(ip), netL = ipToLong(net);
+  if (ipL === null || netL === null || !(bits >= 0 && bits <= 32)) return false;
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+  return (ipL & mask) === (netL & mask);
+}
+/** IP benigna (no es un atacante real): interna, lista blanca, propia WAN, CDN o SaaS conocido. */
+function benignIp(ip: string): boolean {
+  if (!ip) return true;
+  if (!isPublicIP(ip)) return true;
+  if (isWhitelisted(ip)) return true;
+  if (BENIGN_IPS.has(ip)) return true;
+  return BENIGN_CIDRS.some((c) => inCidr(ip, c));
+}
 
 interface AccionBloqueo {
   ip: string;
@@ -47,6 +79,7 @@ export interface AgenticoSummary {
   yaBloqueadas: number;
   acciones: AccionBloqueo[];
   incidentesReconocidos: number;
+  incidentesResueltos: number;
   autoblock: boolean;
   telegram: 'enviado' | 'omitido' | 'error';
   mensaje: string;
@@ -151,6 +184,28 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
     }
   }
 
+  // ---------- 2b) RECONCILIACIÓN DE INCIDENTES (evita SLA de resolución vencidos) ----------
+  // Los incidentes [SOAR] de "ataque sostenido" son conexiones que el firewall YA dropeó en
+  // el perímetro. Se resuelven solos: FALSO POSITIVO si el origen es benigno (M365/CDN/interno),
+  // o VERDADERO POSITIVO (contenido) si es externo real. NO se tocan los que un analista tenga
+  // asignados ni los manuales — solo los [SOAR] abiertos y sin asignar.
+  let resueltosFP = 0, resueltosVP = 0;
+  if (!dryRun && actor.id) {
+    const abiertos = await query<{ id: string; ip: string | null }>(
+      `SELECT id, source->>'ip' AS ip FROM incidents
+        WHERE status = 'abierto' AND assignee_id IS NULL AND title LIKE '[SOAR]%'`
+    ).catch(() => [] as { id: string; ip: string | null }[]);
+    for (const inc of abiertos) {
+      const benigno = benignIp(inc.ip ?? '');
+      try {
+        await updateIncident(inc.id, { status: 'resuelto', disposition: benigno ? 'falso_positivo' : 'verdadero_positivo' }, actor.id);
+        if (benigno) resueltosFP++; else resueltosVP++;
+      } catch (err) {
+        logger.warn({ err: err instanceof Error ? err.message : err, inc: inc.id }, 'Agentico: no se pudo resolver incidente');
+      }
+    }
+  }
+
   // ---------- 3) COMUNICACIÓN ----------
   const ahora = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' });
   const lectura = await narrativa({
@@ -187,6 +242,7 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
       else { L.push(`• ❌ ${a.ip} (${a.pais}): no se pudo aplicar${a.detalle ? ` (${a.detalle})` : ''}`); }
     }
     if (incidentesReconocidos) L.push(`• 📌 Dejamos reconocidos ${incidentesReconocidos} incidente(s) cuyo atacante ya quedó contenido.`);
+    if (resueltosFP + resueltosVP > 0) L.push(`• 🧾 Resolvimos ${resueltosFP + resueltosVP} incidente(s) de ataque ya contenidos por el firewall (${resueltosVP} reales · ${resueltosFP} falsos positivos), para mantener el SLA al día.`);
   } else if (acciones.length) {
     L.push('🛡️ Revisamos a los posibles atacantes y, por prudencia, este turno no bloqueamos ninguno:');
     for (const a of acciones) L.push(`• ⚠️ ${a.ip} (${a.pais})${a.detalle ? ` — ${a.detalle}` : ''}`);
@@ -229,7 +285,7 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
     ranAt: new Date().toISOString(), dryRun, ventanaHoras: lookback,
     amenazasActivas: threats.length, eventos30m, criticas30m, criticas6h,
     incAbiertos, incCriticosAbiertos, uebaAbiertas: uebaOpen.length,
-    yaBloqueadas: blockedList.length, acciones, incidentesReconocidos,
+    yaBloqueadas: blockedList.length, acciones, incidentesReconocidos, incidentesResueltos: resueltosFP + resueltosVP,
     autoblock: env.AGENTICO_AUTOBLOCK, telegram, mensaje,
   };
 }
