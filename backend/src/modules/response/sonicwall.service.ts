@@ -14,12 +14,21 @@ export interface BannedEntry { ip: string; name: string; expiresAt: number | nul
 
 export function isFortigateConfigured(): boolean { return true; }
 
+function checkHelper(stdout: string): void {
+  let r: { ok?: boolean; deferred?: boolean; reason?: string } = {};
+  try { r = JSON.parse(stdout || '{}'); } catch { /* salida no-JSON */ }
+  if (r.deferred) throw new Error(r.reason || 'accion diferida: hay configuracion pendiente de otro admin en el firewall');
+  if (r.ok === false) throw new Error('el firewall no confirmo la accion');
+}
+
 export async function blockIP(ip: string, _expirySeconds?: number): Promise<void> {
-  await run('python3', [HELPER, 'block', ip], { timeout: 30000 });
+  const { stdout } = await run('python3', [HELPER, 'block', ip], { timeout: 30000 });
+  checkHelper(stdout);
 }
 
 export async function unblockIP(ip: string): Promise<void> {
-  await run('python3', [HELPER, 'unblock', ip], { timeout: 30000 });
+  const { stdout } = await run('python3', [HELPER, 'unblock', ip], { timeout: 30000 });
+  checkHelper(stdout);
 }
 
 export async function listBlocked(): Promise<BannedEntry[]> {

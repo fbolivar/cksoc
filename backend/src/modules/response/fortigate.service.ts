@@ -122,24 +122,32 @@ export async function fetchInterfaces(): Promise<FgInterface[]> {
 }
 
 // ---------- Bloqueo / desbloqueo de IPs ----------
+async function swPendingDirty(): Promise<boolean> {
+  try { const d = await swReq('GET', '/config/pending'); return !!d && typeof d === 'object' && Object.keys(d).length > 0; }
+  catch { return false; }
+}
 export async function blockIP(ip: string, _expirySeconds?: number): Promise<void> {
   try {
-    await swAuth(); await swReq('POST', '/config-mode');
+    await swAuth();
+    if (await swPendingDirty()) throw new HttpError(409, 'Config pendiente de otro admin; bloqueo diferido para no pisar cambios');
+    await swReq('POST', '/config-mode');
     const nm = `HXW-Block-${ip}`;
     await swReq('POST', '/address-objects/ipv4', { address_objects: [{ ipv4: { name: nm, zone: 'WAN', host: { ip } } }] });
     const m = await groupMembers(); m.push(nm);
-    await swReq('PUT', '/address-groups/ipv4', { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: [...new Set(m)].map((n) => ({ name: n })) } } }] });
+    await swReq('PUT', `/address-groups/ipv4/name/${BLOCK_GROUP}`, { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: [...new Set(m)].map((n) => ({ name: n })) } } }] });
     await swReq('POST', '/config/pending');
   } catch (e: any) { throw new HttpError(502, `No se pudo bloquear la IP en el SonicWall: ${e?.message ?? e}`); }
 }
 
 export async function unblockIP(ip: string): Promise<void> {
   try {
-    await swAuth(); await swReq('POST', '/config-mode');
+    await swAuth();
+    if (await swPendingDirty()) throw new HttpError(409, 'Config pendiente de otro admin; desbloqueo diferido');
+    await swReq('POST', '/config-mode');
     const nm = `HXW-Block-${ip}`;
     let m = (await groupMembers()).filter((x) => x !== nm);
     if (m.length === 0) m = ['HexWatch-Block-Seed'];
-    await swReq('PUT', '/address-groups/ipv4', { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: m.map((n) => ({ name: n })) } } }] });
+    await swReq('PUT', `/address-groups/ipv4/name/${BLOCK_GROUP}`, { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: m.map((n) => ({ name: n })) } } }] });
     await swReq('DELETE', '/address-objects/ipv4', { address_objects: [{ ipv4: { name: nm } }] });
     await swReq('POST', '/config/pending');
   } catch (e: any) { throw new HttpError(502, `No se pudo desbloquear la IP en el SonicWall: ${e?.message ?? e}`); }
