@@ -36,13 +36,11 @@ def call(method, path, body=None, auth=False):
         return e.code, e.read().decode()
 
 def login(): call("POST", "/auth", auth=True)
-def cfg():   call("POST", "/config-mode")
+def cfg():
+    st, r = call("POST", "/config-mode")
+    try: return r["status"]["info"][0].get("read_only", "No")
+    except Exception: return "No"
 def commit(): return call("POST", "/config/pending")
-
-def pending_dirty():
-    """True si hay cambios de configuracion pendientes (de otro admin) sin confirmar."""
-    st, d = call("GET", "/config/pending")
-    return isinstance(d, (dict, list)) and bool(d)
 
 def get_group_members():
     st, d = call("GET", "/address-groups/ipv4/name/" + GROUP)
@@ -57,9 +55,8 @@ def set_group(names):
 
 def block(ip, reason=""):
     login()
-    if pending_dirty():
-        print(json.dumps({"action":"block","ip":ip,"ok":False,"deferred":True,"reason":"config pendiente de otro admin; bloqueo diferido para no pisar cambios"})); return
-    cfg()
+    if cfg() == "Yes":
+        print(json.dumps({"action":"block","ip":ip,"ok":False,"deferred":True,"reason":"otro admin tiene el config-mode (read-only); bloqueo diferido para no interrumpir"})); return
     name = f"HXW-Block-{ip}"
     call("POST", "/address-objects/ipv4", {"address_objects":[{"ipv4":{"name":name,"zone":"WAN","host":{"ip":ip},"comment":reason[:120]}}]})
     members = get_group_members(); members.append(name)
@@ -69,9 +66,8 @@ def block(ip, reason=""):
 
 def unblock(ip):
     login()
-    if pending_dirty():
-        print(json.dumps({"action":"unblock","ip":ip,"ok":False,"deferred":True,"reason":"config pendiente de otro admin; desbloqueo diferido"})); return
-    cfg()
+    if cfg() == "Yes":
+        print(json.dumps({"action":"unblock","ip":ip,"ok":False,"deferred":True,"reason":"otro admin tiene el config-mode (read-only); desbloqueo diferido"})); return
     name = f"HXW-Block-{ip}"
     members = [m for m in get_group_members() if m != name]
     if not members: members = ["HexWatch-Block-Seed"]
