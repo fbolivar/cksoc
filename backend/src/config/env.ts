@@ -92,6 +92,10 @@ const schema = z.object({
   // Por defecto: IP WAN del propio cliente + CDNs/SaaS que el firewall loguea como ruido.
   ATTACKS_EXCLUDE_IPS: z.string().default('190.26.210.18'),
   ATTACKS_EXCLUDE_CIDRS: z.string().default('199.232.0.0/16,146.75.0.0/16,57.144.0.0/14,157.240.0.0/16,31.13.24.0/21'),
+  // Egresos confiables para el indicador de logins foráneos de O365 (VPN/relay corporativos o
+  // personales que geolocalizan fuera de CO). IPv4 CIDR (a.b.c.d/n), IPv4 exacta o prefijo IPv6
+  // (p.ej. 2a04:4a43:84ef:ff06:). Un login foráneo desde estos NO se cuenta como sospechoso.
+  O365_TRUSTED_EGRESS_CIDRS: z.string().default(''),
 
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),

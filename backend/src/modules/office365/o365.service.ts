@@ -13,6 +13,36 @@ import { query } from '../../config/db';
 const RANGE: Record<string, string> = { '12h': 'now-12h', '24h': 'now-24h', '7d': 'now-7d', '30d': 'now-30d' };
 const O365_FILTER = { bool: { should: [{ match: { 'rule.groups': 'office365' } }, { exists: { field: 'data.office365' } }], minimum_should_match: 1 } };
 
+// --- Egresos confiables (VPN/relay) para NO contar como login foráneo sospechoso ---
+const TRUSTED_IPS = new Set((env.ATTACKS_EXCLUDE_IPS || '').split(',').map((x) => x.trim()).filter(Boolean));
+const TRUSTED_V4_CIDRS = (env.ATTACKS_EXCLUDE_CIDRS || '').split(',').map((x) => x.trim()).filter((c) => c.includes('/') && !c.includes(':'));
+const TRUSTED_EGRESS = (env.O365_TRUSTED_EGRESS_CIDRS || '').split(',').map((x) => x.trim()).filter(Boolean);
+function ipToLong(ip: string): number | null {
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return null;
+  return (((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3]) >>> 0;
+}
+function inV4Cidr(ip: string, cidr: string): boolean {
+  const [net, bitsRaw] = cidr.split('/'); const bits = Number(bitsRaw);
+  const ipL = ipToLong(ip), netL = ipToLong(net);
+  if (ipL === null || netL === null || !(bits >= 0 && bits <= 32)) return false;
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+  return (ipL & mask) === (netL & mask);
+}
+/** IP que corresponde a un egreso confiable conocido (VPN/relay corporativo o personal). */
+function isTrustedEgress(ip: string): boolean {
+  if (TRUSTED_IPS.has(ip)) return true;
+  const low = ip.toLowerCase();
+  for (const e of TRUSTED_EGRESS) {
+    const el = e.toLowerCase();
+    if (el.includes(':')) { const pre = el.replace(/\/\d+$/, '').replace(/::$/, ':'); if (low.startsWith(pre)) return true; }
+    else if (el.includes('/')) { if (inV4Cidr(ip, el)) return true; }
+    else if (low === el) return true;
+  }
+  for (const c of TRUSTED_V4_CIDRS) if (inV4Cidr(ip, c)) return true;
+  return false;
+}
+
 export interface NamedCount { key: string; count: number; country?: string; system?: boolean }
 
 /** Identidad de sistema/anónima de Microsoft (SharePoint/OneDrive), no una persona real. */
@@ -145,6 +175,7 @@ async function computeRisks(base: object[]): Promise<O365Risks> {
     let events = 0;
     for (const b of u.ip?.buckets ?? []) {
       if (!isPublicIP(b.key)) continue;
+      if (isTrustedEgress(b.key)) continue; // VPN/relay corporativo o personal conocido -> no es foráneo sospechoso
       const g = geolocate(b.key);
       const iso = g?.isoCode || '';
       if (iso && iso !== HOME_COUNTRY_ISO) { countries.add(g?.country || iso); events += b.doc_count; }
@@ -153,7 +184,7 @@ async function computeRisks(base: object[]): Promise<O365Risks> {
   }
   foreignUsers.sort((a, b) => b.count - a.count);
   push('foreign_login', 'Usuarios con inicio de sesión desde el exterior', 'alta',
-    `Personas distintas que iniciaron sesión con éxito desde fuera de Colombia (excluye refrescos de token y eventos de servicio). Verificar si viajan o usan VPN antes de tratarlo como compromiso.`,
+    `Personas distintas que iniciaron sesión con éxito desde fuera de Colombia (excluye refrescos de token, eventos de servicio y egresos VPN/relay confiables). Verificar si viajan o usan VPN antes de tratarlo como compromiso.`,
     foreignUsers.length, foreignUsers);
 
   const failB = ag.fails?.by?.buckets ?? [];
