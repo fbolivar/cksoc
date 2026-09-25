@@ -111,11 +111,15 @@ async function computeRisks(base: object[]): Promise<O365Risks> {
       dl: { filter: { terms: { 'data.office365.Operation': ['FileDownloaded', 'FileSyncDownloadedFull'] } },
         aggs: { by: { terms: { field: 'data.office365.UserId', size: 20, min_doc_count: MASS_DOWNLOAD } } } },
       // Logins exitosos por IP (para clasificar por país y detectar orígenes foráneos)
-      logins: { filter: { term: { 'data.office365.Operation': 'UserLoggedIn' } },
-        aggs: { ip: { terms: { field: 'data.office365.ClientIP', size: 300 } } } },
+      // Logins exitosos: agrupados por USUARIO real (excluye eventos sin usuario, que son
+      // refrescos de token / autenticaciones de servicio y no representan un acceso humano).
+      logins: { filter: { bool: { must: [{ term: { 'data.office365.Operation': 'UserLoggedIn' } }],
+          must_not: [{ term: { 'data.office365.UserId': 'Not Available' } }] } },
+        aggs: { u: { terms: { field: 'data.office365.UserId', size: 200 },
+          aggs: { ip: { terms: { field: 'data.office365.ClientIP', size: 20 } } } } } },
     },
   });
-  type Sub = { doc_count?: number; by?: { buckets: TermB[] }; ip?: { buckets: TermB[] } };
+  type Sub = { doc_count?: number; by?: { buckets: TermB[] }; ip?: { buckets: TermB[] }; u?: { buckets: Array<TermB & { ip?: { buckets: TermB[] } }> } };
   const ag = (r.aggregations ?? {}) as Record<string, Sub>;
   const items: O365Risk[] = [];
 
@@ -128,22 +132,29 @@ async function computeRisks(base: object[]): Promise<O365Risks> {
     'Un buzón comprometido suele crear una regla que reenvía la correspondencia a un buzón externo del atacante.',
     ag.forward?.doc_count ?? 0, fwdB.map((b) => ({ label: b.key, count: b.doc_count })));
 
-  // Logins foráneos: agrupa IPs de login por país; cualquier país != CO es sospechoso.
-  const byCountry: Record<string, number> = {};
-  for (const b of ag.logins?.ip?.buckets ?? []) {
-    if (!isPublicIP(b.key)) continue;
-    const g = geolocate(b.key);
-    const iso = g?.isoCode || '';
-    if (iso && iso !== HOME_COUNTRY_ISO) {
-      const name = g?.country || iso;
-      byCountry[name] = (byCountry[name] || 0) + b.doc_count;
+  // Logins foráneos: cuenta USUARIOS DISTINTOS con inicio de sesión interactivo desde otro país.
+  // Un mismo usuario/red genera decenas de eventos UserLoggedIn (refrescos de token), por eso se
+  // cuentan personas, no eventos, igual que los demás indicadores. Ya se excluyeron los eventos
+  // sin usuario ("Not Available") en la agregación. NO es prueba de compromiso por sí solo:
+  // viajes, VPN o Apple Private Relay geolocalizan fuera de Colombia — se debe verificar.
+  const foreignUsers: O365RiskDetail[] = [];
+  for (const u of ag.logins?.u?.buckets ?? []) {
+    const user = String(u.key);
+    if (!user.includes('@')) continue; // solo cuentas reales (UPN)
+    const countries = new Set<string>();
+    let events = 0;
+    for (const b of u.ip?.buckets ?? []) {
+      if (!isPublicIP(b.key)) continue;
+      const g = geolocate(b.key);
+      const iso = g?.isoCode || '';
+      if (iso && iso !== HOME_COUNTRY_ISO) { countries.add(g?.country || iso); events += b.doc_count; }
     }
+    if (countries.size) foreignUsers.push({ label: `${user.split('@')[0]} · ${[...countries].join(', ')}`, count: events });
   }
-  const foreign = Object.entries(byCountry).sort((a, b) => b[1] - a[1]);
-  const foreignTotal = foreign.reduce((s, [, v]) => s + v, 0);
-  push('foreign_login', 'Inicios de sesión desde el exterior', 'alta',
-    `La operación es en Colombia; un inicio de sesión exitoso desde otro país sugiere una cuenta comprometida.`,
-    foreignTotal, foreign.map(([k, v]) => ({ label: k, count: v })));
+  foreignUsers.sort((a, b) => b.count - a.count);
+  push('foreign_login', 'Usuarios con inicio de sesión desde el exterior', 'alta',
+    `Personas distintas que iniciaron sesión con éxito desde fuera de Colombia (excluye refrescos de token y eventos de servicio). Verificar si viajan o usan VPN antes de tratarlo como compromiso.`,
+    foreignUsers.length, foreignUsers);
 
   const failB = ag.fails?.by?.buckets ?? [];
   push('login_failed_spike', 'Ráfaga de fallos de inicio de sesión', 'alta',
