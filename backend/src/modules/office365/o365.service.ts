@@ -8,6 +8,7 @@
 import { getIndexerClient } from '../wazuh/wazuh.client';
 import { env } from '../../config/env';
 import { geolocate, isPublicIP } from '../geo/geoip.service';
+import { query } from '../../config/db';
 
 const RANGE: Record<string, string> = { '12h': 'now-12h', '24h': 'now-24h', '7d': 'now-7d', '30d': 'now-30d' };
 const O365_FILTER = { bool: { should: [{ match: { 'rule.groups': 'office365' } }, { exists: { field: 'data.office365' } }], minimum_should_match: 1 } };
@@ -245,4 +246,57 @@ export async function getO365Overview(rangeIn: string): Promise<O365Overview> {
     fileTopUsers: (fa.aggregations?.dusers?.buckets ?? []).map((b) => ({ key: b.key, count: b.doc_count })),
     generatedAt: new Date().toISOString(),
   };
+}
+
+
+// --- Correlación: credenciales EXPUESTAS (HIBP/credexp) que están BAJO ATAQUE en O365 ---
+// Une el módulo de exposición de credenciales con los logins de Office 365.
+// Cuenta filtrada + fallos = credential stuffing activo. Si hubo login EXITOSO desde el
+// EXTERIOR (fuera del país de operación) => CRÍTICO (posible compromiso).
+export interface ExposedUnderAttack {
+  email: string;
+  breaches: number;
+  breachNames: string[];
+  failedLogins: number;
+  successfulLogins: number;
+  foreignSuccessIps: string[];
+  lastFail: string | null;
+  riesgo: 'critico' | 'alto' | 'medio';
+}
+
+export async function getExposedUnderAttack(rangeIn = '7d'): Promise<ExposedUnderAttack[]> {
+  const gte = RANGE[rangeIn] ?? 'now-7d';
+  const exposed = await query<{ email: string; num_brechas: number; brechas: string[] }>(
+    `SELECT (alias || '@' || domain) AS email, num_brechas, brechas
+       FROM credexp_accounts WHERE estado <> 'dismissed'`
+  ).catch(() => [] as { email: string; num_brechas: number; brechas: string[] }[]);
+  if (!exposed.length) return [];
+  const expMap = new Map(exposed.map((e) => [e.email.toLowerCase(), e]));
+  const client = getIndexerClient();
+  const { data: fd } = await client.post<{ aggregations: { u: { buckets: { key: string; doc_count: number; last: { value_as_string?: string } }[] } } }>(
+    `/${env.WAZUH_ALERTS_INDEX}/_search`,
+    { size: 0, query: { bool: { filter: [{ term: { 'data.office365.Operation': 'UserLoginFailed' } }, { range: { timestamp: { gte } } }] } },
+      aggs: { u: { terms: { field: 'data.office365.UserId', size: 300 }, aggs: { last: { max: { field: 'timestamp' } } } } } });
+  const failMap = new Map((fd.aggregations?.u?.buckets ?? []).map((b) => [String(b.key).toLowerCase(), b]));
+  const okResp = await client.post<{ aggregations: { u: { buckets: { key: string; doc_count: number; ips: { buckets: { key: string }[] } }[] } } }>(
+    `/${env.WAZUH_ALERTS_INDEX}/_search`,
+    { size: 0, query: { bool: { filter: [{ term: { 'data.office365.Operation': 'UserLoggedIn' } }, { range: { timestamp: { gte } } }] } },
+      aggs: { u: { terms: { field: 'data.office365.UserId', size: 300 }, aggs: { ips: { terms: { field: 'data.office365.ActorIpAddress', size: 15 } } } } } }).catch(() => ({ data: { aggregations: { u: { buckets: [] } } } }));
+  const okMap = new Map((okResp.data.aggregations?.u?.buckets ?? []).map((b) => [String(b.key).toLowerCase(), { count: b.doc_count, ips: (b.ips?.buckets ?? []).map((x) => x.key) }]));
+  const out: ExposedUnderAttack[] = [];
+  for (const [email, exp] of expMap) {
+    const f = failMap.get(email);
+    if (!f || !f.doc_count) continue;
+    const ok = okMap.get(email);
+    const foreignIps = (ok?.ips ?? []).filter((ip) => { const g = geolocate(ip); return isPublicIP(ip) && g && g.isoCode !== HOME_COUNTRY_ISO; });
+    const riesgo: ExposedUnderAttack['riesgo'] = foreignIps.length ? 'critico' : (f.doc_count >= 100 || (exp.num_brechas ?? 0) >= 5) ? 'alto' : 'medio';
+    out.push({
+      email, breaches: exp.num_brechas ?? 0, breachNames: Array.isArray(exp.brechas) ? exp.brechas : [],
+      failedLogins: f.doc_count, successfulLogins: ok?.count ?? 0, foreignSuccessIps: foreignIps,
+      lastFail: f.last?.value_as_string ?? null, riesgo,
+    });
+  }
+  const rank = { critico: 3, alto: 2, medio: 1 };
+  out.sort((a, b) => (rank[b.riesgo] - rank[a.riesgo]) || (b.failedLogins - a.failedLogins));
+  return out;
 }

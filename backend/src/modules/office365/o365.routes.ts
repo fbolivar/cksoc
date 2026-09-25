@@ -5,7 +5,7 @@
 import { Router, type Request, type Response } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
-import { getO365Overview } from './o365.service';
+import { getO365Overview, getExposedUnderAttack } from './o365.service';
 import { listM365Identities, getIdentityRecommendations, disableM365User, deleteM365User } from '../identity/identity.service';
 import { auditFromReq } from '../audit/audit.service';
 
@@ -23,6 +23,16 @@ office365Router.get('/', async (req: Request, res: Response) => {
     res.json(await getO365Overview(range));
   } catch {
     res.status(500).json({ error: 'No se pudo construir el dashboard de Office 365' });
+  }
+});
+
+// Correlación credenciales-expuestas ↔ ataques (logins fallidos O365). Solo lectura.
+office365Router.get('/exposed-under-attack', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
+  try {
+    const range = typeof req.query.range === 'string' ? req.query.range : '7d';
+    res.json(await getExposedUnderAttack(range));
+  } catch (e) {
+    fail(e, res, 'No se pudo correlacionar credenciales expuestas con ataques');
   }
 });
 
