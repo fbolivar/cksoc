@@ -300,3 +300,28 @@ export async function getExposedUnderAttack(rangeIn = '7d'): Promise<ExposedUnde
   out.sort((a, b) => (rank[b.riesgo] - rank[a.riesgo]) || (b.failedLogins - a.failedLogins));
   return out;
 }
+
+
+// --- (C) Enlaces ANÓNIMOS a SharePoint/OneDrive (gobierno de datos: exposición externa) ---
+// "Cualquiera con el enlace" a documentos = riesgo de confidencialidad. Reporta quién los
+// crea y sobre qué sitio. Solo lectura.
+export interface AnonLinkShare { user: string; count: number; site: string; sample: string; lastAt: string | null }
+function siteOf(url: string): string {
+  const m = /\/sites\/([^/]+)/i.exec(url || '');
+  return m ? m[1] : (url ? url.split('/').slice(0, 3).join('/') : '(desconocido)');
+}
+export async function getAnonymousLinkShares(rangeIn = '30d'): Promise<AnonLinkShare[]> {
+  const gte = RANGE[rangeIn] ?? 'now-30d';
+  const client = getIndexerClient();
+  const { data } = await client.post<{ aggregations: { u: { buckets: { key: string; doc_count: number; last: { value_as_string?: string }; f: { hits: { hits: { _source: { data?: { office365?: { ObjectId?: string; SourceFileName?: string } } } }[] } } }[] } } }>(
+    `/${env.WAZUH_ALERTS_INDEX}/_search`,
+    { size: 0, query: { bool: { filter: [{ terms: { 'data.office365.Operation': ['AnonymousLinkCreated', 'AnonymousLinkUpdated'] } }, { range: { timestamp: { gte } } }] } },
+      aggs: { u: { terms: { field: 'data.office365.UserId', size: 50 }, aggs: {
+        last: { max: { field: 'timestamp' } },
+        f: { top_hits: { size: 1, _source: ['data.office365.ObjectId', 'data.office365.SourceFileName'] } } } } } });
+  return (data.aggregations?.u?.buckets ?? []).map((b) => {
+    const src = b.f?.hits?.hits?.[0]?._source?.data?.office365 ?? {};
+    const url = src.SourceFileName || src.ObjectId || '';
+    return { user: b.key, count: b.doc_count, site: siteOf(url), sample: url, lastAt: b.last?.value_as_string ?? null };
+  }).sort((a, b) => b.count - a.count);
+}

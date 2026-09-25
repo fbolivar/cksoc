@@ -5,7 +5,7 @@
 import { Router, type Request, type Response } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
-import { getO365Overview, getExposedUnderAttack } from './o365.service';
+import { getO365Overview, getExposedUnderAttack, getAnonymousLinkShares } from './o365.service';
 import { listM365Identities, getIdentityRecommendations, disableM365User, deleteM365User } from '../identity/identity.service';
 import { auditFromReq } from '../audit/audit.service';
 
@@ -33,6 +33,16 @@ office365Router.get('/exposed-under-attack', requireRole('admin', 'analista'), a
     res.json(await getExposedUnderAttack(range));
   } catch (e) {
     fail(e, res, 'No se pudo correlacionar credenciales expuestas con ataques');
+  }
+});
+
+// Enlaces anónimos de SharePoint/OneDrive (gobierno de datos). Solo lectura.
+office365Router.get('/anonymous-links', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
+  try {
+    const range = typeof req.query.range === 'string' ? req.query.range : '30d';
+    res.json(await getAnonymousLinkShares(range));
+  } catch (e) {
+    fail(e, res, 'No se pudieron listar los enlaces anónimos');
   }
 });
 
