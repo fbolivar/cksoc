@@ -97,6 +97,14 @@ const schema = z.object({
   // (p.ej. 2a04:4a43:84ef:ff06:). Un login foráneo desde estos NO se cuenta como sospechoso.
   O365_TRUSTED_EGRESS_CIDRS: z.string().default(''),
 
+  // ASM externo (Attack Surface Management) - descubrimiento y escaneo de superficie a Internet
+  ASM_ENABLED: z.string().default('true'),
+  ASM_SCAN_CRON: z.string().default('30 4 * * *'),
+  ASM_PORTS: z.string().default(''),
+  ASM_CONNECT_TIMEOUT_MS: z.string().default('2500'),
+  ASM_MAX_CONCURRENCY: z.string().default('40'),
+  ASM_TLS_EXPIRY_WARN_DAYS: z.string().default('21'),
+
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
 

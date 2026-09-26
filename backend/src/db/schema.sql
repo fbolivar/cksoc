@@ -604,3 +604,41 @@ CREATE INDEX IF NOT EXISTS idx_remediation_jobs_created ON remediation_jobs(crea
 -- Remediacion Linux: columnas platform y reboot en remediation_jobs (idempotente).
 ALTER TABLE remediation_jobs ADD COLUMN IF NOT EXISTS platform VARCHAR(16) NOT NULL DEFAULT 'windows';
 ALTER TABLE remediation_jobs ADD COLUMN IF NOT EXISTS reboot BOOLEAN;
+
+-- ---------------------------------------------------------------------
+-- ASM - Attack Surface Management externo (superficie expuesta a Internet)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS asm_domains (
+    domain      VARCHAR(255) PRIMARY KEY,
+    habilitado  BOOLEAN NOT NULL DEFAULT true,
+    ultimo_scan TIMESTAMPTZ,
+    ultimo_error TEXT,
+    creado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS asm_assets (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain      VARCHAR(255) NOT NULL,
+    host        VARCHAR(255) NOT NULL,
+    ip          VARCHAR(45)  NOT NULL,
+    fuente      VARCHAR(24)  NOT NULL DEFAULT 'ct',
+    activo      BOOLEAN NOT NULL DEFAULT true,
+    primera_vez TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ultima_vez  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (host, ip)
+);
+CREATE INDEX IF NOT EXISTS idx_asm_assets_dom ON asm_assets(domain);
+CREATE TABLE IF NOT EXISTS asm_findings (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain      VARCHAR(255) NOT NULL,
+    host        VARCHAR(255) NOT NULL,
+    ip          VARCHAR(45),
+    tipo        VARCHAR(40)  NOT NULL,             -- open_port | tls_expiring | tls_expired | tls_selfsigned | ioc_match | private_dns
+    puerto      INTEGER NOT NULL DEFAULT 0,
+    severidad   VARCHAR(12) NOT NULL DEFAULT 'media', -- critica|alta|media|baja|info
+    detalle     TEXT,
+    estado      VARCHAR(16) NOT NULL DEFAULT 'open',  -- open|resolved|dismissed
+    primera_vez TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ultima_vez  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (host, tipo, puerto)
+);
+CREATE INDEX IF NOT EXISTS idx_asm_findings_estado ON asm_findings(estado, severidad);
