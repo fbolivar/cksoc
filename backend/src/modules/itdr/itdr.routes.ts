@@ -14,7 +14,7 @@ import { HttpError } from '../auth/auth.service';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { sendTelegram } from '../notifications/telegram.service';
-import { isItdrEnabled, scan, getOverview, listFindings, setStatus } from './itdr.service';
+import { isItdrEnabled, scan, getOverview, listFindings, setStatus, buildTelegramReport } from './itdr.service';
 
 export const itdrRouter = Router();
 itdrRouter.use(authenticate);
@@ -48,6 +48,19 @@ itdrRouter.put('/findings/:id/status', canManage, async (req, res) => {
   try { await setStatus(req.params.id, typeof req.body?.estado === 'string' ? req.body.estado : ''); res.json({ ok: true }); } catch (e) { handle(e, res); }
 });
 
+// Reenvía por Telegram (con explicación + remediación) los hallazgos abiertos.
+itdrRouter.post('/notify', canManage, async (req, res) => {
+  try {
+    const tipo = typeof req.body?.tipo === 'string' ? req.body.tipo : undefined;
+    const items = await listFindings({ estado: 'open', tipo });
+    if (!items.length) { res.json({ ok: true, sent: 0, message: 'No hay hallazgos abiertos' }); return; }
+    if (!env.TELEGRAM_CHAT_ID) { res.status(400).json({ error: 'Telegram no configurado' }); return; }
+    await sendTelegram([env.TELEGRAM_CHAT_ID], buildTelegramReport(items), { plain: true });
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'itdr_notify', target: 'telegram', result: 'ok', detail: { enviados: items.length } });
+    res.json({ ok: true, sent: items.length });
+  } catch (e) { handle(e, res); }
+});
+
 /** Scheduler: análisis periódico de identidad + aviso Telegram de hallazgos nuevos. */
 export function startItdrScheduler(): void {
   if (!isItdrEnabled()) { logger.info('🪪 ITDR desactivado (ITDR_ENABLED=false)'); return; }
@@ -58,10 +71,7 @@ export function startItdrScheduler(): void {
       const r = await scan(env.ITDR_RANGE || '24h');
       logger.info({ viaje: r.viajeImposible, mfa: r.mfaFatigue, nuevos: r.nuevos }, '🪪 Análisis ITDR completado');
       if (r.nuevosList.length && env.TELEGRAM_CHAT_ID) {
-        const L = ['🪪 Agentico · Amenazas de identidad (ITDR)', '', `Detecté ${r.nuevosList.length} señal(es) nueva(s) en los inicios de sesión de Microsoft 365:`, ''];
-        for (const f of r.nuevosList.slice(0, 12)) L.push(`• [${String(f.severidad).toUpperCase()}] ${f.usuario} — ${f.detalle}`);
-        L.push('', 'Recomiendo verificar con la persona y, si aplica, forzar cambio de contraseña + revocar sesiones. Puedo apoyar en la contención.');
-        await sendTelegram([env.TELEGRAM_CHAT_ID], L.join('\n'), { plain: true }).catch(() => undefined);
+        await sendTelegram([env.TELEGRAM_CHAT_ID], buildTelegramReport(r.nuevosList), { plain: true }).catch(() => undefined);
       }
     } catch (e) { logger.error({ err: e }, 'Error en análisis ITDR programado'); }
   });

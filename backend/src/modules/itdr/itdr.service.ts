@@ -168,3 +168,47 @@ export async function setStatus(id: string, estado: string): Promise<void> {
   if (!['open', 'resolved', 'dismissed'].includes(estado)) throw new HttpError(400, 'Estado inválido');
   await query('UPDATE itdr_findings SET estado=$2, ultima_vez=now() WHERE id=$1', [id, estado]);
 }
+
+// --- Reporte Telegram con explicación y remediación ---
+interface Explain { que: string; como: string[] }
+const EXPLAIN: Record<string, Explain> = {
+  impossible_travel: {
+    que: 'El usuario inició sesión con éxito desde dos ubicaciones que no se pueden cubrir en el tiempo transcurrido. Si no viajó ni cambió de VPN, sus credenciales podrían estar en uso por un tercero.',
+    como: [
+      'Confirmar con la persona si reconoce ambos accesos o si usa una VPN nueva.',
+      'Si no los reconoce: forzar cambio de contraseña y revocar todas las sesiones en Entra ID.',
+      'Exigir re-registro de MFA y revisar reglas de reenvío de correo y accesos recientes.',
+    ],
+  },
+  mfa_fatigue: {
+    que: 'Alguien que ya tiene la contraseña correcta está bombardeando al usuario con solicitudes de MFA para que apruebe una por cansancio o error (MFA bombing). La contraseña está comprometida.',
+    como: [
+      'Forzar cambio de contraseña de inmediato y revocar las sesiones activas.',
+      'Confirmar con la persona que NO aprobó ninguna solicitud.',
+      'Si hubo un inicio de sesión exitoso tras la ráfaga: tratar la cuenta como comprometida (aislar, revisar buzón/reglas/datos).',
+      'Migrar a MFA resistente a fatiga (number matching / passkeys) y considerar bloquear la IP de origen.',
+    ],
+  },
+};
+const TIPO_TXT: Record<string, string> = { impossible_travel: 'Viaje imposible', mfa_fatigue: 'MFA-fatigue' };
+
+export interface ItdrLike { usuario: string; tipo: string; severidad: string; detalle: string }
+
+/** Mensaje de Telegram (texto plano) con cada alerta + qué es + cómo remediar. */
+export function buildTelegramReport(items: ItdrLike[]): string {
+  const L: string[] = ['🪪 Agentico · Amenazas de identidad (ITDR) — Microsoft 365', ''];
+  L.push(`Detecté ${items.length} señal(es) en los inicios de sesión que conviene revisar:`, '');
+  items.slice(0, 15).forEach((f, i) => {
+    const ex = EXPLAIN[f.tipo];
+    L.push(`${i + 1}) [${String(f.severidad).toUpperCase()}] ${TIPO_TXT[f.tipo] ?? f.tipo} · ${f.usuario}`);
+    L.push(`   ${f.detalle}`);
+    if (ex) {
+      L.push(`   📖 Qué es: ${ex.que}`);
+      L.push('   🛠️ Remediación:');
+      ex.como.forEach((c) => L.push(`      • ${c}`));
+    }
+    L.push('');
+  });
+  L.push('Quedo atento para apoyar en la contención de cualquiera de estos casos.');
+  return L.join('\n');
+}
