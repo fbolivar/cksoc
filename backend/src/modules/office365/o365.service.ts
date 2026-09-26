@@ -30,7 +30,7 @@ function inV4Cidr(ip: string, cidr: string): boolean {
   return (ipL & mask) === (netL & mask);
 }
 /** IP que corresponde a un egreso confiable conocido (VPN/relay corporativo o personal). */
-function isTrustedEgress(ip: string): boolean {
+export function isTrustedEgress(ip: string): boolean {
   if (TRUSTED_IPS.has(ip)) return true;
   const low = ip.toLowerCase();
   for (const e of TRUSTED_EGRESS) {

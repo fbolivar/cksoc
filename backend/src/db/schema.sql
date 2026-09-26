@@ -670,3 +670,22 @@ CREATE TABLE IF NOT EXISTS shadow_ai_meta (
     k VARCHAR(40) PRIMARY KEY,
     v TEXT
 );
+
+-- ---------------------------------------------------------------------
+-- ITDR: amenazas de identidad sobre logins O365 (viaje imposible / MFA-fatigue)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS itdr_findings (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    usuario     VARCHAR(320) NOT NULL,
+    tipo        VARCHAR(30)  NOT NULL,             -- impossible_travel | mfa_fatigue
+    ref         VARCHAR(200) NOT NULL,             -- clave de dedupe (par de paises / ip)
+    severidad   VARCHAR(12)  NOT NULL DEFAULT 'alta', -- critica|alta|media
+    detalle     TEXT,
+    meta        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    estado      VARCHAR(16) NOT NULL DEFAULT 'open',   -- open|resolved|dismissed
+    primera_vez TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ultima_vez  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (usuario, tipo, ref)
+);
+CREATE INDEX IF NOT EXISTS idx_itdr_estado ON itdr_findings(estado, severidad);
+CREATE TABLE IF NOT EXISTS itdr_meta ( k VARCHAR(40) PRIMARY KEY, v TEXT );

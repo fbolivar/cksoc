@@ -112,6 +112,14 @@ const schema = z.object({
   SHADOW_AI_SANCTIONED: z.string().default(''),
   SHADOW_AI_EXTRA_DOMAINS: z.string().default(''),
 
+  // ITDR avanzado (amenazas de identidad sobre logins O365)
+  ITDR_ENABLED: z.string().default('true'),
+  ITDR_SCAN_CRON: z.string().default('40 */3 * * *'),
+  ITDR_RANGE: z.string().default('24h'),
+  ITDR_MAX_KMH: z.string().default('900'),
+  ITDR_MIN_KM: z.string().default('500'),
+  ITDR_MFA_MIN: z.string().default('5'),
+
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
 

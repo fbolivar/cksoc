@@ -51,6 +51,7 @@ import { office365Router } from './modules/office365/o365.routes';
 import { emailPostureRouter } from './modules/email-posture/email-posture.routes';
 import { asmRouter, startAsmScheduler } from './modules/asm/asm.routes';
 import { shadowAiRouter, startShadowAiScheduler } from './modules/shadowai/shadowai.routes';
+import { itdrRouter, startItdrScheduler } from './modules/itdr/itdr.routes';
 import { startOverviewWarmup } from './modules/overview/overview.warmup';
 import { assetsRouter } from './modules/assets/assets.routes';
 import { incidentsRouter } from './modules/incidents/incidents.routes';
@@ -147,6 +148,7 @@ app.use('/api/office365', office365Router);
 app.use('/api/email-posture', emailPostureRouter);
 app.use('/api/asm', asmRouter);
 app.use('/api/shadow-ai', shadowAiRouter);
+app.use('/api/itdr', itdrRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/incidents', incidentsRouter);
 app.use('/api/backups', backupsRouter);
@@ -264,6 +266,9 @@ startAsmScheduler();
 
 // Shadow-AI: deteccion de uso de IA generativa no autorizada
 startShadowAiScheduler();
+
+// ITDR: amenazas de identidad (viaje imposible / MFA-fatigue) sobre logins O365
+startItdrScheduler();
 
 // Digest periódico del Centro de Acción por Telegram (pendientes de todos los módulos)
 startActionDigestScheduler();
