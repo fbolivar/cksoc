@@ -642,3 +642,31 @@ CREATE TABLE IF NOT EXISTS asm_findings (
     UNIQUE (host, tipo, puerto)
 );
 CREATE INDEX IF NOT EXISTS idx_asm_findings_estado ON asm_findings(estado, severidad);
+
+-- ---------------------------------------------------------------------
+-- Shadow-AI: uso de servicios de IA generativa detectado por red (SNI)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shadow_ai_usage (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    srcip       VARCHAR(45)  NOT NULL,
+    host        VARCHAR(255),
+    srcuser     VARCHAR(255),
+    service     VARCHAR(60)  NOT NULL,             -- id del servicio (openai, anthropic, ...)
+    vendor      VARCHAR(60),
+    sanctioned  BOOLEAN NOT NULL DEFAULT false,    -- aprobado por la organizacion
+    hits        INTEGER NOT NULL DEFAULT 0,
+    first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (srcip, service)
+);
+CREATE INDEX IF NOT EXISTS idx_shadow_ai_usage_sanc ON shadow_ai_usage(sanctioned);
+CREATE TABLE IF NOT EXISTS shadow_ai_policy (
+    service     VARCHAR(60) PRIMARY KEY,
+    sanctioned  BOOLEAN NOT NULL DEFAULT false,
+    updated_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS shadow_ai_meta (
+    k VARCHAR(40) PRIMARY KEY,
+    v TEXT
+);

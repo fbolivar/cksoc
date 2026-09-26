@@ -50,6 +50,7 @@ import { ndrRouter } from './modules/ndr/ndr.routes';
 import { office365Router } from './modules/office365/o365.routes';
 import { emailPostureRouter } from './modules/email-posture/email-posture.routes';
 import { asmRouter, startAsmScheduler } from './modules/asm/asm.routes';
+import { shadowAiRouter, startShadowAiScheduler } from './modules/shadowai/shadowai.routes';
 import { startOverviewWarmup } from './modules/overview/overview.warmup';
 import { assetsRouter } from './modules/assets/assets.routes';
 import { incidentsRouter } from './modules/incidents/incidents.routes';
@@ -145,6 +146,7 @@ app.use('/api/ndr', ndrRouter);
 app.use('/api/office365', office365Router);
 app.use('/api/email-posture', emailPostureRouter);
 app.use('/api/asm', asmRouter);
+app.use('/api/shadow-ai', shadowAiRouter);
 app.use('/api/assets', assetsRouter);
 app.use('/api/incidents', incidentsRouter);
 app.use('/api/backups', backupsRouter);
@@ -259,6 +261,9 @@ startAgenticoScheduler();
 
 // ASM externo: escaneo periodico de la superficie de ataque a Internet
 startAsmScheduler();
+
+// Shadow-AI: deteccion de uso de IA generativa no autorizada
+startShadowAiScheduler();
 
 // Digest periódico del Centro de Acción por Telegram (pendientes de todos los módulos)
 startActionDigestScheduler();

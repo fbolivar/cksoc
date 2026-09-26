@@ -105,6 +105,13 @@ const schema = z.object({
   ASM_MAX_CONCURRENCY: z.string().default('40'),
   ASM_TLS_EXPIRY_WARN_DAYS: z.string().default('21'),
 
+  // Shadow-AI (uso de IA generativa detectado por red)
+  SHADOW_AI_ENABLED: z.string().default('true'),
+  SHADOW_AI_SCAN_CRON: z.string().default('20 5 * * *'),
+  SHADOW_AI_RANGE: z.string().default('7d'),
+  SHADOW_AI_SANCTIONED: z.string().default(''),
+  SHADOW_AI_EXTRA_DOMAINS: z.string().default(''),
+
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
 
