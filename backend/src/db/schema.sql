@@ -689,3 +689,22 @@ CREATE TABLE IF NOT EXISTS itdr_findings (
 );
 CREATE INDEX IF NOT EXISTS idx_itdr_estado ON itdr_findings(estado, severidad);
 CREATE TABLE IF NOT EXISTS itdr_meta ( k VARCHAR(40) PRIMARY KEY, v TEXT );
+
+-- ---------------------------------------------------------------------
+-- Anti-BEC: senales de compromiso de correo (reenvios/reglas + URL/adjuntos)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS bec_findings (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tipo        VARCHAR(30)  NOT NULL,             -- forwarding_rule | mailbox_forwarding | mail_bad_url | mail_bad_attachment
+    usuario     VARCHAR(320) NOT NULL,
+    ref         VARCHAR(200) NOT NULL,
+    severidad   VARCHAR(12)  NOT NULL DEFAULT 'alta',
+    detalle     TEXT,
+    meta        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    estado      VARCHAR(16) NOT NULL DEFAULT 'open',
+    primera_vez TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ultima_vez  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (usuario, tipo, ref)
+);
+CREATE INDEX IF NOT EXISTS idx_bec_estado ON bec_findings(estado, severidad);
+CREATE TABLE IF NOT EXISTS bec_meta ( k VARCHAR(40) PRIMARY KEY, v TEXT );

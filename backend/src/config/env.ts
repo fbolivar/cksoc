@@ -120,6 +120,16 @@ const schema = z.object({
   ITDR_MIN_KM: z.string().default('500'),
   ITDR_MFA_MIN: z.string().default('5'),
 
+  // Anti-BEC (correo)
+  BEC_ENABLED: z.string().default('true'),
+  BEC_SCAN_CRON: z.string().default('50 */6 * * *'),
+  BEC_AUDIT_RANGE: z.string().default('7d'),
+  BEC_MAIL_HOURS: z.string().default('24'),
+  BEC_MAIL_MAX_MAILBOXES: z.string().default('25'),
+  BEC_MAIL_MAX_MSGS: z.string().default('40'),
+  BEC_SCAN_MAILBOXES: z.string().default(''),
+  BEC_INTERNAL_DOMAINS: z.string().default(''),
+
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
 
