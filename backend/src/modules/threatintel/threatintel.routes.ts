@@ -10,7 +10,7 @@ import { auditFromReq } from '../audit/audit.service';
 import { HttpError } from '../auth/auth.service';
 import { logger } from '../../config/logger';
 import {
-  listIocs, countByType, addIoc, removeIoc, getFeeds, refreshFeeds, getMatches,
+  listIocs, countByType, addIoc, removeIoc, getFeeds, refreshFeeds, getMatches, importStix,
 } from './threatintel.service';
 
 export const threatIntelRouter = Router();
@@ -63,6 +63,15 @@ threatIntelRouter.post('/feeds/refresh', requireRole('admin', 'analista'), async
 threatIntelRouter.get('/matches', requireRole('admin', 'analista'), async (_req, res) => {
   try { res.json({ matches: await getMatches() }); }
   catch (err) { handle(err, res); }
+});
+
+threatIntelRouter.post('/import/stix', requireRole('admin', 'analista'), async (req: Request, res: Response) => {
+  try {
+    const raw = req.body?.bundle ?? req.body;
+    const r = await importStix(raw, req.user!.id);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'ti_stix_import', result: 'ok', detail: r });
+    res.json(r);
+  } catch (err) { handle(err, res); }
 });
 
 /** Refresco diario de feeds (03:15). */

@@ -6,7 +6,7 @@ import { query } from '../../config/db';
 import { getIndexerClient } from '../wazuh/wazuh.client';
 import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
-import { FEEDS, fetchFeed } from './feeds';
+import { FEEDS, fetchFeed, parseStixIndicators, extractStixObjects } from './feeds';
 
 export type IocType = 'ip' | 'domain' | 'url' | 'md5' | 'sha1' | 'sha256';
 export const IOC_TYPES: IocType[] = ['ip', 'domain', 'url', 'md5', 'sha1', 'sha256'];
@@ -213,6 +213,39 @@ async function ipSample(ip: string): Promise<{ lastSeen: string; rule: string; a
  *   - hash   → syscheck.{sha256,sha1,md5}_after (FIM), data.win.eventdata.hashes
  * La cobertura depende de la telemetría disponible (DNS/proxy/FIM/Sysmon).
  */
+/**
+ * Importa indicadores de un bundle STIX 2.x (o envelope TAXII) al catálogo de
+ * IOCs, como fuente 'stix-import'. Reutiliza el parser de feeds.ts.
+ */
+export async function importStix(raw: unknown, userId: string): Promise<{ count: number; byType: Record<string, number> }> {
+  let json: unknown = raw;
+  if (typeof raw === 'string') {
+    try { json = JSON.parse(raw); } catch { throw new HttpError(400, 'JSON STIX inválido'); }
+  }
+  const iocs = parseStixIndicators(extractStixObjects(json));
+  if (!iocs.length) throw new HttpError(400, 'No se encontraron indicadores STIX válidos (indicator con ipv4-addr/domain-name/url/file:hashes)');
+  const grouped = new Map<string, string[]>();
+  for (const it of iocs) { const a = grouped.get(it.type) ?? []; a.push(it.value); grouped.set(it.type, a); }
+  const byType: Record<string, number> = {};
+  for (const [type, vals] of grouped) {
+    const uniq = [...new Set(vals)];
+    byType[type] = uniq.length;
+    for (let i = 0; i < uniq.length; i += 2000) {
+      const chunk = uniq.slice(i, i + 2000);
+      await query(
+        `INSERT INTO iocs (ioc_type, value, source, confidence, last_seen_feed, added_by)
+         SELECT $1, v, 'stix-import', 75, now(), $2 FROM unnest($3::text[]) AS v
+         ON CONFLICT (ioc_type, value) DO UPDATE
+           SET source = 'stix-import', enabled = TRUE, last_seen_feed = now(),
+               confidence = GREATEST(iocs.confidence, 75)`,
+        [type, userId, chunk]
+      );
+    }
+  }
+  const count = Object.values(byType).reduce((a, b) => a + b, 0);
+  return { count, byType };
+}
+
 export async function getMatches(): Promise<IocMatch[]> {
   const iocRows = await query<{ ioc_type: string; value: string; source: string }>(
     "SELECT ioc_type, value, source FROM iocs WHERE enabled = TRUE"

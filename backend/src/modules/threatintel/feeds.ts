@@ -169,6 +169,103 @@ if (OTX_KEY) {
   FEEDS.push({ name: 'AlienVault OTX', fetch: fetchOtx, cap: OTX_CAP, confidence: 75 });
 }
 
+// --------------------------------------------------------------------------
+// MISP (instancia propia / compartida). Se activa con MISP_URL + MISP_API_KEY.
+// Trae atributos to_ids=true (accionables), respetando la warninglist de MISP.
+// --------------------------------------------------------------------------
+const MISP_URL = (process.env.MISP_URL || '').replace(/\/+$/, '');
+const MISP_KEY = process.env.MISP_API_KEY || '';
+const MISP_CAP = Number(process.env.MISP_CAP || 20000);
+const MISP_TAGS = (process.env.MISP_TAGS || '').split(',').map((s) => s.trim()).filter(Boolean);
+const MISP_LAST = process.env.MISP_LAST || '30d';
+
+function mapMisp(type: string, value: string): TypedIoc | null {
+  const v = String(value || '').trim();
+  switch (type) {
+    case 'ip-src': case 'ip-dst': case 'ip': { const ip = v.split('|')[0].split(':')[0]; return IPV4.test(ip) ? { type: 'ip', value: ip } : null; }
+    case 'domain': case 'hostname': { const d = v.split('|')[0]; return DOMAIN.test(d) ? { type: 'domain', value: d.toLowerCase() } : null; }
+    case 'url': case 'uri': return /^https?:\/\//i.test(v) ? { type: 'url', value: v } : null;
+    case 'md5': return MD5.test(v) ? { type: 'md5', value: v.toLowerCase() } : null;
+    case 'sha1': return SHA1.test(v) ? { type: 'sha1', value: v.toLowerCase() } : null;
+    case 'sha256': return SHA256.test(v) ? { type: 'sha256', value: v.toLowerCase() } : null;
+    default: return null;
+  }
+}
+
+interface MispResp { response?: { Attribute?: { type: string; value: string }[] } }
+async function fetchMisp(): Promise<TypedIoc[]> {
+  if (!MISP_URL || !MISP_KEY) throw new Error('MISP_URL/MISP_API_KEY no configurados');
+  const body: Record<string, unknown> = {
+    returnFormat: 'json',
+    type: ['ip-src', 'ip-dst', 'domain', 'hostname', 'url', 'md5', 'sha1', 'sha256'],
+    to_ids: true, enforceWarninglist: true, limit: MISP_CAP, last: MISP_LAST,
+  };
+  if (MISP_TAGS.length) body.tags = MISP_TAGS;
+  const { data } = await axios.post<MispResp>(`${MISP_URL}/attributes/restSearch`, body, {
+    timeout: 60_000,
+    headers: { Authorization: MISP_KEY, Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'HexWatch-ThreatIntel/1.0' },
+  });
+  const attrs = data?.response?.Attribute ?? [];
+  const out: TypedIoc[] = [];
+  for (const a of attrs) { const m = mapMisp(a.type, a.value); if (m) out.push(m); if (out.length >= MISP_CAP) break; }
+  return out;
+}
+if (MISP_URL && MISP_KEY) FEEDS.push({ name: 'MISP', fetch: fetchMisp, cap: MISP_CAP, confidence: 85 });
+
+// --------------------------------------------------------------------------
+// STIX 2.x — parser de indicadores compartido por TAXII y por el import manual.
+// Extrae de los patrones STIX: ipv4-addr / domain-name / url / file:hashes.
+// --------------------------------------------------------------------------
+export function parseStixIndicators(objects: unknown[]): TypedIoc[] {
+  const out: TypedIoc[] = [];
+  for (const raw of objects) {
+    const o = raw as { type?: string; pattern?: string } | null;
+    if (!o || o.type !== 'indicator' || typeof o.pattern !== 'string') continue;
+    const p = o.pattern;
+    for (const m of p.matchAll(/ipv4-addr:value\s*=\s*'([^']+)'/g)) if (IPV4.test(m[1])) out.push({ type: 'ip', value: m[1] });
+    for (const m of p.matchAll(/domain-name:value\s*=\s*'([^']+)'/g)) if (DOMAIN.test(m[1])) out.push({ type: 'domain', value: m[1].toLowerCase() });
+    for (const m of p.matchAll(/url:value\s*=\s*'([^']+)'/g)) if (/^https?:\/\//i.test(m[1])) out.push({ type: 'url', value: m[1] });
+    for (const m of p.matchAll(/hashes\.(?:'?SHA-?256'?|"SHA-256")\s*=\s*'([a-f0-9]{64})'/gi)) out.push({ type: 'sha256', value: m[1].toLowerCase() });
+    for (const m of p.matchAll(/hashes\.(?:'?SHA-?1'?|"SHA-1")\s*=\s*'([a-f0-9]{40})'/gi)) out.push({ type: 'sha1', value: m[1].toLowerCase() });
+    for (const m of p.matchAll(/hashes\.(?:'?MD5'?|"MD5")\s*=\s*'([a-f0-9]{32})'/gi)) out.push({ type: 'md5', value: m[1].toLowerCase() });
+  }
+  return out;
+}
+
+/** Normaliza la entrada (bundle STIX, envelope TAXII, array o indicador suelto) a lista de objetos. */
+export function extractStixObjects(json: unknown): unknown[] {
+  if (Array.isArray(json)) return json;
+  if (json && typeof json === 'object') {
+    const o = json as { objects?: unknown[]; type?: string };
+    if (Array.isArray(o.objects)) return o.objects;
+    if (o.type === 'indicator') return [o];
+  }
+  return [];
+}
+
+// --------------------------------------------------------------------------
+// TAXII 2.1 — poll de una colección de objetos STIX. Se activa con TAXII_URL
+// (URL completa .../collections/<id>/objects/). Auth por Bearer o Basic.
+// --------------------------------------------------------------------------
+const TAXII_URL = (process.env.TAXII_URL || '').trim();
+const TAXII_TOKEN = process.env.TAXII_TOKEN || '';
+const TAXII_USER = process.env.TAXII_USER || '';
+const TAXII_PASS = process.env.TAXII_PASS || '';
+const TAXII_CAP = Number(process.env.TAXII_CAP || 20000);
+
+async function fetchTaxii(): Promise<TypedIoc[]> {
+  if (!TAXII_URL) throw new Error('TAXII_URL no configurada');
+  const headers: Record<string, string> = {
+    Accept: 'application/taxii+json;version=2.1, application/stix+json;version=2.1, application/json',
+    'User-Agent': 'HexWatch-ThreatIntel/1.0',
+  };
+  if (TAXII_TOKEN) headers.Authorization = `Bearer ${TAXII_TOKEN}`;
+  const auth = (!TAXII_TOKEN && TAXII_USER) ? { username: TAXII_USER, password: TAXII_PASS } : undefined;
+  const { data } = await axios.get<unknown>(TAXII_URL, { timeout: 60_000, headers, auth, params: { limit: TAXII_CAP } });
+  return parseStixIndicators(extractStixObjects(data)).slice(0, TAXII_CAP);
+}
+if (TAXII_URL) FEEDS.push({ name: 'TAXII', fetch: fetchTaxii, cap: TAXII_CAP, confidence: 80 });
+
 /** Descarga un feed y devuelve los indicadores tipados únicos (aplicando el tope). */
 export async function fetchFeed(def: FeedDef): Promise<TypedIoc[]> {
   let items: TypedIoc[];
