@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Globe2,
   ShieldAlert,
+  MailWarning,
   Fingerprint,
   Bot,
   ScanSearch,
@@ -81,6 +82,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/shadow-ai', label: 'Shadow-AI · Uso de IA', icon: Bot, roles: ['admin', 'analista'] },
       { to: '/itdr', label: 'ITDR · Identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
       { to: '/postura-correo', label: 'Postura de correo', icon: Mail, roles: ['admin', 'analista'] },
+      { to: '/bec', label: 'Correo · Anti-BEC', icon: MailWarning, roles: ['admin', 'analista'] },
     ],
   },
   {

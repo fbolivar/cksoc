@@ -54,6 +54,7 @@ const HumanFactor = lazy(() => import('@/pages/HumanFactor'));
 const Asm = lazy(() => import('@/pages/Asm'));
 const ShadowAi = lazy(() => import('@/pages/ShadowAi'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
+const Bec = lazy(() => import('@/pages/Bec'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -487,6 +488,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Itdr />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/bec"
+        element={
+          <Protected>
+            <AppLayout>
+              <Bec />
             </AppLayout>
           </Protected>
         }
