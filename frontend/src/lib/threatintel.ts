@@ -47,4 +47,5 @@ export const threatIntelApi = {
   removeIoc: (id: string) => api.delete(`/threatintel/iocs/${id}`).then((r) => r.data),
   refresh: () => api.post<{ results: { name: string; count: number; status: string }[] }>('/threatintel/feeds/refresh').then((r) => r.data.results),
   matches: () => api.get<{ matches: IocMatch[] }>('/threatintel/matches').then((r) => r.data.matches),
+  importStix: (bundle: string) => api.post<{ count: number; byType: Record<string, number> }>('/threatintel/import/stix', { bundle }).then((r) => r.data),
 };

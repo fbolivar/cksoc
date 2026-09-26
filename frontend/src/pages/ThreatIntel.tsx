@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import {
-  Radar, Loader2, Plus, Trash2, X, Ban, ExternalLink, ShieldAlert, ShieldCheck, Rss,
+  Radar, Loader2, Plus, Trash2, X, Ban, ExternalLink, ShieldAlert, ShieldCheck, Rss, Upload,
 } from 'lucide-react';
 import { threatIntelApi, type Ioc, type IocMatch, type FeedStatus, type IocType } from '@/lib/threatintel';
 import { responseApi } from '@/lib/response';
@@ -30,6 +30,10 @@ export default function ThreatIntel() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [showStix, setShowStix] = useState(false);
+  const [stixText, setStixText] = useState('');
+  const [stixBusy, setStixBusy] = useState(false);
+  const [stixMsg, setStixMsg] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<Record<string, { ok?: boolean; error?: string; busy?: boolean; permanent?: boolean }>>({});
 
   const loadAll = useCallback(async () => {
@@ -78,6 +82,18 @@ export default function ThreatIntel() {
     }
   }
 
+  async function doImportStix() {
+    setStixBusy(true); setStixMsg(null);
+    try {
+      const r = await threatIntelApi.importStix(stixText);
+      setStixMsg(`Importados ${r.count} IOC(s): ${Object.entries(r.byType).map(([t, n]) => `${n} ${t}`).join(', ')}`);
+      setStixText('');
+      await loadIocs(); await loadAll();
+    } catch (e) {
+      setStixMsg((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'Error al importar STIX');
+    } finally { setStixBusy(false); }
+  }
+
   async function del(id: string) {
     if (!confirm('¿Eliminar este IOC?')) return;
     await threatIntelApi.removeIoc(id).catch(() => undefined);
@@ -96,6 +112,7 @@ export default function ThreatIntel() {
         {canManage && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowAdd(true)}><Plus className="h-4 w-4" /> IOC manual</Button>
+            <Button variant="outline" size="sm" onClick={() => setShowStix((v) => !v)}><Upload className="h-4 w-4" /> Importar STIX</Button>
             <Button size="sm" onClick={() => void refresh()} disabled={refreshing}>
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rss className="h-4 w-4" />} Refrescar feeds
             </Button>
@@ -104,6 +121,25 @@ export default function ThreatIntel() {
       </div>
 
       {error && <Card><CardContent className="p-4 text-sm text-amber-700">{error}</CardContent></Card>}
+
+      {canManage && showStix && (
+        <Card>
+          <CardContent className="space-y-2 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Importar indicadores STIX 2.x</p>
+              <Button variant="ghost" size="icon" onClick={() => setShowStix(false)}><X className="h-4 w-4" /></Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Pega un bundle STIX (JSON). Se extraen los objetos <b>indicator</b> (ipv4-addr / domain-name / url / file:hashes) y se agregan como fuente <b>stix-import</b>. Tambien puedes conectar MISP o TAXII definiendo sus variables en el .env.</p>
+            <textarea className="h-32 w-full rounded-md border border-border bg-background p-2 font-mono text-[11px]" placeholder={'{ "type": "bundle", "objects": [ { "type": "indicator", "pattern": "[ipv4-addr:value = ...]" } ] }'} value={stixText} onChange={(e) => setStixText(e.target.value)} />
+            <div className="flex items-center gap-2">
+              <Button size="sm" onClick={() => void doImportStix()} disabled={stixBusy || !stixText.trim()}>
+                {stixBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Importar
+              </Button>
+              {stixMsg && <span className="text-[11px] text-muted-foreground">{stixMsg}</span>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-4">
