@@ -52,6 +52,7 @@ const Copilot = lazy(() => import('@/pages/Copilot'));
 const OnCall = lazy(() => import('@/pages/OnCall'));
 const HumanFactor = lazy(() => import('@/pages/HumanFactor'));
 const Asm = lazy(() => import('@/pages/Asm'));
+const ShadowAi = lazy(() => import('@/pages/ShadowAi'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -465,6 +466,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Asm />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/shadow-ai"
+        element={
+          <Protected>
+            <AppLayout>
+              <ShadowAi />
             </AppLayout>
           </Protected>
         }
