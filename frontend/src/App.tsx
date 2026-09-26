@@ -51,6 +51,7 @@ const EmailPosture = lazy(() => import('@/pages/EmailPosture'));
 const Copilot = lazy(() => import('@/pages/Copilot'));
 const OnCall = lazy(() => import('@/pages/OnCall'));
 const HumanFactor = lazy(() => import('@/pages/HumanFactor'));
+const Asm = lazy(() => import('@/pages/Asm'));
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -454,6 +455,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <LicensePage />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/asm"
+        element={
+          <Protected>
+            <AppLayout>
+              <Asm />
             </AppLayout>
           </Protected>
         }

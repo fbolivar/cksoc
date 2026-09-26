@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Globe2,
   ShieldAlert,
+  ScanSearch,
   BellRing,
   FileBarChart,
   Users,
@@ -101,6 +102,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/activos', label: 'Activos', icon: Server },
       { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug },
+      { to: '/asm', label: 'Superficie externa (ASM)', icon: ScanSearch, roles: ['admin', 'analista'] },
       { to: '/sca', label: 'Hardening CIS (SCA)', icon: ClipboardCheck },
       { to: '/fim', label: 'Integridad (FIM)', icon: FileSearch },
       { to: '/hygiene', label: 'IT Hygiene', icon: Activity },
