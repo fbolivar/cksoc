@@ -21,7 +21,9 @@ import {
 import { PRESETS } from './periodo';
 
 export const executiveRouter = Router();
-executiveRouter.use(authenticate, requireRole('admin'));
+executiveRouter.use(authenticate);
+const canView = requireRole('admin', 'analista');
+const adminOnly = requireRole('admin');
 
 function handle(err: unknown, res: Response): void {
   if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
@@ -31,7 +33,7 @@ function handle(err: unknown, res: Response): void {
 }
 
 /** Periodos predefinidos que ofrece la interfaz. */
-executiveRouter.get('/presets', (_req, res) => {
+executiveRouter.get('/presets', canView, (_req, res) => {
   res.json({ presets: PRESETS });
 });
 
@@ -42,7 +44,7 @@ const genSchema = z.object({
   mes: z.string().regex(/^\d{4}-\d{2}$/).optional(),   // compatibilidad
 });
 
-executiveRouter.post('/generate', async (req: Request, res: Response) => {
+executiveRouter.post('/generate', canView, async (req: Request, res: Response) => {
   const parsed = genSchema.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: 'Parámetros de periodo inválidos' }); return; }
   const { preset, desde, hasta, mes } = parsed.data;
@@ -54,14 +56,14 @@ executiveRouter.post('/generate', async (req: Request, res: Response) => {
   } catch (err) { handle(err, res); }
 });
 
-executiveRouter.get('/history', async (_req, res) => {
+executiveRouter.get('/history', canView, async (_req, res) => {
   try {
     const reports = await listReports();
     res.json({ reports: reports.map(ref) });
   } catch (err) { handle(err, res); }
 });
 
-executiveRouter.get('/:id', async (req, res) => {
+executiveRouter.get('/:id', canView, async (req, res) => {
   try {
     const r = await getReport(req.params.id);
     res.json({ report: ref(r), ...preview(r) });
@@ -83,7 +85,7 @@ const editSchema = z.object({
   novedades: texto,
 });
 
-executiveRouter.put('/:id', async (req, res) => {
+executiveRouter.put('/:id', canView, async (req, res) => {
   const parsed = editSchema.safeParse(req.body ?? {});
   if (!parsed.success) { res.status(400).json({ error: 'Datos inválidos' }); return; }
   try {
@@ -92,18 +94,18 @@ executiveRouter.put('/:id', async (req, res) => {
   } catch (err) { handle(err, res); }
 });
 
-executiveRouter.post('/:id/approve', async (req, res) => {
+executiveRouter.post('/:id/approve', adminOnly, async (req, res) => {
   try {
     const r = await marcarRevisado(req.params.id);
     res.json({ report: ref(r) });
   } catch (err) { handle(err, res); }
 });
 
-executiveRouter.post('/:id/send', async (req, res) => {
+executiveRouter.post('/:id/send', adminOnly, async (req, res) => {
   try { res.json(await sendToCommittee(req.params.id)); } catch (err) { handle(err, res); }
 });
 
-executiveRouter.get('/:id/download', async (req, res) => {
+executiveRouter.get('/:id/download', canView, async (req, res) => {
   try {
     const path = await getReportFile(req.params.id);
     const r = await getReport(req.params.id);
@@ -111,7 +113,7 @@ executiveRouter.get('/:id/download', async (req, res) => {
   } catch (err) { handle(err, res); }
 });
 
-executiveRouter.delete('/:id', async (req, res) => {
+executiveRouter.delete('/:id', adminOnly, async (req, res) => {
   try { await deleteReport(req.params.id); res.json({ ok: true }); } catch (err) { handle(err, res); }
 });
 
