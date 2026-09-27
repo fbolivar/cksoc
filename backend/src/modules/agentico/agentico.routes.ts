@@ -8,7 +8,7 @@ import cron from 'node-cron';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { requireRole } from '../../middleware/roles';
-import { runAgenticoCycle } from './agentico.service';
+import { runAgenticoCycle, runUrgentWatch } from './agentico.service';
 
 export const agenticoRouter = Router();
 
@@ -32,10 +32,23 @@ export function startAgenticoScheduler(): void {
     return;
   }
   const min = Math.max(5, Math.min(1440, env.AGENTICO_INTERVAL_MIN));
-  cron.schedule(`*/${min} * * * *`, () => {
+  const spec = (min >= 60 && min % 60 === 0) ? `0 */${min / 60} * * *` : `*/${min} * * * *`;
+  cron.schedule(spec, () => {
     runAgenticoCycle()
       .then((s) => logger.info({ acciones: s.acciones.length, telegram: s.telegram }, 'Agentico: ciclo completado'))
       .catch((err) => logger.warn({ err: err instanceof Error ? err.message : err }, 'Agentico: fallo en el ciclo'));
   });
   logger.info(`Agentico: activo cada ${min} min (autoblock=${env.AGENTICO_AUTOBLOCK})`);
+}
+
+/** Vigilante urgente de Agentico: revisa cada AGENTICO_URGENT_MIN min y reporta al instante lo crítico. */
+export function startAgenticoUrgentWatch(): void {
+  if (!env.AGENTICO_ENABLED) return;
+  const min = Math.max(2, Math.min(60, env.AGENTICO_URGENT_MIN));
+  cron.schedule(`*/${min} * * * *`, () => {
+    runUrgentWatch()
+      .then((r) => { if (r.enviado) logger.warn({ urgentes: r.urgentes }, 'Agentico: ALERTA URGENTE enviada'); })
+      .catch((err) => logger.warn({ err: err instanceof Error ? err.message : err }, 'Agentico: fallo vigilante urgente'));
+  });
+  logger.info(`Agentico: vigilante urgente cada ${min} min (nivel>=${env.AGENTICO_URGENT_LEVEL})`);
 }

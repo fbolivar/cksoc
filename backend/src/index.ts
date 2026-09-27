@@ -78,7 +78,7 @@ import { credExpRouter, startCredExpScheduler } from './modules/credexp/credexp.
 import { correlationRouter } from './modules/correlation/correlation.routes';
 import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
 import { uebaRouter, startUebaScheduler } from './modules/ueba/ueba.routes';
-import { agenticoRouter, startAgenticoScheduler } from './modules/agentico/agentico.routes';
+import { agenticoRouter, startAgenticoScheduler, startAgenticoUrgentWatch } from './modules/agentico/agentico.routes';
 import { copilotRouter } from './modules/copilot/copilot.routes';
 import { actionCenterRouter } from './modules/action-center/action-center.routes';
 import { startActionDigestScheduler } from './modules/action-center/action-center.scheduler';
@@ -270,6 +270,7 @@ startCredExpScheduler();
 // SOAR: motor de respuesta automatizada (evalúa reglas cada 3 min)
 startSoarScheduler();
 startAgenticoScheduler();
+startAgenticoUrgentWatch();
 
 // ASM externo: escaneo periodico de la superficie de ataque a Internet
 startAsmScheduler();

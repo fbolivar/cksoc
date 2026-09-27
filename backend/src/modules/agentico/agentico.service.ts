@@ -25,6 +25,7 @@ import { getIndexerClient } from '../wazuh/wazuh.client';
 import { updateIncident } from '../incidents/incidents.service';
 import { isWhitelisted } from '../response/whitelist';
 import { isPublicIP } from '../geo/geoip.service';
+import { socInfraMustNot } from '../wazuh/agents.service';
 
 const CHAT_IDS = (env.TELEGRAM_CHAT_ID || '').split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -288,4 +289,48 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
     yaBloqueadas: blockedList.length, acciones, incidentesReconocidos, incidentesResueltos: resueltosFP + resueltosVP,
     autoblock: env.AGENTICO_AUTOBLOCK, telegram, mensaje,
   };
+}
+
+// ==========================================================================
+// Vigilante urgente: reporta AL INSTANTE cualquier situación crítica nueva
+// (alerta nivel >= AGENTICO_URGENT_LEVEL o incidente crítico/alto), sin esperar
+// al reporte periódico. Corre cada AGENTICO_URGENT_MIN minutos.
+// ==========================================================================
+const URGENT_LEVEL = Number(env.AGENTICO_URGENT_LEVEL) || 12;
+const URGENT_EXCLUDE = (env.AGENTICO_URGENT_EXCLUDE_RULES || '').split(',').map((s) => s.trim()).filter(Boolean);
+let lastUrgent = Date.now();
+
+export async function runUrgentWatch(): Promise<{ enviado: boolean; urgentes: number }> {
+  if (!isTelegramConfigured() || !CHAT_IDS.length) return { enviado: false, urgentes: 0 };
+  const since = new Date(lastUrgent).toISOString();
+  lastUrgent = Date.now();
+  const lineas: string[] = [];
+  try {
+    const { data } = await getIndexerClient().post<{ hits?: { hits?: { _source?: { '@timestamp'?: string; rule?: { description?: string; level?: number }; agent?: { name?: string }; data?: { srcip?: string } } }[] } }>(
+      `/${env.WAZUH_ALERTS_INDEX}/_search`,
+      {
+        size: 10,
+        query: { bool: { filter: [{ range: { '@timestamp': { gt: since } } }, { range: { 'rule.level': { gte: URGENT_LEVEL } } }], must_not: [...socInfraMustNot(), { match: { 'rule.groups': 'vulnerability-detector' } }, { terms: { 'rule.id': URGENT_EXCLUDE } }] } },
+        sort: [{ '@timestamp': { order: 'desc' } }],
+        _source: ['@timestamp', 'rule.description', 'rule.level', 'agent.name', 'data.srcip'],
+      },
+    );
+    for (const h of data.hits?.hits ?? []) {
+      const o = h._source; const ip = o?.data?.srcip;
+      if (ip && benignIp(ip)) continue;
+      const hora = o?.['@timestamp'] ? new Date(o['@timestamp']).toLocaleTimeString('es-CO') : '';
+      lineas.push(`• [nivel ${o?.rule?.level ?? '?'}] ${o?.rule?.description ?? 'alerta crítica'}${o?.agent?.name ? ` — ${o.agent.name}` : ''}${ip ? ` · origen ${ip}` : ''}${hora ? ` (${hora})` : ''}`);
+    }
+  } catch (e) { logger.warn({ err: e instanceof Error ? e.message : e }, 'Agentico urgente: fallo consulta de alertas'); }
+  try {
+    const inc = await query<{ title: string; severity: string }>(
+      "SELECT title, severity FROM incidents WHERE severity IN ('critica','alta') AND created_at > $1 ORDER BY created_at DESC LIMIT 5",
+      [since],
+    );
+    for (const i of inc) lineas.push(`• Incidente ${i.severity}: ${i.title}`);
+  } catch { /* incidents opcional */ }
+  if (!lineas.length) return { enviado: false, urgentes: 0 };
+  const msg = ['🚨 Agentico · ALERTA URGENTE', '', `Detecté ${lineas.length} situación(es) crítica(s) que requieren atención inmediata:`, '', ...lineas.slice(0, 12), '', 'Recomiendo revisión inmediata. En el reporte periódico ampliaré el contexto y las acciones tomadas.'].join('\n');
+  await sendTelegram(CHAT_IDS, msg, { plain: true }).catch(() => undefined);
+  return { enviado: true, urgentes: lineas.length };
 }

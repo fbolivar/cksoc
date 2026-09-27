@@ -169,11 +169,14 @@ const schema = z.object({
   // --- Agentico (analista SOC autonomo) ---
   AGENTICO_ENABLED: boolish.default('true'),
   AGENTICO_AUTOBLOCK: boolish.default('true'),
-  AGENTICO_INTERVAL_MIN: z.coerce.number().default(30),
+  AGENTICO_INTERVAL_MIN: z.coerce.number().default(60),
   AGENTICO_LOOKBACK_HOURS: z.coerce.number().default(6),
   AGENTICO_MAX_BLOCKS: z.coerce.number().default(5),
   AGENTICO_MIN_ABUSE: z.coerce.number().default(50),
   AGENTICO_BAN_SECONDS: z.coerce.number().default(86400),
+  AGENTICO_URGENT_MIN: z.coerce.number().default(5),
+  AGENTICO_URGENT_LEVEL: z.coerce.number().default(12),
+  AGENTICO_URGENT_EXCLUDE_RULES: z.string().default('100210,100205,100206,100207,92213,92217,60227'),
   // Maximo de origenes a enriquecer con reputacion por consulta (cuota free ~1000/dia).
   ATTACKS_ENRICH_MAX: z.coerce.number().default(60),
 
