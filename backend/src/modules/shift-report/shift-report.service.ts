@@ -82,7 +82,6 @@ Se adjunta el informe completo en PDF.`;
         `<p><b>${emoji} Parte de estado del servicio · ${data.turnoLabel}</b><br>${data.fecha}</p>` +
         `<p>Estaciones: <b>${data.wkEnLinea}</b> en línea · <b>${data.wkApagadas}</b> apagadas · <b>${data.wkAtencion}</b> en atención<br>` +
         `Eventos ${data.ventanaLabel}: <b>${new Intl.NumberFormat('es-CO').format(data.eventos12h)}</b> · Incidentes críticos: <b>${data.incidentesCriticos}</b></p>` +
-        (internal ? `<p style=\"color:#b45309\"><i>Envío interno de revisión (aún no va al cliente).</i></p>` : '') +
         `<p>Se adjunta el informe completo en PDF.</p></div>`;
       let sent = false;
       for (let i = 0; i < 3 && !sent; i++) {
