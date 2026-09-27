@@ -55,6 +55,7 @@ const Asm = lazy(() => import('@/pages/Asm'));
 const ShadowAi = lazy(() => import('@/pages/ShadowAi'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
 const Bec = lazy(() => import('@/pages/Bec'));
+const Drp = lazy(() => import('@/pages/Drp'));
 const Xdr = lazy(() => import('@/pages/Xdr'));
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -509,6 +510,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Xdr />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/drp"
+        element={
+          <Protected>
+            <AppLayout>
+              <Drp />
             </AppLayout>
           </Protected>
         }
