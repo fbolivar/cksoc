@@ -13,6 +13,8 @@ import { getIndexerClient } from '../wazuh/wazuh.client';
 import { env } from '../../config/env';
 import { query } from '../../config/db';
 import { HttpError } from '../auth/auth.service';
+import { geolocate, isPublicIP } from '../geo/geoip.service';
+import { isTrustedEgress } from '../office365/o365.service';
 
 const RANGE: Record<string, string> = { '24h': 'now-24h', '7d': 'now-7d', '30d': 'now-30d' };
 export type EntType = 'ip' | 'host' | 'user' | 'domain';
@@ -24,7 +26,7 @@ interface Src {
   agent?: { name?: string };
   data?: {
     srcip?: string; dstip?: string; remip?: string; srcuser?: string; hostname?: string; dstname?: string;
-    office365?: { UserId?: string; ClientIP?: string };
+    office365?: { UserId?: string; ClientIP?: string; Operation?: string; ResultStatus?: string; ErrorNumber?: string };
     win?: { eventdata?: { targetUserName?: string; subjectUserName?: string } };
     dns?: { question?: { name?: string } };
   };
@@ -206,4 +208,77 @@ export async function getGraph(type: EntType, value: string, rangeIn = '7d'): Pr
   const byType: Record<string, number> = { ip: 0, host: 0, user: 0, domain: 0 };
   for (const n of kept) byType[n.type]++;
   return { seed: { type, value: v }, nodes: kept, edges: keptEdges, timeline, stats: { alertas: total, byType } };
+}
+
+// ==========================================================================
+// UEBA Timeline (estilo Exabeam Smart Timelines): historia cronológica de un
+// usuario, con puntuación de anomalía por evento. Reutiliza el mismo motor.
+// ==========================================================================
+const USER_TL_FIELDS = ['data.office365.UserId', 'data.win.eventdata.targetUserName', 'data.srcuser'];
+const HOME_ISO = 'CO';
+
+export interface TlEvent {
+  ts: string; source: string; action: string; ip: string | null;
+  ciudad: string | null; pais: string | null; outcome: 'ok' | 'fallo';
+  risk: number; band: 'critico' | 'alto' | 'medio' | 'bajo'; anomalias: string[];
+}
+export interface UserTimeline {
+  user: string; range: string; events: TlEvent[];
+  resumen: { total: number; anomalias: number; ips: number; paises: number; riesgoMax: number; fallos: number };
+}
+
+export async function getUserTimeline(user: string, rangeIn = '7d'): Promise<UserTimeline> {
+  const u = String(user || '').trim();
+  if (!u) throw new HttpError(400, 'Usuario requerido');
+  const range = RANGE[rangeIn] ? rangeIn : '7d';
+  const should = USER_TL_FIELDS.map((f) => ({ term: { [f]: u } }));
+  const { data } = await client().post<{ hits: { hits: { _source: Src }[] } }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+    size: 800,
+    query: { bool: { filter: [{ range: { '@timestamp': { gte: RANGE[range] } } }], should, minimum_should_match: 1 } },
+    sort: [{ '@timestamp': { order: 'asc' } }],
+    _source: ['@timestamp', 'rule.description', 'rule.level', 'rule.groups', 'agent.name', 'data.srcip',
+      'data.office365.ClientIP', 'data.office365.Operation', 'data.office365.ResultStatus', 'data.office365.ErrorNumber'],
+  });
+
+  const seenIp = new Set<string>(); const seenPais = new Set<string>();
+  const events: TlEvent[] = []; let anomN = 0, fallos = 0, riesgoMax = 0;
+
+  for (const h of data.hits.hits) {
+    const s = h._source; const o = s.data?.office365;
+    const ts = s['@timestamp'] || new Date().toISOString();
+    const ip = (o?.ClientIP || s.data?.srcip || '') || null;
+    const g = ip && isPublicIP(ip) ? geolocate(ip) : null;
+    const pais = g?.country ?? null; const ciudad = g?.city ?? null;
+    const src = o ? 'M365' : (s.agent?.name && s.agent.name !== 'cs-soc-wazuh' ? 'Endpoint' : (s.data?.srcip ? 'Red' : 'Sistema'));
+    const op = o?.Operation; const action = op || s.rule?.description || '(evento)';
+    const err = o?.ErrorNumber;
+    const outcome: 'ok' | 'fallo' = (o?.ResultStatus === 'Failed' || op === 'UserLoginFailed' || (!!err && err !== '0')) ? 'fallo' : 'ok';
+    const level = s.rule?.level ?? 0;
+    const anomalias: string[] = []; let risk = 0;
+
+    const hour = (new Date(ts).getUTCHours() - 5 + 24) % 24; // hora local CO
+    if (hour < 6 || hour >= 22) { anomalias.push('fuera de horario'); risk += 15; }
+    if (outcome === 'fallo') { risk += 10; fallos++; }
+    if (err === '500121' || err === '500571') { anomalias.push('MFA rechazada'); risk += 30; }
+    if (err === '50053') { anomalias.push('cuenta bloqueada'); risk += 25; }
+    if (level >= 12) { anomalias.push(`alerta nivel ${level}`); risk += 30; } else if (level >= 10) risk += 15;
+
+    const foreignPub = !!(ip && isPublicIP(ip) && !isTrustedEgress(ip));
+    if (g && g.isoCode && g.isoCode !== HOME_ISO && foreignPub) { anomalias.push(`ubicación atípica (${pais})`); risk += 40; }
+    if (foreignPub) {
+      if (!seenIp.has(ip!)) { seenIp.add(ip!); if (events.length) { anomalias.push('IP nueva'); risk += 20; } }
+    } else if (ip) seenIp.add(ip);
+    if (pais && !seenPais.has(pais)) { seenPais.add(pais); if (events.length && pais !== 'Colombia') { anomalias.push('país nuevo'); risk += 25; } }
+
+    const band: TlEvent['band'] = risk >= 60 ? 'critico' : risk >= 35 ? 'alto' : risk >= 15 ? 'medio' : 'bajo';
+    if (anomalias.length) anomN++;
+    riesgoMax = Math.max(riesgoMax, risk);
+    events.push({ ts, source: src, action, ip, ciudad, pais, outcome, risk, band, anomalias });
+  }
+
+  const ips = new Set(events.map((e) => e.ip).filter(Boolean)).size;
+  const paises = new Set(events.map((e) => e.pais).filter(Boolean)).size;
+  const total = events.length;
+  events.reverse(); // más reciente primero (los "primeros/nuevos" ya se calcularon en orden ascendente)
+  return { user: u, range, events: events.slice(0, 400), resumen: { total, anomalias: anomN, ips, paises, riesgoMax, fallos } };
 }

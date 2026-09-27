@@ -56,6 +56,7 @@ const ShadowAi = lazy(() => import('@/pages/ShadowAi'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
 const Bec = lazy(() => import('@/pages/Bec'));
 const Drp = lazy(() => import('@/pages/Drp'));
+const UebaTimeline = lazy(() => import('@/pages/UebaTimeline'));
 const Xdr = lazy(() => import('@/pages/Xdr'));
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -520,6 +521,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Drp />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/timeline"
+        element={
+          <Protected>
+            <AppLayout>
+              <UebaTimeline />
             </AppLayout>
           </Protected>
         }

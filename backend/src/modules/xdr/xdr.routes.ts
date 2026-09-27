@@ -8,7 +8,7 @@ import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
 import { HttpError } from '../auth/auth.service';
 import { logger } from '../../config/logger';
-import { getGroups, getGraph, type EntType } from './xdr.service';
+import { getGroups, getGraph, getUserTimeline, type EntType } from './xdr.service';
 
 export const xdrRouter = Router();
 xdrRouter.use(authenticate);
@@ -33,5 +33,13 @@ xdrRouter.get('/graph', canManage, async (req, res) => {
     const value = typeof req.query.value === 'string' ? req.query.value : '';
     const range = typeof req.query.range === 'string' ? req.query.range : '7d';
     res.json(await getGraph(type, value, range));
+  } catch (e) { handle(e, res); }
+});
+
+xdrRouter.get('/timeline', canManage, async (req, res) => {
+  try {
+    const user = typeof req.query.user === 'string' ? req.query.user : '';
+    const range = typeof req.query.range === 'string' ? req.query.range : '7d';
+    res.json(await getUserTimeline(user, range));
   } catch (e) { handle(e, res); }
 });
