@@ -708,3 +708,22 @@ CREATE TABLE IF NOT EXISTS bec_findings (
 );
 CREATE INDEX IF NOT EXISTS idx_bec_estado ON bec_findings(estado, severidad);
 CREATE TABLE IF NOT EXISTS bec_meta ( k VARCHAR(40) PRIMARY KEY, v TEXT );
+
+-- ---------------------------------------------------------------------
+-- DRP: riesgo digital (typosquatting / lookalike + certificate transparency)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS drp_findings (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tipo        VARCHAR(24)  NOT NULL,             -- lookalike_domain | lookalike_cert
+    brand       VARCHAR(255) NOT NULL,             -- dominio propio protegido
+    dominio     VARCHAR(255) NOT NULL,             -- dominio parecido detectado
+    severidad   VARCHAR(12)  NOT NULL DEFAULT 'media',
+    detalle     TEXT,
+    meta        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    estado      VARCHAR(16) NOT NULL DEFAULT 'open',
+    primera_vez TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ultima_vez  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (dominio, tipo)
+);
+CREATE INDEX IF NOT EXISTS idx_drp_estado ON drp_findings(estado, severidad);
+CREATE TABLE IF NOT EXISTS drp_meta ( k VARCHAR(40) PRIMARY KEY, v TEXT );

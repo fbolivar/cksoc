@@ -130,6 +130,15 @@ const schema = z.object({
   BEC_SCAN_MAILBOXES: z.string().default(''),
   BEC_INTERNAL_DOMAINS: z.string().default(''),
 
+  // DRP (riesgo digital: typosquatting + certificate transparency)
+  DRP_ENABLED: z.string().default('true'),
+  DRP_SCAN_CRON: z.string().default('10 5 * * *'),
+  DRP_MAX_PERMUTATIONS: z.string().default('700'),
+  DRP_CONCURRENCY: z.string().default('30'),
+  DRP_DNS_TIMEOUT_MS: z.string().default('3000'),
+  DRP_TLDS: z.string().default(''),
+  DRP_BRANDS: z.string().default(''),
+
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
 
