@@ -58,6 +58,7 @@ const Bec = lazy(() => import('@/pages/Bec'));
 const Drp = lazy(() => import('@/pages/Drp'));
 const UebaTimeline = lazy(() => import('@/pages/UebaTimeline'));
 const Edr = lazy(() => import('@/pages/Edr'));
+const Flows = lazy(() => import('@/pages/Flows'));
 const Xdr = lazy(() => import('@/pages/Xdr'));
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -542,6 +543,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Edr />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/flows"
+        element={
+          <Protected>
+            <AppLayout>
+              <Flows />
             </AppLayout>
           </Protected>
         }
