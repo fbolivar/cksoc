@@ -1,4 +1,4 @@
-/** Ruta del Tablero Ejecutivo de Riesgo (solo admin).
+/** Ruta del Tablero Ejecutivo de Riesgo (admin + analista, solo lectura).
  *   GET /api/risk/board
  */
 import { Router, type Request, type Response } from 'express';
@@ -7,7 +7,7 @@ import { requireRole } from '../../middleware/roles';
 import { getRiskBoard } from './risk.service';
 
 export const riskRouter = Router();
-riskRouter.use(authenticate, requireRole('admin'));
+riskRouter.use(authenticate, requireRole('admin', 'analista'));
 
 let cache: { at: number; data: unknown } | null = null;
 const TTL = 60_000; // el tablero agrega varias fuentes; cache de 1 min
