@@ -148,6 +148,12 @@ const schema = z.object({
   MDE_CLIENT_SECRET: z.string().default(''),
   MDE_API_BASE: z.string().default('https://api.securitycenter.microsoft.com'),
 
+  // Flujos de red (analítica NetFlow/QFlow del SonicWall)
+  FLOWS_BEACON_MIN: z.string().default('12'),
+  FLOWS_BEACON_CV: z.string().default('0.35'),
+  FLOWS_SCAN_DST: z.string().default('250'),
+  FLOWS_SCAN_PORT: z.string().default('150'),
+
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
 
