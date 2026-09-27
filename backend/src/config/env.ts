@@ -139,6 +139,15 @@ const schema = z.object({
   DRP_TLDS: z.string().default(''),
   DRP_BRANDS: z.string().default(''),
 
+  // EDR/NGAV (conector on-demand a Defender/SentinelOne; requiere creds del cliente)
+  EDR_PROVIDER: z.string().default(''),
+  S1_URL: z.string().default(''),
+  S1_TOKEN: z.string().default(''),
+  MDE_TENANT_ID: z.string().default(''),
+  MDE_CLIENT_ID: z.string().default(''),
+  MDE_CLIENT_SECRET: z.string().default(''),
+  MDE_API_BASE: z.string().default('https://api.securitycenter.microsoft.com'),
+
   // --- Threat Intel (AbuseIPDB) ---
   ABUSEIPDB_API_KEY: z.string().optional(),
 
