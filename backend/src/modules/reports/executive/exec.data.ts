@@ -68,6 +68,15 @@ export interface PosturaEndpoints {
   cumplimiento: { marco: string; controles: number }[];
 }
 
+export interface SuperficieExterna {
+  asmHallazgos: number; asmCriticos: number;
+  drpLookalikes: number; drpConMx: number;
+  credencialesExpuestas: number;
+  itdrAmenazas: number;
+  becSenales: number;
+  shadowAiEquipos: number; shadowAiServicios: number;
+}
+
 export interface ReportMetrics {
   // --- Identificacion del periodo ---
   periodo: Periodo;
@@ -75,6 +84,8 @@ export interface ReportMetrics {
   periodoLabel: string;      // "junio de 2026"
   rangoTexto: string;        // "del 1 al 30 de junio de 2026"
   generadoEn: string;
+  cliente: string;
+  superficie: SuperficieExterna;
 
   // --- Volumen y severidad ---
   totalEventos: number;
@@ -458,6 +469,25 @@ async function gestionDe(p: Periodo): Promise<GestionIncidentes> {
 // Recoleccion principal
 // --------------------------------------------------------------------------
 
+export async function collectSuperficie(): Promise<SuperficieExterna> {
+  const one = async (sql: string): Promise<number> => {
+    const r = await query<{ n: number }>(sql).catch(() => [{ n: 0 }]);
+    return r[0]?.n ?? 0;
+  };
+  const [asm, asmCrit, drp, drpMx, creds, itdr, bec, saDev, saSvc] = await Promise.all([
+    one("SELECT count(*)::int AS n FROM asm_findings WHERE estado='open'"),
+    one("SELECT count(*)::int AS n FROM asm_findings WHERE estado='open' AND severidad IN ('critica','alta')"),
+    one("SELECT count(*)::int AS n FROM drp_findings WHERE estado='open'"),
+    one("SELECT count(*)::int AS n FROM drp_findings WHERE estado='open' AND (meta->>'mx')='true'"),
+    one("SELECT count(*)::int AS n FROM credexp_accounts WHERE estado <> 'dismissed'"),
+    one("SELECT count(*)::int AS n FROM itdr_findings WHERE estado='open'"),
+    one("SELECT count(*)::int AS n FROM bec_findings WHERE estado='open'"),
+    one("SELECT count(DISTINCT srcip)::int AS n FROM shadow_ai_usage WHERE sanctioned=false"),
+    one("SELECT count(DISTINCT service)::int AS n FROM shadow_ai_usage WHERE sanctioned=false"),
+  ]);
+  return { asmHallazgos: asm, asmCriticos: asmCrit, drpLookalikes: drp, drpConMx: drpMx, credencialesExpuestas: creds, itdrAmenazas: itdr, becSenales: bec, shadowAiEquipos: saDev, shadowAiServicios: saSvc };
+}
+
 export async function collectMetrics(entrada: Periodo | string): Promise<ReportMetrics> {
   // Compatibilidad: si llega "YYYY-MM" se interpreta como ese mes completo.
   const p: Periodo =
@@ -597,8 +627,11 @@ export async function collectMetrics(entrada: Periodo | string): Promise<ReportM
     (postura?.vulnAltas ?? 0) > 0 || coberturaPct < 100
   ) semaforo = 'amarillo';
 
+  const superficie = await collectSuperficie();
   return {
     periodo: p,
+    cliente: env.REPORT_CLIENT_NAME || '',
+    superficie,
     mes: p.mes,
     periodoLabel: p.label,
     rangoTexto: p.rangoTexto,

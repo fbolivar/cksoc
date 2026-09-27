@@ -553,6 +553,30 @@ La comparación con el periodo anterior se realiza contra un intervalo de la mis
 // Documento completo
 // --------------------------------------------------------------------------
 
+function seccionSuperficie(m: ReportMetrics): string {
+  const s = m.superficie;
+  const rows: [string, string, string][] = [
+    ['Superficie externa expuesta a Internet', String(s.asmHallazgos), s.asmCriticos ? `${s.asmCriticos} de riesgo alto/crítico` : 'sin hallazgos de alto riesgo'],
+    ['Dominios que suplantan la marca (typosquatting)', String(s.drpLookalikes), s.drpConMx ? `${s.drpConMx} con capacidad de enviar correo` : ''],
+    ['Credenciales corporativas filtradas', String(s.credencialesExpuestas), ''],
+    ['Amenazas de identidad (viaje imposible / MFA)', String(s.itdrAmenazas), ''],
+    ['Señales de compromiso de correo (BEC)', String(s.becSenales), ''],
+    ['Uso de IA generativa no autorizada', `${s.shadowAiEquipos} equipo(s)`, s.shadowAiServicios ? `${s.shadowAiServicios} servicio(s)` : ''],
+  ];
+  const filas = rows.map(([k, v, d]) => `<tr>
+    <td style="padding:6px 8px;border-bottom:1px solid #e6e8ec;font-size:11px;color:${C.tinta}">${esc(k)}</td>
+    <td style="padding:6px 8px;border-bottom:1px solid #e6e8ec;font-size:12px;font-weight:700;text-align:center;color:${C.tinta}">${esc(v)}</td>
+    <td style="padding:6px 8px;border-bottom:1px solid #e6e8ec;font-size:10.5px;color:#666">${esc(d)}</td>
+  </tr>`).join('');
+  return `<h2 style="font-size:15px;color:${C.tinta};margin:26px 0 12px;padding:0 0 6px;border-bottom:2px solid ${C.marca};page-break-after:avoid">Superficie externa y vigilancia extendida</h2>
+  <p style="font-size:11px;color:${C.texto};margin:0 0 10px">Además de la telemetría interna, el SOC vigila de forma continua la exposición de la organización fuera del perímetro: dominios y servicios expuestos a Internet, suplantación de la marca, filtración de credenciales, amenazas de identidad y de correo, y uso de IA generativa no autorizada.</p>
+  <table style="width:100%;border-collapse:collapse;margin:6px 0 14px;page-break-inside:avoid"><thead><tr>
+    <th style="text-align:left;padding:6px 8px;background:${C.tinta};color:#fff;font-size:10px">Vigilancia extendida</th>
+    <th style="text-align:center;padding:6px 8px;background:${C.tinta};color:#fff;font-size:10px;width:74px">Hallazgos</th>
+    <th style="text-align:left;padding:6px 8px;background:${C.tinta};color:#fff;font-size:10px">Detalle</th>
+  </tr></thead><tbody>${filas}</tbody></table>`;
+}
+
 export function buildExecutiveHtml(
   m: ReportMetrics,
   overrides: SeccionesEditables = {},
@@ -631,6 +655,8 @@ export function buildExecutiveHtml(
     ${h2(5, 'Análisis')}
     ${seccionAnalisis(m, a, overrides)}
 
+    ${seccionSuperficie(m)}
+
     ${h2(6, 'Conclusiones')}
     ${overrides.conclusiones ? rich(overrides.conclusiones) : lista(a.conclusiones)}
 
@@ -679,6 +705,7 @@ export function buildExecutiveHtml(
       <div style="font-size:12px;letter-spacing:4px;color:#f4a58c">HEXWATCH</div>
       <h1 style="font-size:27px;margin:16px 0 8px;font-weight:700;line-height:1.25">Informe Gerencial de<br>Seguridad de la Información</h1>
       <div style="width:64px;height:3px;background:${C.marca};margin:12px 0 16px"></div>
+      ${m.cliente ? `<div style="font-size:19px;color:#fff;font-weight:700;margin-bottom:6px">${esc(m.cliente)}</div>` : ''}
       <div style="font-size:16px;color:#e5e7eb">${esc(m.periodoLabel)}</div>
       <div style="font-size:11px;color:#9aa1ab;margin-top:4px">${esc(m.rangoTexto)}</div>
       <div style="margin-top:34px;font-size:11.5px;color:#b6bcc5">Centro de Operaciones de Seguridad</div>
@@ -688,7 +715,7 @@ export function buildExecutiveHtml(
     </div>
     <div class="content">${contenido}</div>
     <div class="footer-band">
-      <span>Informe Gerencial de Seguridad &middot; ${esc(m.periodoLabel)}</span>
+      <span>${m.cliente ? esc(m.cliente) + ' &middot; ' : ''}Informe Gerencial &middot; ${esc(m.periodoLabel)}</span>
       <span>HexWatch &middot; Uso interno — Confidencial</span>
     </div>
   </body></html>`;

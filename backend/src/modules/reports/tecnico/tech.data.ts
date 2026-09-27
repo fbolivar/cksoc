@@ -23,6 +23,7 @@ import { getMatches, type IocMatch } from '../../threatintel/threatintel.service
 import { getInterfacePeriod, type IfacePeriodStat } from '../../netperf/netperf.service';
 import { SLA_TARGETS, type Severity as SevIncidente } from '../../metrics/metrics.service';
 import { type Periodo, periodoAnterior } from '../executive/periodo';
+import { collectSuperficie, type SuperficieExterna } from '../executive/exec.data';
 
 // --------------------------------------------------------------------------
 // Tipos
@@ -135,6 +136,8 @@ export interface TechMetrics {
   periodo: Periodo;
   generadoEn: string;
   titulo: string;
+  cliente: string;
+  superficie: SuperficieExterna;
 
   // Volumen
   total: number;
@@ -862,10 +865,13 @@ export async function collectTechMetrics(p: Periodo, titulo: string): Promise<Te
     totalSesiones: 0, ipsEventos: 0, volumenBytes: 0, subtipos: [], topApps: [], topAppsVol: [], categorias: [], topTalkers: [], topDestinos: [], topDominios: [], interfaces: [],
   } as RedData));
 
+  const superficie = await collectSuperficie();
   return {
     periodo: p,
     generadoEn: new Date().toISOString(),
     titulo,
+    cliente: env.REPORT_CLIENT_NAME || '',
+    superficie,
 
     total,
     porNivel,

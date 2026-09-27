@@ -768,6 +768,25 @@ function seccionRed(m: TechMetrics): string {
   return out;
 }
 
+function seccionSuperficieTech(m: TechMetrics): string {
+  const s = m.superficie;
+  const rows: [string, string][] = [
+    ['Superficie externa expuesta a Internet (hallazgos abiertos)', `${s.asmHallazgos} (${s.asmCriticos} alto/crítico)`],
+    ['Dominios que suplantan la marca (typosquatting)', `${s.drpLookalikes} (${s.drpConMx} con MX)`],
+    ['Credenciales corporativas filtradas', String(s.credencialesExpuestas)],
+    ['Amenazas de identidad abiertas (ITDR: viaje imposible / MFA)', String(s.itdrAmenazas)],
+    ['Señales de compromiso de correo (BEC)', String(s.becSenales)],
+    ['Uso de IA generativa no autorizada (Shadow-AI)', `${s.shadowAiEquipos} equipo(s) · ${s.shadowAiServicios} servicio(s)`],
+  ];
+  const filas = rows.map(([k, v]) => `<tr>
+    <td style="padding:5px 8px;border-bottom:1px solid ${C.linea};font-size:11px;color:${C.tinta}">${esc(k)}</td>
+    <td style="padding:5px 8px;border-bottom:1px solid ${C.linea};font-size:11.5px;font-weight:700;text-align:right;color:${C.tinta};white-space:nowrap">${esc(v)}</td>
+  </tr>`).join('');
+  return `<h2 style="font-size:14.5px;color:${C.tinta};margin:24px 0 11px;padding:0 0 6px;border-bottom:2px solid ${C.marca};page-break-after:avoid">Vigilancia extendida (superficie externa)</h2>
+  <p style="font-size:11px;line-height:1.6;color:${C.texto};margin:0 0 8px;text-align:justify">Estado de las capacidades de vigilancia fuera del perímetro operadas por el SOC: superficie externa (ASM), suplantación de marca (DRP), credenciales filtradas, amenazas de identidad (ITDR), correo (anti-BEC) y uso de IA no autorizada (Shadow-AI).</p>
+  <table style="width:100%;border-collapse:collapse;margin:4px 0 12px;page-break-inside:avoid">${filas}</table>`;
+}
+
 export function buildTechnicalHtml(m: TechMetrics): string {
   const a = analizarTecnico(m);
   const logo = logoDataUri();
@@ -854,6 +873,8 @@ export function buildTechnicalHtml(m: TechMetrics): string {
     ${h2(8, 'Hoja de ruta por sprints')}
     ${seccionHojaRuta(a)}
 
+    ${seccionSuperficieTech(m)}
+
     ${h2(9, 'Anexos')}
     ${seccionAnexos(m, a)}
   `;
@@ -876,6 +897,7 @@ export function buildTechnicalHtml(m: TechMetrics): string {
       <div style="font-size:11px;letter-spacing:4px;color:#f4a58c">HEXWATCH · SOC</div>
       <h1 style="font-size:25px;margin:14px 0 6px;font-weight:700;line-height:1.28">Informe Técnico de<br>Operaciones de Seguridad</h1>
       <div style="width:60px;height:3px;background:${C.marca};margin:12px 0 15px"></div>
+      ${m.cliente ? `<div style="font-size:18px;color:#fff;font-weight:700;margin-bottom:5px">${esc(m.cliente)}</div>` : ''}
       <div style="font-size:15px;color:#e5e7eb">${esc(m.periodo.label)}</div>
       <div style="font-size:10.5px;color:#9aa1ab;margin-top:4px;max-width:520px">${esc(m.periodo.rangoTexto)}</div>
       <div style="margin-top:30px;font-size:11px;color:#b6bcc5">${esc(m.titulo)}</div>
@@ -884,7 +906,7 @@ export function buildTechnicalHtml(m: TechMetrics): string {
     </div>
     <div class="content">${contenido}</div>
     <div class="footer-band">
-      <span>Informe Técnico SOC &middot; ${esc(m.periodo.label)}</span>
+      <span>${m.cliente ? esc(m.cliente) + ' &middot; ' : ''}Informe Técnico SOC &middot; ${esc(m.periodo.label)}</span>
       <span>HexWatch &middot; Uso interno — Confidencial</span>
     </div>
   </body></html>`;

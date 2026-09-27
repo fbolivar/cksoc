@@ -82,6 +82,7 @@ const schema = z.object({
   REPORT_SCHEDULE_CRON: z.string().default('0 7 * * *'), // diario 07:00
   REPORT_SCHEDULE_RANGE: z.string().default('24h'),
   REPORT_EMAIL_TO: z.string().optional(), // correos separados por coma (opcional)
+  REPORT_CLIENT_NAME: z.string().default(''), // nombre del cliente en los informes
   // Ruta del ejecutable de Chromium (si no, Puppeteer usa el suyo)
   PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
 
