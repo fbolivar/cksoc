@@ -8,6 +8,7 @@ Diseño seguro (2026-09-24):
   administrador por preempcion de config-mode). Nunca usa la coleccion /address-groups/ipv4.
 """
 import sys, os, json, urllib.request, urllib.error, ssl, base64
+import time
 
 _raw = os.environ.get("SONICWALL_API_URL", "https://192.168.20.1/api/sonicos").rstrip("/")
 BASE = _raw if _raw.endswith("/api/sonicos") else _raw + "/api/sonicos"
@@ -41,6 +42,23 @@ def cfg():
     try: return r["status"]["info"][0].get("read_only", "No")
     except Exception: return "No"
 def commit(): return call("POST", "/config/pending")
+def _commit_ok(r): return isinstance(r, dict) and r.get("status", {}).get("success", False)
+def commit_confirm(retries=3, delay=2.0):
+    """Confirma el commit; si el firewall responde success:false por contencion de
+    config-mode (varias operaciones a la vez), reintenta. Si otro admin toma el
+    config-mode en read-only, DIFIERE (no fuerza)."""
+    st, r = commit()
+    if _commit_ok(r): return True, r
+    tries = 0
+    while tries < retries:
+        if cfg() == "Yes":
+            return False, {"deferred": True, "detail": r}
+        time.sleep(delay)
+        login()
+        st, r = commit()
+        if _commit_ok(r): return True, r
+        tries += 1
+    return False, r
 
 def get_group_members():
     st, d = call("GET", "/address-groups/ipv4/name/" + GROUP)
@@ -61,8 +79,11 @@ def block(ip, reason=""):
     call("POST", "/address-objects/ipv4", {"address_objects":[{"ipv4":{"name":name,"zone":"WAN","host":{"ip":ip},"comment":reason[:120]}}]})
     members = get_group_members(); members.append(name)
     set_group(members)
-    st, r = commit()
-    print(json.dumps({"action":"block","ip":ip,"ok":isinstance(r,dict) and r.get("status",{}).get("success",False),"detail":r}))
+    ok, r = commit_confirm()
+    out = {"action":"block","ip":ip,"ok":ok,"detail":r}
+    if (not ok) and isinstance(r, dict) and r.get("deferred"):
+        out["deferred"] = True; out["reason"] = "config-mode tomado por otro admin durante el commit; diferido"
+    print(json.dumps(out))
 
 def unblock(ip):
     login()
