@@ -26,6 +26,7 @@ import { updateIncident } from '../incidents/incidents.service';
 import { isWhitelisted } from '../response/whitelist';
 import { isPublicIP } from '../geo/geoip.service';
 import { socInfraMustNot } from '../wazuh/agents.service';
+import { checkReputation } from '../threatintel/abuseipdb.service';
 
 const CHAT_IDS = (env.TELEGRAM_CHAT_ID || '').split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -56,6 +57,20 @@ function benignIp(ip: string): boolean {
   if (isWhitelisted(ip)) return true;
   if (BENIGN_IPS.has(ip)) return true;
   return BENIGN_CIDRS.some((c) => inCidr(ip, c));
+}
+
+// Umbral de reputacion "limpia": por debajo NO se considera atacante real (AbuseIPDB 0-100).
+const CLEAN_ABUSE_MAX = Number(process.env.AGENTICO_CLEAN_ABUSE_MAX) || 25;
+/** Reputacion limpia: AbuseIPDB configurado y score por debajo del umbral. */
+async function reputacionLimpia(ip: string): Promise<boolean> {
+  if (!ip || !isPublicIP(ip)) return false;
+  try { const rep = await checkReputation(ip); return rep.configured && rep.abuseScore < CLEAN_ABUSE_MAX; }
+  catch { return false; }
+}
+/** Benigno por lista/CDN/interno O por reputacion limpia (evita escalar/alertar falsos positivos). */
+async function esBenigno(ip: string): Promise<boolean> {
+  if (benignIp(ip)) return true;
+  return reputacionLimpia(ip);
 }
 
 interface AccionBloqueo {
@@ -197,7 +212,7 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
         WHERE status = 'abierto' AND assignee_id IS NULL AND title LIKE '[SOAR]%'`
     ).catch(() => [] as { id: string; ip: string | null }[]);
     for (const inc of abiertos) {
-      const benigno = benignIp(inc.ip ?? '');
+      const benigno = await esBenigno(inc.ip ?? '');
       try {
         await updateIncident(inc.id, { status: 'resuelto', disposition: benigno ? 'falso_positivo' : 'verdadero_positivo' }, actor.id);
         if (benigno) resueltosFP++; else resueltosVP++;
@@ -323,11 +338,11 @@ export async function runUrgentWatch(): Promise<{ enviado: boolean; urgentes: nu
     }
   } catch (e) { logger.warn({ err: e instanceof Error ? e.message : e }, 'Agentico urgente: fallo consulta de alertas'); }
   try {
-    const inc = await query<{ title: string; severity: string }>(
-      "SELECT title, severity FROM incidents WHERE severity IN ('critica','alta') AND created_at > $1 ORDER BY created_at DESC LIMIT 5",
+    const inc = await query<{ title: string; severity: string; ip: string | null }>(
+      "SELECT title, severity, source->>'ip' AS ip FROM incidents WHERE severity IN ('critica','alta') AND created_at > $1 ORDER BY created_at DESC LIMIT 8",
       [since],
     );
-    for (const i of inc) lineas.push(`• Incidente ${i.severity}: ${i.title}`);
+    for (const i of inc) { if (i.ip && await esBenigno(i.ip)) continue; lineas.push(`• Incidente ${i.severity}: ${i.title}`); }
   } catch { /* incidents opcional */ }
   if (!lineas.length) return { enviado: false, urgentes: 0 };
   const msg = ['🚨 Agentico · ALERTA URGENTE', '', `Detecté ${lineas.length} situación(es) crítica(s) que requieren atención inmediata:`, '', ...lineas.slice(0, 12), '', 'Recomiendo revisión inmediata. En el reporte periódico ampliaré el contexto y las acciones tomadas.'].join('\n');
