@@ -20,6 +20,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { TechMetrics } from './tech.data';
+import { seccionVigilancia } from '../vigilancia.template';
 import {
   analizarTecnico, DOMINIOS, ETIQUETA_SEV,
   type AnalisisTecnico, type HallazgoTecnico, type SevTecnica,
@@ -873,7 +874,7 @@ export function buildTechnicalHtml(m: TechMetrics): string {
     ${h2(8, 'Hoja de ruta por sprints')}
     ${seccionHojaRuta(a)}
 
-    ${seccionSuperficieTech(m)}
+    ${seccionVigilancia(m.vigilancia, 'tech')}
 
     ${h2(9, 'Anexos')}
     ${seccionAnexos(m, a)}

@@ -24,6 +24,7 @@ import { getInterfacePeriod, type IfacePeriodStat } from '../../netperf/netperf.
 import { SLA_TARGETS, type Severity as SevIncidente } from '../../metrics/metrics.service';
 import { type Periodo, periodoAnterior } from '../executive/periodo';
 import { collectSuperficie, type SuperficieExterna } from '../executive/exec.data';
+import { collectVigilancia, type Vigilancia } from '../vigilancia.data';
 
 // --------------------------------------------------------------------------
 // Tipos
@@ -138,6 +139,7 @@ export interface TechMetrics {
   titulo: string;
   cliente: string;
   superficie: SuperficieExterna;
+  vigilancia?: Vigilancia;
 
   // Volumen
   total: number;
@@ -866,12 +868,14 @@ export async function collectTechMetrics(p: Periodo, titulo: string): Promise<Te
   } as RedData));
 
   const superficie = await collectSuperficie();
+  const vigilancia = await collectVigilancia(720).catch(() => undefined);
   return {
     periodo: p,
     generadoEn: new Date().toISOString(),
     titulo,
     cliente: env.REPORT_CLIENT_NAME || '',
     superficie,
+    vigilancia,
 
     total,
     porNivel,

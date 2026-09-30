@@ -19,6 +19,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { ReportMetrics } from './exec.data';
+import { seccionVigilancia } from '../vigilancia.template';
 import { analizar, ETIQUETA_CRITICIDAD, duracionTexto, type Analisis, type AccionPlan, type FaseRuta, type Criticidad } from './exec.analysis';
 import { fechaLarga, etiquetaBucket } from './periodo';
 
@@ -655,7 +656,7 @@ export function buildExecutiveHtml(
     ${h2(5, 'Análisis')}
     ${seccionAnalisis(m, a, overrides)}
 
-    ${seccionSuperficie(m)}
+    ${seccionVigilancia(m.vigilancia, 'exec')}
 
     ${h2(6, 'Conclusiones')}
     ${overrides.conclusiones ? rich(overrides.conclusiones) : lista(a.conclusiones)}

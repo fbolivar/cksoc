@@ -18,6 +18,7 @@ import { getSca } from '../../sca/sca.service';
 import { getCompliance } from '../../compliance/compliance.service';
 import { SLA_TARGETS, type Severity as SevIncidente } from '../../metrics/metrics.service';
 import { resolvePeriodo, periodoAnterior, type Periodo } from './periodo';
+import { collectVigilancia, type Vigilancia } from '../vigilancia.data';
 
 export interface ThreatOrigin { country: string; count: number }
 export interface BlockedIp { ip: string; motivo: string | null; fecha: string }
@@ -86,6 +87,7 @@ export interface ReportMetrics {
   generadoEn: string;
   cliente: string;
   superficie: SuperficieExterna;
+  vigilancia?: Vigilancia;
 
   // --- Volumen y severidad ---
   totalEventos: number;
@@ -628,10 +630,12 @@ export async function collectMetrics(entrada: Periodo | string): Promise<ReportM
   ) semaforo = 'amarillo';
 
   const superficie = await collectSuperficie();
+  const vigilancia = await collectVigilancia(720).catch(() => undefined);
   return {
     periodo: p,
     cliente: env.REPORT_CLIENT_NAME || '',
     superficie,
+    vigilancia,
     mes: p.mes,
     periodoLabel: p.label,
     rangoTexto: p.rangoTexto,
