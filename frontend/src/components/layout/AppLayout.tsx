@@ -61,7 +61,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <Topbar onMenuClick={() => setMobileOpen(true)} />
-          {lic.state === 'grace' && (
+          {lic.state === 'grace' && !((lic as { snoozedUntil?: string }).snoozedUntil && Date.now() < Date.parse((lic as { snoozedUntil?: string }).snoozedUntil as string)) && (
             <div className="border-b border-red-500/40 bg-red-500/10 px-4 py-1.5 text-center text-xs font-medium text-red-700">
               ⚠ Licencia <b>VENCIDA</b>{lic.expiresAt ? ` el ${lic.expiresAt.slice(0, 10)}` : ''} · periodo de gracia: <b className="tabular-nums">{lic.graceDaysLeft} día(s)</b> antes del corte del servicio. Renueva YA en Operación → Licenciamiento.
             </div>

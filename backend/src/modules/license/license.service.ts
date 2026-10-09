@@ -30,6 +30,7 @@ export interface LicenseStatus {
   renewalWarning?: boolean; // activa pero por vencer (daysLeft <= 30)
   urgency?: LicenseUrgency; // escala del aviso según días restantes
   graceDaysLeft?: number; // días de gracia restantes tras el vencimiento (state='grace')
+  snoozedUntil?: string; // si está en el futuro, el frontend oculta el banner de gracia (aviso pospuesto)
 }
 
 // Umbral de aviso proactivo: renovar antes de que el gate bloquee todo el SOC.
@@ -100,6 +101,8 @@ async function computeStatus(): Promise<LicenseStatus> {
   const exp = new Date(v.payload.expiresAt).getTime();
   const daysLeft = Math.max(0, Math.ceil((exp - trusted) / 86400_000));
   const base = { customer: v.payload.customer, issuedAt: v.payload.issuedAt, expiresAt: v.payload.expiresAt, daysLeft, clockWarning };
+  const snz = await query<{ until: Date | string | null }>("SELECT snoozed_until AS until FROM license_state WHERE id = 1");
+  const snoozedUntil = snz[0] && snz[0].until ? new Date(snz[0].until as unknown as string).toISOString() : undefined;
   if (trusted > exp) {
     // Vencida: si aún está dentro del periodo de gracia, el SOC sigue operando.
     if (trusted <= exp + GRACE_MS) {
@@ -110,6 +113,7 @@ async function computeStatus(): Promise<LicenseStatus> {
         renewalWarning: true,
         urgency: 'urgent',
         graceDaysLeft,
+        snoozedUntil,
         ...base,
       };
     }
