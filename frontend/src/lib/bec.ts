@@ -19,7 +19,7 @@ export const becApi = {
   overview: () => api.get<BecOverview>('/bec/overview').then((r) => r.data),
   findings: (f: { estado?: string; tipo?: string } = {}) =>
     api.get<{ findings: BecFinding[] }>('/bec/findings', { params: f }).then((r) => r.data.findings),
-  scan: (range = '7d') => api.post<BecScanResult>('/bec/scan', { range }).then((r) => r.data),
+  scan: (range = '7d') => api.post<BecScanResult>('/bec/scan', { range }, { timeout: 120_000 }).then((r) => r.data),
   setStatus: (id: string, estado: 'open' | 'resolved' | 'dismissed') =>
     api.put(`/bec/findings/${id}/status`, { estado }).then((r) => r.data),
 };
