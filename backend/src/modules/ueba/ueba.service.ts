@@ -100,6 +100,8 @@ function haversineKm(a: GeoLocation, b: GeoLocation): number {
 
 /** Cuentas de máquina/servicio que no son "usuarios" reales para UEBA. */
 const IGNORE_USERS = new Set(['', '-', 'anonymous logon', 'system', 'local service', 'network service']);
+/** Cuentas excluidas SOLO del detector new_host (admin/IT que entra a muchas maquinas por su trabajo). Los demas detectores -off_hours, viaje imposible, MFA- siguen vigilandolas. */
+const NEW_HOST_IGNORE = new Set((process.env.UEBA_NEW_HOST_IGNORE || 'sistemas@col-law.com,sistemas').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean));
 function cleanUser(u: unknown): string | null {
   const s = String(u ?? '').trim();
   if (!s) return null;
@@ -326,7 +328,7 @@ function detect(logins: LoginEvent[], baseline: Map<string, UserBaseline>, s: Ue
 
     for (const e of events) {
       // Host nuevo
-      if (!base.hosts.has(e.host)) {
+      if (!base.hosts.has(e.host) && !NEW_HOST_IGNORE.has(user.toLowerCase())) {
         const k = `new_host|${user}|${e.host}`;
         if (!seenNewHost.has(k)) {
           seenNewHost.add(k);

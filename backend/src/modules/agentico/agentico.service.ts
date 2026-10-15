@@ -344,6 +344,19 @@ export async function runUrgentWatch(): Promise<{ enviado: boolean; urgentes: nu
     );
     for (const i of inc) { if (i.ip && await esBenigno(i.ip)) continue; lineas.push(`• Incidente ${i.severity}: ${i.title}`); }
   } catch { /* incidents opcional */ }
+  // Auto-cierre rapido: resuelve los [SOAR] benignos (reputacion limpia) sin esperar al ciclo de 60 min.
+  try {
+    const act = await query<{ id: string }>("SELECT id FROM users ORDER BY created_at ASC LIMIT 1");
+    const actorId = act[0]?.id;
+    if (actorId) {
+      const soar = await query<{ id: string; ip: string | null }>("SELECT id, source->>'ip' AS ip FROM incidents WHERE status='abierto' AND assignee_id IS NULL AND title LIKE '[SOAR]%'").catch(() => [] as { id: string; ip: string | null }[]);
+      for (const s2 of soar) {
+        if (s2.ip && await esBenigno(s2.ip)) {
+          await updateIncident(s2.id, { status: 'resuelto', disposition: 'falso_positivo' }, actorId).catch(() => undefined);
+        }
+      }
+    }
+  } catch { /* auto-cierre opcional */ }
   if (!lineas.length) return { enviado: false, urgentes: 0 };
   const msg = ['🚨 Agentico · ALERTA URGENTE', '', `Detecté ${lineas.length} situación(es) crítica(s) que requieren atención inmediata:`, '', ...lineas.slice(0, 12), '', 'Recomiendo revisión inmediata. En el reporte periódico ampliaré el contexto y las acciones tomadas.'].join('\n');
   await sendTelegram(CHAT_IDS, msg, { plain: true }).catch(() => undefined);
