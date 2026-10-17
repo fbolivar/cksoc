@@ -4,6 +4,7 @@
  */
 import axios from 'axios';
 import { env } from '../../config/env';
+import { getLicenseStatus } from '../license/license.service';
 
 export function isTelegramConfigured(): boolean {
   return Boolean(env.TELEGRAM_BOT_TOKEN);
@@ -12,7 +13,13 @@ export function isTelegramConfigured(): boolean {
 const apiUrl = () => `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}`;
 
 /** Envia un mensaje (Markdown) a uno o varios chats. */
+async function notificacionesPermitidas(): Promise<boolean> {
+  try { const s = await getLicenseStatus(); return s.state === 'active' || s.state === 'grace'; }
+  catch { return true; }
+}
+
 export async function sendTelegram(chatIds: string[], text: string, opts?: { plain?: boolean }): Promise<void> {
+  if (!(await notificacionesPermitidas())) return;
   if (!isTelegramConfigured()) {
     throw new Error('Telegram no configurado (define TELEGRAM_BOT_TOKEN en el .env)');
   }
@@ -36,6 +43,7 @@ export async function sendTelegramDocument(
   filename: string,
   caption?: string
 ): Promise<void> {
+  if (!(await notificacionesPermitidas())) return;
   if (!isTelegramConfigured()) {
     throw new Error('Telegram no configurado (define TELEGRAM_BOT_TOKEN en el .env)');
   }
