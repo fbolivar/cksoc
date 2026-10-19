@@ -9,6 +9,7 @@
  * usa el máximo(now, last_seen) → no se puede des-expirar retrasando la hora.
  */
 import crypto from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { query } from '../../config/db';
 
 // Llave PÚBLICA de verificación (la privada NUNCA se despliega).
@@ -74,6 +75,7 @@ export async function getLicenseStatus(): Promise<LicenseStatus> {
   if (cache && Date.now() - cache.at < TTL) return cache.data;
   const data = await computeStatus();
   cache = { at: Date.now(), data };
+  try { writeFileSync('/opt/hexwatch-ops/.lic-notify', (data.state === 'active' || data.state === 'grace') ? '1' : '0'); } catch { /* bandera opcional */ }
   return data;
 }
 
