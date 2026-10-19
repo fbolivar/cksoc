@@ -5,6 +5,7 @@
  */
 import nodemailer, { type Transporter } from 'nodemailer';
 import { env } from '../../config/env';
+import { getLicenseStatus } from '../license/license.service';
 
 let transporter: Transporter | null = null;
 
@@ -40,6 +41,11 @@ export interface MailAttachment {
 }
 
 /** Envia un correo a uno o varios destinatarios (con adjuntos opcionales). */
+async function notificacionesPermitidas(): Promise<boolean> {
+  try { const s = await getLicenseStatus(); return s.state === 'active' || s.state === 'grace'; }
+  catch { return true; }
+}
+
 export async function sendEmail(
   to: string[],
   subject: string,
@@ -47,6 +53,7 @@ export async function sendEmail(
   text: string,
   attachments?: MailAttachment[]
 ): Promise<void> {
+  if (!(await notificacionesPermitidas())) return;
   if (!isEmailConfigured()) {
     throw new Error('SMTP no configurado (define SMTP_HOST, SMTP_PORT y SMTP_FROM en el .env)');
   }
