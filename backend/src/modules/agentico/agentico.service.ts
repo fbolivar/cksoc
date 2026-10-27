@@ -23,6 +23,7 @@ import { completarPrompt, isConfigured as isCopilotConfigured } from '../copilot
 import { listAnomalies } from '../ueba/ueba.service';
 import { getIndexerClient } from '../wazuh/wazuh.client';
 import { updateIncident } from '../incidents/incidents.service';
+import { getLicenseStatus } from '../license/license.service';
 import { isWhitelisted } from '../response/whitelist';
 import { isPublicIP } from '../geo/geoip.service';
 import { socInfraMustNot } from '../wazuh/agents.service';
@@ -138,6 +139,21 @@ async function narrativa(datos: Record<string, unknown>): Promise<string> {
 export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise<AgenticoSummary> {
   const dryRun = Boolean(opts.dryRun);
   const lookback = env.AGENTICO_LOOKBACK_HOURS;
+
+  // Sin licencia vigente, Agentico se PAUSA: no analiza, no reporta y NO toca el firewall.
+  if (!dryRun) {
+    const _lic = await getLicenseStatus();
+    if (_lic.state !== 'active' && _lic.state !== 'grace') {
+      logger.info('Agentico en pausa: licencia no vigente (no analiza ni bloquea).');
+      return {
+        ranAt: new Date().toISOString(), dryRun, ventanaHoras: lookback,
+        amenazasActivas: 0, eventos30m: 0, criticas30m: 0, criticas6h: 0,
+        incAbiertos: 0, incCriticosAbiertos: 0, uebaAbiertas: 0, yaBloqueadas: 0,
+        acciones: [], incidentesReconocidos: 0, incidentesResueltos: 0,
+        autoblock: false, telegram: 'omitido', mensaje: 'Licencia no vigente: Agentico en pausa.',
+      };
+    }
+  }
 
   // ---------- 1) RECOLECCIÓN ----------
   const w30 = { range: { timestamp: { gte: 'now-30m' } } };
@@ -316,6 +332,7 @@ const URGENT_EXCLUDE = (env.AGENTICO_URGENT_EXCLUDE_RULES || '').split(',').map(
 let lastUrgent = Date.now();
 
 export async function runUrgentWatch(): Promise<{ enviado: boolean; urgentes: number }> {
+  { const _l = await getLicenseStatus(); if (_l.state !== 'active' && _l.state !== 'grace') return { enviado: false, urgentes: 0 }; }
   if (!isTelegramConfigured() || !CHAT_IDS.length) return { enviado: false, urgentes: 0 };
   const since = new Date(lastUrgent).toISOString();
   lastUrgent = Date.now();
