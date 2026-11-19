@@ -53,6 +53,7 @@ const OnCall = lazy(() => import('@/pages/OnCall'));
 const HumanFactor = lazy(() => import('@/pages/HumanFactor'));
 const Asm = lazy(() => import('@/pages/Asm'));
 const ShadowAi = lazy(() => import('@/pages/ShadowAi'));
+const AiSecurity = lazy(() => import('@/pages/AiSecurity'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
 const Bec = lazy(() => import('@/pages/Bec'));
 const Drp = lazy(() => import('@/pages/Drp'));
@@ -473,6 +474,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Asm />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/seguridad-ia"
+        element={
+          <Protected>
+            <AppLayout>
+              <AiSecurity />
             </AppLayout>
           </Protected>
         }

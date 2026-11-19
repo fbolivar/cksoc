@@ -48,6 +48,7 @@ import {
   Cloud,
   Mail,
   Wrench,
+  BrainCircuit,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -87,6 +88,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/office365', label: 'Office 365', icon: Cloud, roles: ['admin', 'analista'] },
       { to: '/itdr', label: 'ITDR · Identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
       { to: '/shadow-ai', label: 'Shadow-AI · Uso de IA', icon: Bot, roles: ['admin', 'analista'] },
+      { to: '/seguridad-ia', label: 'Seguridad de IA', icon: BrainCircuit, roles: ['admin', 'analista'] },
       { to: '/bec', label: 'Correo · Anti-BEC', icon: MailWarning, roles: ['admin', 'analista'] },
     ],
   },
