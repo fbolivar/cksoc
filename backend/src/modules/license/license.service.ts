@@ -14,7 +14,7 @@ import { query } from '../../config/db';
 
 // Llave PÚBLICA de verificación (la privada NUNCA se despliega).
 const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEA0yCxygPqLEYEhy0OJFSVbxp0M6F+4t64u0B7G97A6yA=
+MCowBQYDK2VwAyEAGd6q1HYle58O+j0GA7yTHxea+mEst8okX5QeNWtM/Zc=
 -----END PUBLIC KEY-----`;
 
 export interface LicensePayload { v: number; customer: string; licenseId: string; issuedAt: string; expiresAt: string }
