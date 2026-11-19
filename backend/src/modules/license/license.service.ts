@@ -12,13 +12,14 @@ import crypto from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { query } from '../../config/db';
 
-// Llave PÚBLICA de verificación (la privada NUNCA se despliega).
-const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+// Llave PÚBLICA de verificación (la privada NUNCA se despliega). Exportada para
+// que el cliente de phone-home verifique los tokens de estado con la MISMA llave.
+export const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAGd6q1HYle58O+j0GA7yTHxea+mEst8okX5QeNWtM/Zc=
 -----END PUBLIC KEY-----`;
 
 export interface LicensePayload { v: number; customer: string; licenseId: string; issuedAt: string; expiresAt: string }
-export type LicenseState = 'active' | 'grace' | 'expired' | 'none' | 'invalid';
+export type LicenseState = 'active' | 'grace' | 'expired' | 'none' | 'invalid' | 'revoked';
 export type LicenseUrgency = 'none' | 'info' | 'warn' | 'urgent';
 export interface LicenseStatus {
   state: LicenseState;
@@ -86,9 +87,22 @@ async function computeStatus(): Promise<LicenseStatus> {
   const v = verifyCode(rows[0].code);
   if (!v.ok || !v.payload) return { state: 'invalid', message: v.reason ?? 'Licencia inválida.' };
 
-  // Reloj confiable (anti-rollback).
+  // Reloj confiable (anti-rollback) + revocación remota.
   const now = Date.now();
-  const st = await query<{ ts: string }>("SELECT extract(epoch from last_seen_at) * 1000 AS ts FROM license_state WHERE id = 1");
+  const st = await query<{ ts: string; rev: string | null }>(
+    "SELECT extract(epoch from last_seen_at) * 1000 AS ts, extract(epoch from revoked_at) * 1000 AS rev FROM license_state WHERE id = 1"
+  );
+  // Revocación remota (phone-home): el proveedor cortó el servicio. Bloquea y es pegajoso.
+  if (st[0] && st[0].rev) {
+    return {
+      state: 'revoked',
+      message: `Licencia revocada por el proveedor${v.payload.customer ? ` (${v.payload.customer})` : ''}. El servicio quedó bloqueado; contacta a Crubol para reactivar.`,
+      customer: v.payload.customer,
+      issuedAt: v.payload.issuedAt,
+      expiresAt: v.payload.expiresAt,
+      daysLeft: 0,
+    };
+  }
   const lastSeen = st[0] ? Number(st[0].ts) : 0;
   const trusted = Math.max(now, lastSeen);
   const clockWarning = now < lastSeen - 6 * 3600_000;
@@ -129,8 +143,8 @@ async function computeStatus(): Promise<LicenseStatus> {
   return { state: 'active', message, renewalWarning, urgency, ...base };
 }
 
-/** Activa un código (solo si firma válida y no vencido). Reinicia la línea de tiempo confiable. */
-export async function activateLicense(code: string, userId: string): Promise<LicenseStatus> {
+/** Activa un código (solo si firma válida y no vencido). Reinicia la línea de tiempo confiable y limpia cualquier revocación previa. */
+export async function activateLicense(code: string, userId: string | null): Promise<LicenseStatus> {
   const v = verifyCode(code);
   if (!v.ok || !v.payload) return { state: 'invalid', message: v.reason ?? 'Código inválido.' };
   if (new Date(v.payload.expiresAt).getTime() <= Date.now()) {
@@ -143,9 +157,35 @@ export async function activateLicense(code: string, userId: string): Promise<Lic
     [code.trim(), v.payload.customer, v.payload.licenseId, v.payload.issuedAt, v.payload.expiresAt, userId]
   );
   await query(
-    `INSERT INTO license_state (id, last_seen_at) VALUES (1, now())
-       ON CONFLICT (id) DO UPDATE SET last_seen_at = now()`
+    `INSERT INTO license_state (id, last_seen_at, revoked_at) VALUES (1, now(), NULL)
+       ON CONFLICT (id) DO UPDATE SET last_seen_at = now(), revoked_at = NULL`
   );
   invalidateLicenseCache();
   return getLicenseStatus();
+}
+
+/** Marca la licencia como REVOCADA remotamente (phone-home). Bloquea y es pegajoso hasta una nueva activación. */
+export async function markRevoked(): Promise<void> {
+  await query(
+    `INSERT INTO license_state (id, revoked_at) VALUES (1, now())
+       ON CONFLICT (id) DO UPDATE SET revoked_at = now()`
+  );
+  invalidateLicenseCache();
+}
+
+/** Último issuedAt de token de estado visto (anti-replay del phone-home), en ms. */
+export async function getLastStatusAt(): Promise<number> {
+  const r = await query<{ ts: string | null }>("SELECT extract(epoch from last_status_at) * 1000 AS ts FROM license_state WHERE id = 1");
+  return r[0]?.ts ? Number(r[0].ts) : 0;
+}
+
+/** Registra (monotónico) el issuedAt del último token de estado aplicado. */
+export async function recordStatusSeen(issuedAtIso: string): Promise<void> {
+  const t = Math.floor(new Date(issuedAtIso).getTime() / 1000);
+  if (!Number.isFinite(t)) return;
+  await query(
+    `INSERT INTO license_state (id, last_status_at) VALUES (1, to_timestamp($1))
+       ON CONFLICT (id) DO UPDATE SET last_status_at = GREATEST(license_state.last_status_at, to_timestamp($1))`,
+    [t]
+  );
 }

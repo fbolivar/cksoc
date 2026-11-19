@@ -22,6 +22,7 @@ import { apiLimiter } from './middleware/rateLimit';
 import { licenseGate } from './middleware/license';
 import { authRouter } from './modules/auth/auth.routes';
 import { licenseRouter } from './modules/license/license.routes';
+import { startPhoneHomeScheduler } from './modules/license/phonehome.service';
 import { wazuhRouter } from './modules/wazuh/wazuh.routes';
 import { notificationsRouter } from './modules/notifications/notifications.routes';
 import { reportsRouter } from './modules/reports/reports.routes';
@@ -295,6 +296,9 @@ startUebaScheduler();
 
 // Inteligencia de CVEs (CISA KEV diario + EPSS cada 6 h) para priorizar vulns
 startCveIntelScheduler();
+
+// Phone-home: consulta a CrubolOS el estado de la licencia (revocar/renovar remoto)
+startPhoneHomeScheduler();
 
 // Geolocalizacion (carga GeoLite2) + emisor de ataques en vivo
 void initGeoIp().then(() => startAttacksBroadcast(io));
