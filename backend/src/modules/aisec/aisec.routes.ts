@@ -45,7 +45,9 @@ export function startAiSecScheduler(): void {
   cron.schedule(spec, async () => {
     try {
       const c = await getCopilot('24h');
-      logger.info({ interactions: c.interactions, users: c.users, jailbreak: c.jailbreakAttempts }, '🧠 Revisión AI-Security (Copilot) completada');
+      const ex = await getExfiltration('24h');
+      logger.info({ interactions: c.interactions, users: c.users, jailbreak: c.jailbreakAttempts, exfilFlagged: ex.flagged, sentMB: ex.totalSentMB }, '🧠 Revisión AI-Security completada');
+      // (1) Jailbreak / prompt-injection en Copilot
       if (c.jailbreakAttempts > 0 && env.TELEGRAM_CHAT_ID) {
         const L = [
           '🧠 Agentico · Seguridad de IA — intento(s) de manipulación en Copilot',
@@ -55,6 +57,20 @@ export function startAiSecScheduler(): void {
         ];
         for (const j of c.jailbreakList.slice(0, 8)) L.push(`• ${j.user} · ${j.app} · ${j.time.slice(0, 16).replace('T', ' ')}`);
         L.push('', 'Recomiendo revisar a esos usuarios (uso indebido o cuenta comprometida intentando evadir las barreras del asistente).');
+        await sendTelegram([env.TELEGRAM_CHAT_ID], L.join('\n'), { plain: true }).catch(() => undefined);
+      }
+      // (2) Exfiltración: equipos que superan el umbral de subida a GenAI
+      if (ex.flagged > 0 && env.TELEGRAM_CHAT_ID) {
+        const L = [
+          '🧠 Agentico · Seguridad de IA — subida inusual de datos a IA generativa',
+          '',
+          `Detecté ${ex.flagged} equipo(s) que superaron ${ex.thresholdMB} MB subidos a servicios de IA en 24 h (posible fuga de información):`,
+          '',
+        ];
+        for (const r of ex.rows.filter((r) => r.flagged).slice(0, 10)) {
+          L.push(`• ${r.host || r.srcip} → ${r.name}: ${r.sentMB} MB${r.sanctioned ? '' : ' (no aprobado)'}`);
+        }
+        L.push('', 'Recomiendo revisar qué se está enviando (riesgo de fuga de datos sensibles). Puedo ayudarte a restringir el servicio en el firewall si no está aprobado.');
         await sendTelegram([env.TELEGRAM_CHAT_ID], L.join('\n'), { plain: true }).catch(() => undefined);
       }
     } catch (e) { logger.error({ err: e }, 'Error en revisión AI-Security programada'); }
