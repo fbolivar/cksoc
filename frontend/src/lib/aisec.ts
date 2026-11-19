@@ -8,11 +8,14 @@ export interface AiInventory {
   network: NetAiRow[];
   copilot: { interactions: number; users: number; jailbreakAttempts: number; sanctioned: boolean; lastSeen: string; byApp: { key: string; count: number }[] };
 }
-export interface CopilotRow { time: string; user: string; app: string; clientIp: string | null; jailbreak: boolean; contexts: string[] }
+export interface CopilotRow { time: string; user: string; app: string; agent: string | null; clientIp: string | null; jailbreak: boolean; xpia: boolean; contexts: string[] }
+export interface AiAgent { id: string; label: string; interactions: number; builtin: boolean }
+export interface CitationRow { url: string; type: string; hits: number }
 export interface CopilotSummary {
-  range: string; interactions: number; users: number; jailbreakAttempts: number; offHours: number; sanctioned: boolean;
+  range: string; interactions: number; users: number; jailbreakAttempts: number; xpiaAttempts: number; offHours: number; sanctioned: boolean;
   byApp: { key: string; count: number }[]; topUsers: { key: string; count: number }[];
-  topResources: { resource: string; hits: number }[]; jailbreakList: CopilotRow[]; recent: CopilotRow[];
+  topResources: { resource: string; hits: number }[]; agents: AiAgent[]; externalCitations: number; topCitations: CitationRow[];
+  jailbreakList: CopilotRow[]; xpiaList: CopilotRow[]; recent: CopilotRow[];
 }
 export interface ExfilRow { srcip: string; host: string | null; service: string; name: string; sentMB: number; rcvdMB: number; hits: number; lastSeen: string; sanctioned: boolean; flagged: boolean }
 export interface ExfilSummary { range: string; thresholdMB: number; totalSentMB: number; flagged: number; rows: ExfilRow[] }

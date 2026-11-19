@@ -11,6 +11,7 @@ import { getCompliance } from '../compliance/compliance.service';
 import { getPosture } from '../email-posture/email-posture.service';
 import { getGroups } from '../xdr/xdr.service';
 import { getAttackGeo } from '../attacks/attacks.service';
+import { getOverview } from '../aisec/aisec.service';
 
 export interface CredItem { cuenta: string; brechas: number; nombres: string }
 export interface AsmItem { sev: string; objetivo: string; detalle: string }
@@ -30,7 +31,9 @@ export interface Vigilancia {
   ataques: AtaqueItem[];
   xdr: { total: number; items: XdrItem[] };
   o365: O365Stats;
+  aisec?: AiSecVig;
 }
+export interface AiSecVig { aiServices: number; shadowServices: number; sentMB: number; exfilFlagged: number; copInteractions: number; copUsers: number; jailbreak: number; xpia: number; agents: number; postureScore: number; topFindings: { category: string; status: string; finding: string }[]; topExfil: { host: string; service: string; mb: number }[]; agentList: { label: string; interactions: number }[] }
 
 const FW_LABEL: Record<string, string> = {
   nist_800_53: 'NIST 800-53', gdpr: 'GDPR', tsc: 'SOC 2 (TSC)', pci_dss: 'PCI DSS', hipaa: 'HIPAA',
@@ -147,5 +150,21 @@ export async function collectVigilancia(hours = 720): Promise<Vigilancia> {
     })).sort((a, b) => b.controles - a.controles);
   } catch { /* compliance opcional */ }
 
-  return { cred, asm, drp, postura, cumplimiento, ataques, xdr, o365 };
+  // ── 9. Seguridad de IA ──
+  let aisec: Vigilancia['aisec'];
+  try {
+    const ov = await getOverview('30d');
+    aisec = {
+      aiServices: ov.inventory.kpis.aiServices, shadowServices: ov.inventory.kpis.shadowServices,
+      sentMB: ov.exfil.totalSentMB, exfilFlagged: ov.exfil.flagged,
+      copInteractions: ov.copilot.interactions, copUsers: ov.copilot.users,
+      jailbreak: ov.copilot.jailbreakAttempts, xpia: ov.copilot.xpiaAttempts, agents: ov.copilot.agents.length,
+      postureScore: ov.posture.score,
+      topFindings: ov.posture.items.filter((i) => i.status !== 'ok').slice(0, 4).map((i) => ({ category: i.category, status: i.status, finding: i.finding })),
+      topExfil: ov.exfil.rows.slice(0, 4).map((r) => ({ host: r.host || r.srcip, service: r.name, mb: r.sentMB })),
+      agentList: ov.copilot.agents.slice(0, 6).map((a) => ({ label: a.label, interactions: a.interactions })),
+    };
+  } catch { /* aisec opcional */ }
+
+  return { cred, asm, drp, postura, cumplimiento, ataques, xdr, o365, aisec };
 }

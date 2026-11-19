@@ -111,5 +111,14 @@ export function seccionVigilancia(v: Vigilancia | undefined, modo: 'exec' | 'tec
     v.cumplimiento.map((f) => [esc(f.marco), String(f.controles), f.total.toLocaleString('es-CO')]),
     ['40%', '32%', '28%']));
 
+  // 9. Seguridad de IA
+  if (v.aisec) {
+    const a = v.aisec;
+    out.push(h3(9, 'Seguridad de IA (Shadow-AI, Copilot y exfiltración)'));
+    out.push(p(`Visibilidad y gobierno del uso de IA. Se detectaron <b>${a.aiServices} servicio(s) de IA</b> en uso (${a.shadowServices} no aprobados), <b>${a.sentMB} MB subidos a GenAI</b> (${a.exfilFlagged} equipo(s) sobre el umbral) y <b>${a.copInteractions.toLocaleString('es-CO')} interacciones de M365 Copilot</b> de ${a.copUsers} usuarios${a.agents ? `, con ${a.agents} agente(s) de IA activos` : ''}. ${a.jailbreak + a.xpia > 0 ? `<b>Señales de manipulación:</b> ${a.jailbreak} jailbreak y ${a.xpia} inyección indirecta (XPIA).` : 'Sin señales de manipulación del asistente.'} <b>Postura de IA: ${a.postureScore}/100.</b>`));
+    if (a.topExfil.length) out.push(tabla(['Equipo', 'Servicio IA', 'Subido (MB)'], top(a.topExfil, 3).map((e) => [esc(e.host), esc(e.service), String(e.mb)]), ['40%', '35%', '25%']));
+    if (a.topFindings.length) out.push(tabla(['Hallazgo', 'Estado', 'Detalle'], a.topFindings.map((f) => [esc(f.category), chip(f.status === 'critical' ? 'crítico' : 'medio', f.status === 'critical' ? '#b91c1c' : '#b45309'), esc(f.finding).slice(0, tech ? 110 : 60)]), ['28%', '14%', '58%']));
+  }
+
   return out.join('\n');
 }

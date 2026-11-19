@@ -138,25 +138,37 @@ export async function getExfiltration(rangeIn?: string): Promise<ExfilSummary> {
 
 // ---------- COPILOT (M365) ----------
 const COPILOT_FILTER = { term: { 'data.office365.Operation': 'CopilotInteraction' } };
-interface CopilotDoc { '@timestamp'?: string; data?: { office365?: { UserId?: string; ClientIP?: string; CopilotEventData?: { AppHost?: string; Contexts?: { Id?: string }[]; Messages?: { JailbreakDetected?: boolean }[] } } } }
-export interface CopilotInteractionRow { time: string; user: string; app: string; clientIp: string | null; jailbreak: boolean; contexts: string[] }
+interface AccRes { Action?: string; Type?: string; Name?: string; SiteUrl?: string; XPIADetected?: boolean }
+interface CopilotDoc { '@timestamp'?: string; data?: { office365?: { UserId?: string; ClientIP?: string; AppIdentity?: string; CopilotEventData?: { AppHost?: string; Contexts?: { Id?: string }[]; Messages?: { JailbreakDetected?: boolean }[]; AccessedResources?: AccRes[] } } } }
+export interface CopilotInteractionRow { time: string; user: string; app: string; agent: string | null; clientIp: string | null; jailbreak: boolean; xpia: boolean; contexts: string[] }
+export interface AiAgent { id: string; label: string; interactions: number; builtin: boolean }
+export interface CitationRow { url: string; type: string; hits: number }
 export interface CopilotSummary {
-  range: string; interactions: number; users: number; jailbreakAttempts: number; offHours: number; sanctioned: boolean;
+  range: string; interactions: number; users: number; jailbreakAttempts: number; xpiaAttempts: number; offHours: number; sanctioned: boolean;
   byApp: { key: string; count: number }[]; topUsers: { key: string; count: number }[];
-  topResources: { resource: string; hits: number }[]; jailbreakList: CopilotInteractionRow[]; recent: CopilotInteractionRow[];
+  topResources: { resource: string; hits: number }[]; agents: AiAgent[]; externalCitations: number; topCitations: CitationRow[];
+  jailbreakList: CopilotInteractionRow[]; xpiaList: CopilotInteractionRow[]; recent: CopilotInteractionRow[];
 }
 function shortResource(url: string): string {
   try { const u = new URL(url); const seg = u.pathname.split('/').filter(Boolean); return decodeURIComponent(seg[seg.length - 1] || u.hostname); }
   catch { const parts = url.split(/[\\/]/); return parts[parts.length - 1] || url; }
 }
+// AppIdentity "MicrosoftAgent.<Nombre>.<Id>" o "Copilot.M365Copilot.Apps" → nombre de agente o null (Copilot estándar).
+function agentOf(appIdentity?: string): { id: string; label: string; builtin: boolean } | null {
+  if (!appIdentity) return null;
+  if (appIdentity.startsWith('Copilot.M365Copilot')) return null; // superficie estándar de Copilot
+  const parts = appIdentity.split('.');
+  const label = parts.length >= 2 ? parts[1] : appIdentity;
+  return { id: appIdentity, label, builtin: appIdentity.startsWith('MicrosoftAgent.') };
+}
 
 export async function getCopilot(rangeIn?: string): Promise<CopilotSummary> {
   const { range, gte } = gteOf(rangeIn);
   const sanc = await sanctionedMap();
-  const source = ['@timestamp', 'data.office365.UserId', 'data.office365.ClientIP', 'data.office365.CopilotEventData.AppHost', 'data.office365.CopilotEventData.Contexts', 'data.office365.CopilotEventData.Messages'];
+  const source = ['@timestamp', 'data.office365.UserId', 'data.office365.ClientIP', 'data.office365.AppIdentity', 'data.office365.CopilotEventData.AppHost', 'data.office365.CopilotEventData.Contexts', 'data.office365.CopilotEventData.Messages', 'data.office365.CopilotEventData.AccessedResources'];
   const { data } = await getIndexerClient().post<{
     hits: { total: { value: number }; hits: { _source: CopilotDoc }[] };
-    aggregations?: { byApp: { buckets: { key: string; doc_count: number }[] }; topUsers: { buckets: { key: string; doc_count: number }[] }; users: { value: number }; jail: { doc_count: number } };
+    aggregations?: { byApp: { buckets: { key: string; doc_count: number }[] }; topUsers: { buckets: { key: string; doc_count: number }[] }; users: { value: number }; jail: { doc_count: number }; xpia: { doc_count: number }; appId: { buckets: { key: string; doc_count: number }[] } };
   }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
     size: 200, _source: source, sort: [{ '@timestamp': { order: 'desc' } }],
     query: { bool: { filter: [COPILOT_FILTER, { range: { '@timestamp': { gte } } }] } },
@@ -165,23 +177,75 @@ export async function getCopilot(rangeIn?: string): Promise<CopilotSummary> {
       topUsers: { terms: { field: 'data.office365.UserId', size: 15 } },
       users: { cardinality: { field: 'data.office365.UserId' } },
       jail: { filter: { term: { 'data.office365.CopilotEventData.Messages.JailbreakDetected': true } } },
+      xpia: { filter: { term: { 'data.office365.CopilotEventData.AccessedResources.XPIADetected': true } } },
+      appId: { terms: { field: 'data.office365.AppIdentity', size: 30 } },
     },
   });
   const toRow = (s: CopilotDoc): CopilotInteractionRow => {
     const o = s.data?.office365; const c = o?.CopilotEventData;
-    return { time: s['@timestamp'] ?? '', user: o?.UserId ?? '—', app: c?.AppHost ?? '—', clientIp: o?.ClientIP ?? null, jailbreak: Array.isArray(c?.Messages) && c!.Messages!.some((m) => m?.JailbreakDetected === true), contexts: Array.isArray(c?.Contexts) ? c!.Contexts!.map((x) => x?.Id ?? '').filter(Boolean) : [] };
+    const ag = agentOf(o?.AppIdentity);
+    return {
+      time: s['@timestamp'] ?? '', user: o?.UserId ?? '—', app: c?.AppHost ?? '—', agent: ag?.label ?? null, clientIp: o?.ClientIP ?? null,
+      jailbreak: Array.isArray(c?.Messages) && c!.Messages!.some((m) => m?.JailbreakDetected === true),
+      xpia: Array.isArray(c?.AccessedResources) && c!.AccessedResources!.some((r) => r?.XPIADetected === true),
+      contexts: Array.isArray(c?.Contexts) ? c!.Contexts!.map((x) => x?.Id ?? '').filter(Boolean) : [],
+    };
   };
-  const docs = (data.hits?.hits ?? []).map((h) => toRow(h._source));
-  const resAcc = new Map<string, number>(); let offHours = 0;
-  for (const d of docs) { for (const url of d.contexts) resAcc.set(url, (resAcc.get(url) ?? 0) + 1); if (isOffHours(d.time)) offHours += 1; }
-  const topResources = [...resAcc.entries()].map(([url, hits]) => ({ resource: shortResource(url), hits })).sort((a, b) => b.hits - a.hits).slice(0, 15);
+  const hits = data.hits?.hits ?? [];
+  const docs = hits.map((h) => toRow(h._source));
+  const resAcc = new Map<string, number>(); const citAcc = new Map<string, { type: string; hits: number }>(); let offHours = 0;
+  for (let i = 0; i < docs.length; i++) {
+    const d = docs[i]; const ar = hits[i]._source.data?.office365?.CopilotEventData?.AccessedResources ?? [];
+    for (const url of d.contexts) resAcc.set(url, (resAcc.get(url) ?? 0) + 1);
+    for (const r of ar) { const u = r.SiteUrl || r.Name; if (u && /^https?:\/\//i.test(u)) { const cur = citAcc.get(u) ?? { type: r.Type || 'CITATION', hits: 0 }; cur.hits += 1; citAcc.set(u, cur); } }
+    if (isOffHours(d.time)) offHours += 1;
+  }
+  const topResources = [...resAcc.entries()].map(([url, h]) => ({ resource: shortResource(url), hits: h })).sort((a, b) => b.hits - a.hits).slice(0, 15);
+  const topCitations = [...citAcc.entries()].map(([url, v]) => ({ url, type: v.type, hits: v.hits })).sort((a, b) => b.hits - a.hits).slice(0, 15);
+  const agents: AiAgent[] = (data.aggregations?.appId?.buckets ?? [])
+    .map((b) => ({ ag: agentOf(b.key), count: b.doc_count })).filter((x) => x.ag)
+    .map((x) => ({ id: x.ag!.id, label: x.ag!.label, interactions: x.count, builtin: x.ag!.builtin }));
   return {
     range, interactions: data.hits?.total?.value ?? 0, users: data.aggregations?.users?.value ?? 0,
-    jailbreakAttempts: data.aggregations?.jail?.doc_count ?? 0, offHours, sanctioned: copilotSanctioned(sanc),
+    jailbreakAttempts: data.aggregations?.jail?.doc_count ?? 0, xpiaAttempts: data.aggregations?.xpia?.doc_count ?? 0,
+    offHours, sanctioned: copilotSanctioned(sanc),
     byApp: (data.aggregations?.byApp?.buckets ?? []).map((b) => ({ key: b.key, count: b.doc_count })),
     topUsers: (data.aggregations?.topUsers?.buckets ?? []).map((b) => ({ key: b.key, count: b.doc_count })),
-    topResources, jailbreakList: docs.filter((d) => d.jailbreak).slice(0, 25), recent: docs.slice(0, 40),
+    topResources, agents, externalCitations: topCitations.reduce((s, c) => s + c.hits, 0), topCitations,
+    jailbreakList: docs.filter((d) => d.jailbreak).slice(0, 25), xpiaList: docs.filter((d) => d.xpia).slice(0, 25), recent: docs.slice(0, 40),
   };
+}
+
+// ---------- A2: uso de IA de una entidad (para enriquecer el grafo XDR) ----------
+export interface AiEntityNode { id: string; label: string; weight: number; shadow: boolean; risk: number }
+export async function aiUsageForEntity(type: 'ip' | 'host' | 'user' | 'domain', value: string, rangeIn?: string): Promise<AiEntityNode[]> {
+  const { gte } = gteOf(rangeIn);
+  const sanc = await sanctionedMap();
+  try {
+    if (type === 'user') {
+      const { data } = await getIndexerClient().post<{ hits: { total: { value: number } }; aggregations?: { jail: { doc_count: number } } }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+        size: 0, track_total_hits: true,
+        query: { bool: { filter: [COPILOT_FILTER, { range: { '@timestamp': { gte } } }, { term: { 'data.office365.UserId': value } }] } },
+        aggs: { jail: { filter: { term: { 'data.office365.CopilotEventData.Messages.JailbreakDetected': true } } } },
+      });
+      const n = data.hits?.total?.value ?? 0; if (!n) return [];
+      const jb = data.aggregations?.jail?.doc_count ?? 0;
+      return [{ id: 'aisvc:m365_copilot', label: 'M365 Copilot · IA', weight: n, shadow: false, risk: jb > 0 ? 12 : 3 }];
+    }
+    if (type === 'ip' || type === 'host') {
+      let ip = value;
+      if (type === 'host') { const a = (await getAssetList().catch(() => [])).find((x) => x.name?.toLowerCase() === value.toLowerCase()); if (!a?.ip) return []; ip = a.ip; }
+      const { data } = await getIndexerClient().post<{ aggregations?: { dom: { buckets: { key: string; doc_count: number }[] } } }>(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+        size: 0,
+        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'sonicwall' } }, { exists: { field: 'data.hostname' } }, { term: { 'data.srcip': ip } }], should: aiHostnameShould(), minimum_should_match: 1 } },
+        aggs: { dom: { terms: { field: 'data.hostname', size: 200 } } },
+      });
+      const acc = new Map<string, { name: string; hits: number }>();
+      for (const b of data.aggregations?.dom?.buckets ?? []) { const svc = matchService(b.key); if (!svc) continue; const cur = acc.get(svc.id) ?? { name: svc.name, hits: 0 }; cur.hits += b.doc_count; acc.set(svc.id, cur); }
+      return [...acc.entries()].map(([id, v]) => { const shadow = !(sanc.get(id) ?? false); return { id: `aisvc:${id}`, label: `${v.name} · IA`, weight: v.hits, shadow, risk: shadow ? 8 : 2 }; });
+    }
+    return [];
+  } catch { return []; }
 }
 
 // ---------- INVENTARIO ----------
@@ -287,10 +351,12 @@ function buildPosture(range: string, net: NetAiRow[], exfil: Omit<ExfilSummary, 
   const sensitiveDocs = new Set<string>(); for (const d of cop.recent) for (const c of d.contexts) sensitiveDocs.add(c);
   const items: PostureItem[] = [
     {
-      id: 'prompt-injection', category: 'Inyección de prompt / Jailbreak', owasp: 'ASI-01 / LLM01',
-      status: cop.jailbreakAttempts > 0 ? 'critical' : 'ok', severity: 8.5, evidence: cop.jailbreakAttempts,
-      finding: cop.jailbreakAttempts > 0 ? `${cop.jailbreakAttempts} interacción(es) de Copilot marcadas como posible jailbreak.` : 'Sin intentos de jailbreak detectados en Copilot.',
-      recommendation: 'Revisar a los usuarios implicados; reforzar políticas de uso del asistente y DLP.',
+      id: 'prompt-injection', category: 'Inyección de prompt (directa/indirecta)', owasp: 'ASI-01 / LLM01',
+      status: cop.jailbreakAttempts + cop.xpiaAttempts > 0 ? 'critical' : 'ok', severity: 8.5, evidence: cop.jailbreakAttempts + cop.xpiaAttempts,
+      finding: cop.jailbreakAttempts + cop.xpiaAttempts > 0
+        ? `${cop.jailbreakAttempts} jailbreak (directo) y ${cop.xpiaAttempts} XPIA (inyección indirecta vía contenido) marcados por Copilot.`
+        : 'Sin intentos de jailbreak ni inyección indirecta (XPIA) detectados en Copilot.',
+      recommendation: 'Revisar usuarios/documentos implicados; reforzar políticas del asistente y DLP. XPIA = contenido externo que intenta manipular al agente.',
     },
     {
       id: 'data-exfil', category: 'Exfiltración de datos a GenAI', owasp: 'ASI-05 / LLM06',

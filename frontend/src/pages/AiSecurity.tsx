@@ -18,6 +18,7 @@ type Range = (typeof RANGES)[number];
 const TABS = [
   { id: 'inv', label: 'Inventario', icon: Bot },
   { id: 'copilot', label: 'Copilot', icon: Activity },
+  { id: 'agents', label: 'Agentes', icon: Cpu },
   { id: 'exfil', label: 'Exfiltración', icon: Upload },
   { id: 'risk', label: 'Riesgo', icon: Network },
   { id: 'posture', label: 'Postura', icon: Gauge },
@@ -146,6 +147,17 @@ export default function AiSecurity() {
               </CardContent>
             </Card>
           )}
+          {cop.xpiaAttempts > 0 && (
+            <Card className="border-destructive/50">
+              <CardHeader><CardTitle className="hw-mono flex items-center gap-2 text-sm text-destructive"><ShieldAlert className="h-4 w-4" /> INYECCIÓN INDIRECTA · XPIA ({cop.xpiaAttempts})</CardTitle></CardHeader>
+              <CardContent className="space-y-1">
+                <p className="text-[11px] text-muted-foreground">Contenido (documento/web citado) que intentó manipular al asistente — detección de Microsoft (XPIADetected).</p>
+                {cop.xpiaList.map((j, i) => (
+                  <div key={i} className="hw-mono flex flex-wrap items-center gap-x-3 text-xs"><span className="font-semibold text-destructive">{j.user}</span><span className="text-muted-foreground">{j.app}</span><span className="text-muted-foreground">{fmt(j.time)}</span></div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
           <div className="grid gap-3 md:grid-cols-3">
             <Card><CardHeader><CardTitle className="hw-mono flex items-center gap-2 text-sm"><AppWindow className="h-4 w-4" /> POR APP</CardTitle></CardHeader>
               <CardContent className="space-y-1">{cop.byApp.map((b) => <div key={b.key} className="hw-mono flex justify-between text-xs"><span>{b.key}</span><span className="tabular-nums text-muted-foreground">{b.count}</span></div>)}{cop.byApp.length === 0 && <div className="text-xs text-muted-foreground">Sin datos.</div>}</CardContent></Card>
@@ -154,18 +166,49 @@ export default function AiSecurity() {
             <Card><CardHeader><CardTitle className="hw-mono flex items-center gap-2 text-sm"><FileText className="h-4 w-4" /> DOCUMENTOS (muestra)</CardTitle></CardHeader>
               <CardContent className="space-y-1">{cop.topResources.map((b, i) => <div key={i} className="hw-mono flex justify-between gap-2 text-xs"><span className="truncate" title={b.resource}>{b.resource}</span><span className="tabular-nums text-muted-foreground">{b.hits}</span></div>)}{cop.topResources.length === 0 && <div className="text-xs text-muted-foreground">Sin documentos.</div>}</CardContent></Card>
           </div>
+          {cop.topCitations.length > 0 && (
+            <Card><CardHeader><CardTitle className="hw-mono flex items-center gap-2 text-sm"><AppWindow className="h-4 w-4" /> CITACIONES WEB EXTERNAS DE COPILOT ({cop.externalCitations})</CardTitle></CardHeader>
+              <CardContent className="space-y-1">
+                <p className="text-[11px] text-muted-foreground">Contenido externo que Copilot trajo a las respuestas (vector potencial de inyección indirecta).</p>
+                {cop.topCitations.map((c, i) => (
+                  <div key={i} className="hw-mono flex items-center justify-between gap-2 text-xs"><span className="truncate" title={c.url}>{c.url.replace(/^https?:\/\//, '')}</span><span className="tabular-nums text-muted-foreground">{c.hits}</span></div>
+                ))}
+              </CardContent></Card>
+          )}
           <Card><CardHeader><CardTitle className="hw-mono flex items-center gap-2 text-sm"><Clock className="h-4 w-4" /> INTERACCIONES RECIENTES {cop.offHours > 0 && <span className="text-amber-500">· {cop.offHours} fuera de horario</span>}</CardTitle></CardHeader>
             <CardContent className="overflow-x-auto p-0"><table className="w-full text-sm">
-              <thead className="hw-mono text-[10px] uppercase text-muted-foreground"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Hora</th><th className="px-3 py-2 text-left">Usuario</th><th className="px-3 py-2 text-left">App</th><th className="px-3 py-2 text-left">Documento</th></tr></thead>
+              <thead className="hw-mono text-[10px] uppercase text-muted-foreground"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Hora</th><th className="px-3 py-2 text-left">Usuario</th><th className="px-3 py-2 text-left">App / Agente</th><th className="px-3 py-2 text-left">Documento</th></tr></thead>
               <tbody>{cop.recent.map((d, i) => (
-                <tr key={i} className={`border-b border-border/50 ${d.jailbreak ? 'bg-destructive/10' : ''}`}>
+                <tr key={i} className={`border-b border-border/50 ${d.jailbreak || d.xpia ? 'bg-destructive/10' : ''}`}>
                   <td className="hw-mono px-3 py-1.5 text-xs text-muted-foreground">{fmt(d.time)}</td>
-                  <td className="px-3 py-1.5">{d.user}{d.jailbreak && <ShieldAlert className="ml-1 inline h-3.5 w-3.5 text-destructive" />}</td>
-                  <td className="px-3 py-1.5 text-muted-foreground">{d.app}</td>
+                  <td className="px-3 py-1.5">{d.user}{d.jailbreak && <ShieldAlert className="ml-1 inline h-3.5 w-3.5 text-destructive" />}{d.xpia && <AlertTriangle className="ml-1 inline h-3.5 w-3.5 text-destructive" />}</td>
+                  <td className="px-3 py-1.5 text-muted-foreground">{d.app}{d.agent && <span className="ml-1 rounded bg-primary/10 px-1 text-[10px] text-primary">{d.agent}</span>}</td>
                   <td className="px-3 py-1.5 text-xs text-muted-foreground"><span className="block max-w-md truncate">{d.contexts.map((c) => c.split(/[\\/]/).pop()).join(', ') || '—'}</span></td>
                 </tr>))}</tbody>
             </table></CardContent></Card>
         </div>
+      )}
+
+      {/* ---- AGENTES (A4) ---- */}
+      {tab === 'agents' && cop && (
+        <Card>
+          <CardHeader><CardTitle className="hw-mono flex items-center gap-2 text-sm"><Cpu className="h-4 w-4" /> AGENTES DE IA EN EL TENANT ({cop.agents.length})</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            <p className="text-[11px] text-muted-foreground">Agentes declarativos / Copilot Studio detectados en la auditoría de M365 (AppIdentity), distintos del Copilot estándar.</p>
+            <table className="w-full text-sm">
+              <thead className="hw-mono text-[10px] uppercase text-muted-foreground"><tr className="border-b border-border"><th className="px-3 py-2 text-left">Agente</th><th className="px-3 py-2 text-left">Tipo</th><th className="px-3 py-2 text-right">Interacciones</th></tr></thead>
+              <tbody>{cop.agents.map((a) => (
+                <tr key={a.id} className="border-b border-border/50">
+                  <td className="px-3 py-1.5 font-medium">{a.label}</td>
+                  <td className="px-3 py-1.5"><Pill ok={a.builtin}>{a.builtin ? 'Integrado (Microsoft)' : 'Personalizado'}</Pill></td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{a.interactions}</td>
+                </tr>))}
+                {cop.agents.length === 0 && <tr><td colSpan={3} className="px-3 py-4 text-center text-muted-foreground">No se detectaron agentes de IA propios en el periodo (solo Copilot estándar).</td></tr>}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-muted-foreground">Un agente <b>Personalizado</b> (Copilot Studio) merece revisión: qué datos toca y quién lo usa. Se marcan también en "Interacciones recientes" de Copilot.</p>
+          </CardContent>
+        </Card>
       )}
 
       {/* ---- EXFILTRACIÓN ---- */}
@@ -210,6 +253,7 @@ export default function AiSecurity() {
                 </div>
               ))}
               {risk.entities.length === 0 && <div className="text-xs text-muted-foreground">Sin entidades con riesgo de IA en el periodo.</div>}
+              <p className="pt-1 text-[11px] text-muted-foreground">↔ Estas entidades también aparecen en el <b>grafo XDR</b>: pivotea un usuario o IP y verás su uso de IA junto al resto de la actividad.</p>
             </CardContent></Card>
         </div>
       )}

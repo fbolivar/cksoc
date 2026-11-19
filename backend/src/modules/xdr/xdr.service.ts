@@ -15,6 +15,7 @@ import { query } from '../../config/db';
 import { HttpError } from '../auth/auth.service';
 import { geolocate, isPublicIP } from '../geo/geoip.service';
 import { isTrustedEgress } from '../office365/o365.service';
+import { aiUsageForEntity } from '../aisec/aisec.service';
 
 const RANGE: Record<string, string> = { '24h': 'now-24h', '7d': 'now-7d', '30d': 'now-30d' };
 export type EntType = 'ip' | 'host' | 'user' | 'domain';
@@ -204,6 +205,14 @@ export async function getGraph(type: EntType, value: string, rangeIn = '7d'): Pr
   const kept = [...nodes.values()].sort((a, b) => Number(b.seed) - Number(a.seed) || b.alertas - a.alertas).slice(0, TOP);
   const keptIds = new Set(kept.map((n) => n.id));
   const keptEdges = [...edges.values()].filter((e) => keptIds.has(e.from) && keptIds.has(e.to)).sort((a, b) => b.weight - a.weight).slice(0, 200);
+  // Enriquecimiento IA (A2): agrega el uso de IA del seed como nodos al grafo.
+  try {
+    const aiNodes = await aiUsageForEntity(type, v, range);
+    for (const an of aiNodes) {
+      if (!keptIds.has(an.id)) { kept.push({ id: an.id, type: 'domain', label: an.label, alertas: 0, maxLevel: an.risk, ioc: false, seed: false }); keptIds.add(an.id); }
+      keptEdges.push({ from: seedId, to: an.id, weight: an.weight });
+    }
+  } catch { /* enriquecimiento IA opcional */ }
   const total = typeof data.hits.total === 'number' ? data.hits.total : data.hits.total.value;
   const byType: Record<string, number> = { ip: 0, host: 0, user: 0, domain: 0 };
   for (const n of kept) byType[n.type]++;
