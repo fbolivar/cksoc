@@ -14,7 +14,7 @@ import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
 import { sendTelegram } from '../notifications/telegram.service';
-import { getInventory, getCopilot } from './aisec.service';
+import { getInventory, getCopilot, getOverview, getExfiltration, getRisk, getPosture } from './aisec.service';
 
 export const aisecRouter = Router();
 aisecRouter.use(authenticate);
@@ -32,6 +32,10 @@ aisecRouter.get('/inventory', canManage, async (req, res) => {
 aisecRouter.get('/copilot', canManage, async (req, res) => {
   try { res.json(await getCopilot(typeof req.query.range === 'string' ? req.query.range : '7d')); } catch (e) { handle(e, res); }
 });
+aisecRouter.get('/overview', canManage, async (req, res) => { try { res.json(await getOverview(typeof req.query.range === 'string' ? req.query.range : '7d')); } catch (e) { handle(e, res); } });
+aisecRouter.get('/exfiltration', canManage, async (req, res) => { try { res.json(await getExfiltration(typeof req.query.range === 'string' ? req.query.range : '7d')); } catch (e) { handle(e, res); } });
+aisecRouter.get('/risk', canManage, async (req, res) => { try { res.json(await getRisk(typeof req.query.range === 'string' ? req.query.range : '7d')); } catch (e) { handle(e, res); } });
+aisecRouter.get('/posture', canManage, async (req, res) => { try { res.json(await getPosture(typeof req.query.range === 'string' ? req.query.range : '7d')); } catch (e) { handle(e, res); } });
 
 /** Scheduler: revisión diaria de intentos de jailbreak en Copilot. */
 export function startAiSecScheduler(): void {
