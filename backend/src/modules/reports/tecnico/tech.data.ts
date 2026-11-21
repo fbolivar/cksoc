@@ -13,7 +13,7 @@ import { getIndexerClient } from '../../wazuh/wazuh.client';
 import { env } from '../../../config/env';
 import { query } from '../../../config/db';
 import { geolocate, isPublicIP } from '../../geo/geoip.service';
-import { getAgents, getAgentsSummary, socInfraMustNot, isSocInfra, type AgentItem } from '../../wazuh/agents.service';
+import { getClientAgents, getClientAgentsSummary, socInfraMustNot, isSocInfra, type AgentItem } from '../../wazuh/agents.service';
 import { getVulnerabilities, type VulnData } from '../../vulnerabilities/vuln.service';
 import { getSca, type ScaData } from '../../sca/sca.service';
 import { getCoverage, type CoverageData } from '../../mitre/mitre.service';
@@ -588,7 +588,7 @@ async function fimDelPeriodo(p: Periodo): Promise<TechMetrics['fim']> {
     track_total_hits: true,
     sort: [{ 'rule.level': 'desc' }, { timestamp: 'desc' }],
     _source: ['syscheck.path', 'syscheck.event', 'syscheck.uname_after', 'agent.name', 'rule.level', 'timestamp'],
-    query: { bool: { filter: [rango(p), filtro] } },
+    query: { bool: { filter: [rango(p), filtro], must_not: socInfraMustNot() } },
     aggs: { ev: { terms: { field: 'syscheck.event', size: 5 } } },
   });
 
@@ -835,8 +835,8 @@ export async function collectTechMetrics(p: Periodo, titulo: string): Promise<Te
   // Estado actual de la plataforma (tolerante a modulos sin datos)
   const [resumenAgentes, inventario, vuln, sca, cobertura, puertos, usuarios, iocMatches, supresiones, reglasPropias] =
     await Promise.all([
-      getAgentsSummary().catch(() => ({ total: 0, active: 0, disconnected: 0, neverConnected: 0, pending: 0 })),
-      getAgents(100).then((xs) => xs.filter((a) => a.id !== '000')).catch(() => [] as AgentItem[]),
+      getClientAgentsSummary().catch(() => ({ total: 0, active: 0, disconnected: 0, neverConnected: 0, pending: 0 })),
+      getClientAgents(100).then((xs) => xs.filter((a) => a.id !== '000')).catch(() => [] as AgentItem[]),
       getVulnerabilities().catch(() => null),
       getSca().catch(() => null),
       getCoverage(Math.min(Math.max(p.dias, 1), 90)).catch(() => null),
@@ -870,6 +870,9 @@ export async function collectTechMetrics(p: Periodo, titulo: string): Promise<Te
 
   const superficie = await collectSuperficie();
   const vigilancia = await collectVigilancia(720).catch(() => undefined);
+  // Solo-cliente en las secciones de detalle del informe (excluye infra del SOC)
+  const puertosCliente = puertos.filter((pr) => !isSocInfra(pr.agent));
+  const scaCliente = sca ? { ...sca, agentes: sca.agentes.filter((a) => !isSocInfra(a.agent)) } : null;
   return {
     periodo: p,
     generadoEn: new Date().toISOString(),
@@ -905,9 +908,9 @@ export async function collectTechMetrics(p: Periodo, titulo: string): Promise<Te
     },
     inventario,
     vuln,
-    sca,
-    puertos,
-    usuariosRiesgo: usuarios.riesgo ?? [],
+    sca: scaCliente,
+    puertos: puertosCliente,
+    usuariosRiesgo: (usuarios.riesgo ?? []).filter((u) => !isSocInfra(u.agent)),
     iocMatches,
     supresiones,
     reglasPropias,
