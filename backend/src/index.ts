@@ -53,6 +53,7 @@ import { emailPostureRouter } from './modules/email-posture/email-posture.routes
 import { asmRouter, startAsmScheduler } from './modules/asm/asm.routes';
 import { shadowAiRouter, startShadowAiScheduler } from './modules/shadowai/shadowai.routes';
 import { aisecRouter, startAiSecScheduler } from './modules/aisec/aisec.routes';
+import { nocRouter, startNocScheduler } from './modules/noc/noc.routes';
 import { itdrRouter, startItdrScheduler } from './modules/itdr/itdr.routes';
 import { becRouter, startBecScheduler } from './modules/bec/bec.routes';
 import { xdrRouter } from './modules/xdr/xdr.routes';
@@ -156,6 +157,7 @@ app.use('/api/email-posture', emailPostureRouter);
 app.use('/api/asm', asmRouter);
 app.use('/api/shadow-ai', shadowAiRouter);
 app.use('/api/aisec', aisecRouter);
+app.use('/api/noc', nocRouter);
 app.use('/api/itdr', itdrRouter);
 app.use('/api/bec', becRouter);
 app.use('/api/xdr', xdrRouter);
@@ -281,6 +283,7 @@ startAsmScheduler();
 // Shadow-AI: deteccion de uso de IA generativa no autorizada
 startShadowAiScheduler();
 startAiSecScheduler();
+startNocScheduler();
 
 // ITDR: amenazas de identidad (viaje imposible / MFA-fatigue) sobre logins O365
 startItdrScheduler();

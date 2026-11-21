@@ -71,6 +71,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
       { to: '/resumen', label: 'Resumen Ejecutivo', icon: ShieldCheck },
       { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
+      { to: '/noc', label: 'NOC · Disponibilidad', icon: Activity, roles: ['admin', 'analista'] },
     ],
   },
   {
