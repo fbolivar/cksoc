@@ -7,6 +7,7 @@
  */
 import { getDdosBots } from '../ddos/ddos.service';
 import { getApiExposure } from '../api-exposure/api-exposure.service';
+import { getApiHttpCoverage, type ApiCoverage } from '../api-analytics/api-analytics.service';
 
 export type Estado = 'detectado' | 'limpio' | 'sin-cobertura';
 export type Sev = 'alta' | 'media' | 'baja' | 'info';
@@ -27,10 +28,12 @@ const SINCOB = (id: string, nombre: string, descripcion: string): ApiCategoria =
 
 export async function getApiThreats(rangeIn = '24h'): Promise<ApiThreatsReport> {
   const range = ['1h', '24h', '7d'].includes(rangeIn) ? rangeIn : '24h';
-  const [ddos, exp] = await Promise.all([
+  const [ddos, exp, cov] = await Promise.all([
     getDdosBots(range).catch(() => ({ volumetric: [], bots: [], resumen: { flujos: 0, volumetricos: 0, bots: 0 } })),
     getApiExposure().catch(() => ({ ultimoScan: null, resumen: { total: 0, apis: 0, specsExpuestos: 0, nuevos: 0, zombies: 0 }, endpoints: [] })),
+    getApiHttpCoverage(range).catch((): ApiCoverage => ({ cobertura: false, fuentes: [], bola: [], auth: [], funcion: [] })),
   ]);
+  const fuenteHttp = `Analítica HTTP por endpoint (${cov.fuentes.join(', ') || 'sin fuentes'})`;
 
   // Solo las señales dirigidas a puertos web/API cuentan como "amenazas de API":
   // el abuso de credenciales a telnet/RDP/PPTP, etc. es perímetro (vive en /ddos),
@@ -59,14 +62,27 @@ export async function getApiThreats(rangeIn = '24h'): Promise<ApiThreatsReport> 
   const det = (count: number, sev: Sev): Estado => (count > 0 ? 'detectado' : 'limpio');
 
   const categorias: ApiCategoria[] = [
-    SINCOB('API1', 'Broken Object Level Authorization (BOLA)', 'Acceso a objetos de otros usuarios manipulando IDs. Se detecta por patrones de acceso a nivel de endpoint/payload.'),
+    // API1 BOLA: ahora observable vía analítica HTTP por endpoint (#C) si hay cobertura.
+    cov.cobertura
+      ? {
+          id: 'API1', nombre: 'Broken Object Level Authorization (BOLA)', estado: cov.bola.length ? 'detectado' : 'limpio',
+          severidad: cov.bola.some((h) => h.severidad === 'alta') ? 'alta' : cov.bola.length ? 'media' : 'baja',
+          count: cov.bola.length,
+          evidencia: cov.bola.slice(0, 6).map((h) => h.titulo),
+          fuente: fuenteHttp, ruta: '/analitica-api',
+          descripcion: 'Enumeración/sondeo de objetos por IP (acceso a objetos de otros usuarios). Observable por analítica de logs HTTP por endpoint.',
+        }
+      : SINCOB('API1', 'Broken Object Level Authorization (BOLA)', 'Acceso a objetos de otros usuarios manipulando IDs. Se detecta por patrones de acceso a nivel de endpoint/payload.'),
     {
-      id: 'API2', nombre: 'Broken Authentication', estado: det(credStuffing.length, 'alta'),
-      severidad: credStuffing.some((b) => b.severidad === 'alta') ? 'alta' : credStuffing.length ? 'media' : 'baja',
-      count: credStuffing.length,
-      evidencia: credStuffing.slice(0, 6).map((b) => `${b.source}${b.pais ? ` (${b.pais})` : ''} -> ${b.target}:${b.topPort} (${b.flows} flujos)`),
-      fuente: 'DDoS/Bots (SonicWall)', ruta: '/ddos',
-      descripcion: 'Credential stuffing / ATO: automatización externa de alto volumen contra puertos web/API.',
+      id: 'API2', nombre: 'Broken Authentication', estado: det(credStuffing.length + cov.auth.length, 'alta'),
+      severidad: credStuffing.some((b) => b.severidad === 'alta') || cov.auth.some((h) => h.severidad === 'alta') ? 'alta' : (credStuffing.length + cov.auth.length) ? 'media' : 'baja',
+      count: credStuffing.length + cov.auth.length,
+      evidencia: [
+        ...credStuffing.slice(0, 4).map((b) => `${b.source}${b.pais ? ` (${b.pais})` : ''} -> ${b.target}:${b.topPort} (${b.flows} flujos)`),
+        ...cov.auth.slice(0, 4).map((h) => h.titulo),
+      ],
+      fuente: cov.cobertura ? `DDoS/Bots (SonicWall) + ${fuenteHttp}` : 'DDoS/Bots (SonicWall)', ruta: cov.auth.length ? '/analitica-api' : '/ddos',
+      descripcion: 'Credential stuffing / ATO a nivel red (puertos web/API) + fallos de autenticación (401/403) por endpoint.',
     },
     SINCOB('API3', 'Broken Object Property Level Authorization', 'Exposición/modificación de propiedades de objetos no autorizadas. Requiere inspección del payload.'),
     {
@@ -78,7 +94,16 @@ export async function getApiThreats(rangeIn = '24h'): Promise<ApiThreatsReport> 
       fuente: 'DDoS/Bots (SonicWall)', ruta: '/ddos',
       descripcion: 'API DDoS / HTTP flood: saturación de recursos (fan-in, amplificación, flood).',
     },
-    SINCOB('API5', 'Broken Function Level Authorization', 'Acceso a funciones/administración no autorizadas. Requiere analítica por endpoint y rol.'),
+    cov.cobertura
+      ? {
+          id: 'API5', nombre: 'Broken Function Level Authorization', estado: cov.funcion.length ? 'detectado' : 'limpio',
+          severidad: cov.funcion.some((h) => h.severidad === 'alta') ? 'alta' : cov.funcion.length ? 'media' : 'baja',
+          count: cov.funcion.length,
+          evidencia: cov.funcion.slice(0, 6).map((h) => h.titulo),
+          fuente: fuenteHttp, ruta: '/analitica-api',
+          descripcion: 'Intentos de acceder a funciones/recursos privilegiados (respuestas 403) sin autorización de nivel. Observable por analítica de logs HTTP por endpoint.',
+        }
+      : SINCOB('API5', 'Broken Function Level Authorization', 'Acceso a funciones/administración no autorizadas. Requiere analítica por endpoint y rol.'),
     {
       id: 'API6', nombre: 'Unrestricted Access to Sensitive Business Flows', estado: det(scraping.length, 'media'),
       severidad: scraping.length ? 'media' : 'baja', count: scraping.length,

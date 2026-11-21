@@ -87,6 +87,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/flows', label: 'Flujos de red', icon: Waypoints, roles: ['admin', 'analista'] },
       { to: '/ddos', label: 'DDoS / Bots', icon: Waves, roles: ['admin', 'analista'] },
       { to: '/amenazas-api', label: 'Amenazas de API (OWASP)', icon: ListChecks, roles: ['admin', 'analista'] },
+      { to: '/analitica-api', label: 'Analítica de API (endpoint)', icon: Activity, roles: ['admin', 'analista'] },
       { to: '/office365', label: 'Office 365', icon: Cloud, roles: ['admin', 'analista'] },
       { to: '/itdr', label: 'ITDR · Identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
       { to: '/seguridad-ia', label: 'Seguridad de IA', icon: BrainCircuit, roles: ['admin', 'analista'] },

@@ -50,6 +50,7 @@ const DdosDetection = lazy(() => import('@/pages/DdosDetection'));
 const LlmGuard = lazy(() => import('@/pages/LlmGuard'));
 const ApiExposure = lazy(() => import('@/pages/ApiExposure'));
 const ApiThreats = lazy(() => import('@/pages/ApiThreats'));
+const ApiAnalytics = lazy(() => import('@/pages/ApiAnalytics'));
 const Ndr = lazy(() => import('@/pages/Ndr'));
 const Office365 = lazy(() => import('@/pages/Office365'));
 const EmailPosture = lazy(() => import('@/pages/EmailPosture'));
@@ -481,6 +482,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <ApiThreats />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/analitica-api"
+        element={
+          <Protected>
+            <AppLayout>
+              <ApiAnalytics />
             </AppLayout>
           </Protected>
         }
