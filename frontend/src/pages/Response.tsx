@@ -77,7 +77,7 @@ export default function Response() {
   const tabs: { id: Tab; label: string; icon: typeof ShieldAlert; n?: number }[] = [
     { id: 'incidentes', label: 'IPs sospechosas', icon: ShieldAlert, n: incidents.length },
     { id: 'bloqueadas', label: 'IPs bloqueadas', icon: Ban, n: blocked.length },
-    { id: 'auditoria', label: 'Auditoría', icon: ShieldCheck, n: audit.length },
+    { id: 'auditoria', label: 'Auditoría de bloqueos', icon: ShieldCheck, n: audit.length },
   ];
 
   return (
@@ -302,7 +302,7 @@ function AuditView({ audit }: { audit: AuditRow[] }) {
     r === 'success' ? 'success' : r === 'rejected' ? 'warning' : 'danger';
   return (
     <Card>
-      <CardHeader><CardTitle className="text-muted-foreground">Auditoría de acciones ({audit.length})</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-muted-foreground">Auditoría de bloqueos ({audit.length})</CardTitle></CardHeader>
       <CardContent>
         {audit.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">Sin acciones registradas</p>

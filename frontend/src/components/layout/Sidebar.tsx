@@ -134,7 +134,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/oncall', label: 'On-call · Turnos', icon: CalendarClock, roles: ['admin', 'analista'] },
       { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse },
       { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, roles: ['admin'] },
-      { to: '/auditoria', label: 'Auditoría', icon: ScrollText, roles: ['admin'] },
+      { to: '/auditoria', label: 'Auditoría del sistema', icon: ScrollText, roles: ['admin'] },
       { to: '/gestion', label: 'Gestión', icon: Users, roles: ['admin'] },
       { to: '/licencia', label: 'Licenciamiento', icon: KeyRound, roles: ['admin'] },
     ],

@@ -66,7 +66,7 @@ export default function Audit() {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="hw-mono text-2xl font-bold tracking-tight">Auditoría</h1>
+          <h1 className="hw-mono text-2xl font-bold tracking-tight">Auditoría del sistema</h1>
           <p className="text-sm text-muted-foreground">
             Quién hizo qué en la plataforma — las acciones sensibles (bloqueos, borrados, cambios de reglas) primero
           </p>
