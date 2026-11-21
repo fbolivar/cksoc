@@ -37,7 +37,7 @@ interface VeloClient { host?: string }
 
 // Infraestructura PROPIA del SOC: no se triagea como si fuera un activo-cliente
 // (su volumen es ruido propio, no ataque). Se gestiona/parcha directamente.
-const SOC_INFRA_RE = /(gvm-soc|pmx-soc)/i;
+const SOC_INFRA_RE = /(cs-soc|gvm-soc|pmx-soc)/i;
 
 // Host con señal REAL de amenaza (no solo vulnerabilidades): alerta de nivel
 // crítico o alguna crítica en 24h. Solo entonces el triage forense es la acción
