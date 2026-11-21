@@ -106,7 +106,7 @@ export function startAsmScheduler(): void {
       const total = out.reduce((s, r) => s + r.nuevos, 0);
       logger.info({ dominios: out.length, nuevos: total }, '🌐 Escaneo ASM completado');
       if (nuevos.length && env.TELEGRAM_CHAT_ID) {
-        const L = ['🌐 Agentico · Superficie de ataque externa', '', `Al revisar lo que la organización expone a Internet detecté ${nuevos.length} exposición(es) nueva(s) de riesgo alto/crítico:`, ''];
+        const L = ['🌐 CKAgentico · Superficie de ataque externa', '', `Al revisar lo que la organización expone a Internet detecté ${nuevos.length} exposición(es) nueva(s) de riesgo alto/crítico:`, ''];
         for (const f of nuevos.slice(0, 12)) L.push(`• [${String(f.severidad).toUpperCase()}] ${f.host} — ${f.detalle}`);
         L.push('', 'Recomiendo verificar si estas exposiciones son intencionales. Quedo atento para apoyar en la revisión.');
         await sendTelegram([env.TELEGRAM_CHAT_ID], L.join('\n'), { plain: true }).catch(() => undefined);

@@ -250,7 +250,7 @@ const TIPO_TXT: Record<string, string> = { forwarding_rule: 'Regla de reenvío/o
 
 export interface BecLike { usuario: string; tipo: string; severidad: string; detalle: string }
 export function buildTelegramReport(items: BecLike[]): string {
-  const L: string[] = ['📧 Agentico · Correo — señales de BEC (Business Email Compromise)', ''];
+  const L: string[] = ['📧 CKAgentico · Correo — señales de BEC (Business Email Compromise)', ''];
   L.push(`Detecté ${items.length} señal(es) en el correo que conviene revisar:`, '');
   items.slice(0, 15).forEach((f, i) => {
     const ex = EXPLAIN[f.tipo];

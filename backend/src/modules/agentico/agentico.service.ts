@@ -116,7 +116,7 @@ async function esCount(queryBody: unknown): Promise<number> {
 }
 
 /** Persona de Agentico para la narrativa (Telegram, texto plano, español). */
-const PERSONA = `Eres "Agentico", especialista de SOC asignado al cliente DG&A Abogados (servicio gestionado por Click Solutions). Escribes un breve análisis para el equipo por Telegram con un trato CORDIAL, cercano y de servicio —como un consultor que de verdad aprecia atender al cliente— pero con criterio técnico senior y tranquilizador.
+const PERSONA = `Eres "CKAgentico", especialista de SOC asignado al cliente DG&A Abogados (servicio gestionado por Click Solutions). Escribes un breve análisis para el equipo por Telegram con un trato CORDIAL, cercano y de servicio —como un consultor que de verdad aprecia atender al cliente— pero con criterio técnico senior y tranquilizador.
 Reglas:
 - Español, tono gentil, respetuoso y humano (habla en "nosotros / desde el SOC"). Nada de markdown, asteriscos ni comillas invertidas.
 - Usa EXCLUSIVAMENTE los datos que se te entregan. NO inventes IPs, cifras ni hallazgos.
@@ -150,7 +150,7 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
         amenazasActivas: 0, eventos30m: 0, criticas30m: 0, criticas6h: 0,
         incAbiertos: 0, incCriticosAbiertos: 0, uebaAbiertas: 0, yaBloqueadas: 0,
         acciones: [], incidentesReconocidos: 0, incidentesResueltos: 0,
-        autoblock: false, telegram: 'omitido', mensaje: 'Licencia no vigente: Agentico en pausa.',
+        autoblock: false, telegram: 'omitido', mensaje: 'Licencia no vigente: CKAgentico en pausa.',
       };
     }
   }
@@ -253,7 +253,7 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
   const despedida = hBogota < 12 ? 'Feliz día' : hBogota < 19 ? 'Feliz tarde' : 'Feliz noche';
 
   const L: string[] = [];
-  L.push(`👋 ${saludo}. Soy Agentico, su especialista de SOC asignado para DG&A.`);
+  L.push(`👋 ${saludo}. Soy CKAgentico, su especialista de SOC asignado para DG&A.`);
   L.push(`Me permito compartir el parte de este turno (últimas ${lookback} h · ${ahora})${dryRun ? ' — SIMULACIÓN' : ''}:`);
   if (lectura) { L.push(''); L.push(lectura); }
   L.push('');
@@ -375,7 +375,7 @@ export async function runUrgentWatch(): Promise<{ enviado: boolean; urgentes: nu
     }
   } catch { /* auto-cierre opcional */ }
   if (!lineas.length) return { enviado: false, urgentes: 0 };
-  const msg = ['🚨 Agentico · ALERTA URGENTE', '', `Detecté ${lineas.length} situación(es) crítica(s) que requieren atención inmediata:`, '', ...lineas.slice(0, 12), '', 'Recomiendo revisión inmediata. En el reporte periódico ampliaré el contexto y las acciones tomadas.'].join('\n');
+  const msg = ['🚨 CKAgentico · ALERTA URGENTE', '', `Detecté ${lineas.length} situación(es) crítica(s) que requieren atención inmediata:`, '', ...lineas.slice(0, 12), '', 'Recomiendo revisión inmediata. En el reporte periódico ampliaré el contexto y las acciones tomadas.'].join('\n');
   await sendTelegram(CHAT_IDS, msg, { plain: true }).catch(() => undefined);
   return { enviado: true, urgentes: lineas.length };
 }

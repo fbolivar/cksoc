@@ -59,7 +59,7 @@ export function startDrpScheduler(): void {
       logger.info({ registrados: r.registrados, certs: r.certs, nuevos: r.nuevos }, '🕵️ Barrido DRP completado');
       const criticos = r.nuevosList.filter((f) => f.severidad !== 'media');
       if (criticos.length && env.TELEGRAM_CHAT_ID) {
-        const L = ['🕵️ Agentico · Riesgo digital (DRP) — dominios que suplantan la marca', '', `Detecté ${criticos.length} dominio(s) nuevo(s) parecido(s) al del cliente, activos y potencialmente para phishing:`, ''];
+        const L = ['🕵️ CKAgentico · Riesgo digital (DRP) — dominios que suplantan la marca', '', `Detecté ${criticos.length} dominio(s) nuevo(s) parecido(s) al del cliente, activos y potencialmente para phishing:`, ''];
         for (const f of criticos.slice(0, 12)) L.push(`• [${String(f.severidad).toUpperCase()}] ${f.detalle}`);
         L.push('', 'Recomiendo: reportar el dominio para takedown (registrador/hosting), avisar a los usuarios y, si tiene MX, vigilar correos entrantes que lo referencien. Puedo ayudar con el reporte.');
         await sendTelegram([env.TELEGRAM_CHAT_ID], L.join('\n'), { plain: true }).catch(() => undefined);

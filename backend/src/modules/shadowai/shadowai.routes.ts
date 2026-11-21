@@ -66,7 +66,7 @@ export function startShadowAiScheduler(): void {
       const r = await scan(env.SHADOW_AI_RANGE || '7d');
       logger.info({ dispositivos: r.devices, servicios: r.services, nuevos: r.nuevos, shadow: r.nuevosShadow.length }, '🤖 Escaneo Shadow-AI completado');
       if (r.nuevosShadow.length && env.TELEGRAM_CHAT_ID) {
-        const L = ['🤖 Agentico · Uso de IA no autorizado (Shadow-AI)', '', `Detecté ${r.nuevosShadow.length} nuevo(s) uso(s) de IA generativa NO aprobada desde la red:`, ''];
+        const L = ['🤖 CKAgentico · Uso de IA no autorizado (Shadow-AI)', '', `Detecté ${r.nuevosShadow.length} nuevo(s) uso(s) de IA generativa NO aprobada desde la red:`, ''];
         for (const s of r.nuevosShadow.slice(0, 12)) L.push(`• ${s.host || s.srcip} → ${s.service}`);
         L.push('', 'Sugiero validar si estas herramientas están permitidas por la política de datos (riesgo de fuga de información sensible). Puedo ayudarte a aprobarlas o restringirlas.');
         await sendTelegram([env.TELEGRAM_CHAT_ID], L.join('\n'), { plain: true }).catch(() => undefined);

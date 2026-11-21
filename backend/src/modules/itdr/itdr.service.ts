@@ -196,7 +196,7 @@ export interface ItdrLike { usuario: string; tipo: string; severidad: string; de
 
 /** Mensaje de Telegram (texto plano) con cada alerta + qué es + cómo remediar. */
 export function buildTelegramReport(items: ItdrLike[]): string {
-  const L: string[] = ['🪪 Agentico · Amenazas de identidad (ITDR) — Microsoft 365', ''];
+  const L: string[] = ['🪪 CKAgentico · Amenazas de identidad (ITDR) — Microsoft 365', ''];
   L.push(`Detecté ${items.length} señal(es) en los inicios de sesión que conviene revisar:`, '');
   items.slice(0, 15).forEach((f, i) => {
     const ex = EXPLAIN[f.tipo];

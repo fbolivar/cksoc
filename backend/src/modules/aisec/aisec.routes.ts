@@ -50,7 +50,7 @@ export function startAiSecScheduler(): void {
       // (1) Jailbreak / prompt-injection en Copilot
       if (c.jailbreakAttempts > 0 && env.TELEGRAM_CHAT_ID) {
         const L = [
-          '🧠 Agentico · Seguridad de IA — intento(s) de manipulación en Copilot',
+          '🧠 CKAgentico · Seguridad de IA — intento(s) de manipulación en Copilot',
           '',
           `Detecté ${c.jailbreakAttempts} interacción(es) de M365 Copilot marcadas como posible jailbreak / prompt-injection en 24 h.`,
           '',
@@ -62,7 +62,7 @@ export function startAiSecScheduler(): void {
       // (2) Exfiltración: equipos que superan el umbral de subida a GenAI
       if (ex.flagged > 0 && env.TELEGRAM_CHAT_ID) {
         const L = [
-          '🧠 Agentico · Seguridad de IA — subida inusual de datos a IA generativa',
+          '🧠 CKAgentico · Seguridad de IA — subida inusual de datos a IA generativa',
           '',
           `Detecté ${ex.flagged} equipo(s) que superaron ${ex.thresholdMB} MB subidos a servicios de IA en 24 h (posible fuga de información):`,
           '',
