@@ -7,9 +7,9 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Activity, Server, CircleCheck, CircleX, Gauge as GaugeIcon, Radio, ShieldCheck,
-  Cpu, MemoryStick, Wifi, Zap, TriangleAlert, Table as TableIcon, Boxes,
+  Cpu, MemoryStick, Wifi, Zap, TriangleAlert, Table as TableIcon, Boxes, Monitor,
 } from 'lucide-react';
-import { nocApi, type NocOverview, type NocReport, type NocTrend, type NocAgents, type NocTarget } from '@/lib/noc';
+import { nocApi, type NocOverview, type NocReport, type NocTrend, type NocAgents, type NocAgent, type NocTarget } from '@/lib/noc';
 import { Card, CardContent } from '@/components/ui/card';
 import { Link } from 'react-router-dom';
 
@@ -74,14 +74,19 @@ function Kpi({ icon: Icon, value, label, color }: { icon: typeof Server; value: 
 }
 
 /* ---------- Topología radial (hub-and-spoke) ---------- */
-function Topology({ targets }: { targets: NocTarget[] }) {
-  const W = 760, H = 430, cx = W / 2, cy = H / 2;
+function Topology({ targets, agents }: { targets: NocTarget[]; agents: NocAgent[] }) {
+  const W = 780, H = 480, cx = W / 2, cy = H / 2;
   const nodes = targets.filter((t) => t.enabled);
-  const rx = 300, ry = 170;
+  // anillo interior: infraestructura (objetivos NOC). anillo exterior: agentes Wazuh.
   const placed = nodes.map((t, i) => {
     const a = (i / Math.max(1, nodes.length)) * Math.PI * 2 - Math.PI / 2;
-    return { t, x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), right: Math.cos(a) >= 0 };
+    return { t, x: cx + 248 * Math.cos(a), y: cy + 140 * Math.sin(a), right: Math.cos(a) >= 0 };
   });
+  const agPlaced = agents.map((ag, i) => {
+    const a = (i / Math.max(1, agents.length)) * Math.PI * 2 - Math.PI / 2 + Math.PI / Math.max(1, agents.length);
+    return { ag, x: cx + 338 * Math.cos(a), y: cy + 212 * Math.sin(a), right: Math.cos(a) >= 0 };
+  });
+  const showAgLabels = agents.length <= 14;
   const iconFor = (t: NocTarget) => {
     const g = (t.grupo || '').toLowerCase();
     if (g.includes('internet') || g.includes('enlace')) return Wifi;
@@ -90,7 +95,7 @@ function Topology({ targets }: { targets: NocTarget[] }) {
   };
   return (
     <div className="relative">
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ maxHeight: 440 }}>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ maxHeight: 480 }}>
         <defs>
           <radialGradient id="cc-core" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.9" />
@@ -102,20 +107,36 @@ function Topology({ targets }: { targets: NocTarget[] }) {
           </pattern>
         </defs>
         <rect x="0" y="0" width={W} height={H} fill="url(#cc-grid)" />
-        {/* enlaces */}
+        {/* enlaces a agentes (tenues, por detrás) */}
+        {agPlaced.map(({ ag, x, y }, i) => {
+          const c = healthColor(ag.health);
+          return <line key={`al${i}`} x1={cx} y1={cy} x2={x} y2={y} stroke={c} strokeOpacity={0.22} strokeWidth={1} strokeDasharray="3 7" className="cc-flow" />;
+        })}
+        {/* enlaces a infraestructura */}
         {placed.map(({ t, x, y }, i) => {
           const c = t.status === 'up' ? TEAL : t.status === 'down' ? DOWN : MUTE;
-          return (
-            <line key={`l${i}`} x1={cx} y1={cy} x2={x} y2={y} stroke={c} strokeOpacity={0.5} strokeWidth={1.6}
-              strokeDasharray="5 6" className="cc-flow" style={{ filter: `drop-shadow(0 0 3px ${c})` }} />
-          );
+          return <line key={`l${i}`} x1={cx} y1={cy} x2={x} y2={y} stroke={c} strokeOpacity={0.5} strokeWidth={1.6} strokeDasharray="5 6" className="cc-flow" style={{ filter: `drop-shadow(0 0 3px ${c})` }} />;
         })}
         {/* núcleo */}
         <circle cx={cx} cy={cy} r={66} fill="url(#cc-core)" />
         <circle cx={cx} cy={cy} r={34} fill="hsl(var(--card))" stroke={TEAL} strokeWidth={2} style={{ filter: `drop-shadow(0 0 10px ${TEAL})` }} />
         <path d={`M${cx - 6} ${cy - 13} L${cx + 7} ${cy - 2} L${cx - 1} ${cy - 1} L${cx + 6} ${cy + 13} L${cx - 7} ${cy + 1} L${cx + 1} ${cy} Z`} fill={TEAL} style={{ filter: `drop-shadow(0 0 4px ${TEAL})` }} />
         <text x={cx} y={cy + 52} textAnchor="middle" className="hw-mono" fill={TEAL} style={{ fontSize: 13, fontWeight: 700 }}>NOC</text>
-        {/* nodos */}
+        {/* nodos agentes (anillo exterior, más pequeños) */}
+        {agPlaced.map(({ ag, x, y, right }, i) => {
+          const c = healthColor(ag.health);
+          return (
+            <g key={`a${i}`} opacity={ag.health === 'apagado' ? 0.65 : 1}>
+              {ag.needsAttention && <circle cx={x} cy={y} r={13} fill="none" stroke={c} strokeWidth={1.2} className="cc-pulse" />}
+              <circle cx={x} cy={y} r={9} fill="hsl(var(--card))" stroke={c} strokeWidth={1.6} style={{ filter: `drop-shadow(0 0 4px ${c})` }} />
+              <foreignObject x={x - 6} y={y - 6} width={12} height={12}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 12 }}><Monitor width={8} height={8} style={{ color: c }} /></div>
+              </foreignObject>
+              {showAgLabels && <text x={right ? x + 14 : x - 14} y={y + 3} textAnchor={right ? 'start' : 'end'} className="hw-mono" fill={MUTE} style={{ fontSize: 8.5 }}>{ag.name.length > 16 ? ag.name.slice(0, 15) + '…' : ag.name}</text>}
+            </g>
+          );
+        })}
+        {/* nodos infraestructura (anillo interior) */}
         {placed.map(({ t, x, y, right }, i) => {
           const c = t.status === 'up' ? UP : t.status === 'down' ? DOWN : MUTE;
           const Icon = iconFor(t);
@@ -136,8 +157,10 @@ function Topology({ targets }: { targets: NocTarget[] }) {
           );
         })}
       </svg>
-      <div className="hw-mono absolute right-2 top-2 flex items-center gap-1 text-[10px] text-muted-foreground">
-        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: UP, boxShadow: `0 0 6px ${UP}` }} /> EN VIVO
+      <div className="hw-mono absolute right-2 top-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1"><Server className="h-2.5 w-2.5" style={{ color: TEAL }} /> infra</span>
+        <span className="flex items-center gap-1"><Monitor className="h-2.5 w-2.5" style={{ color: TEAL }} /> agentes</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: UP, boxShadow: `0 0 6px ${UP}` }} /> EN VIVO</span>
       </div>
     </div>
   );
@@ -325,8 +348,8 @@ export default function NocCommand() {
 
         {/* Topología radial */}
         <div className="lg:col-span-6">
-          <Panel title="Topología de red" icon={Activity} right={<span className="hw-mono text-[10px] text-muted-foreground">{targets.filter((t) => t.enabled).length} nodos</span>}>
-            {ov ? <Topology targets={targets} /> : <div className="flex h-72 items-center justify-center text-muted-foreground">Cargando…</div>}
+          <Panel title="Topología de red" icon={Activity} right={<span className="hw-mono text-[10px] text-muted-foreground">{targets.filter((t) => t.enabled).length} infra · {agents?.agents.length ?? 0} agentes</span>}>
+            {ov ? <Topology targets={targets} agents={agents?.agents ?? []} /> : <div className="flex h-72 items-center justify-center text-muted-foreground">Cargando…</div>}
           </Panel>
         </div>
 
