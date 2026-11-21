@@ -131,9 +131,13 @@ async function snmpLite(host: string, community: string): Promise<NocSnmp | null
       if (Number.isFinite(v)) res.cpuPct = Math.max(0, Math.min(100, Math.round(v)));
     }
 
-    const mem = await get(['1.3.6.1.4.1.2021.4.5.0', '1.3.6.1.4.1.2021.4.6.0']); // UCD memTotalReal, memAvailReal (KB)
+    // UCD memTotalReal, memAvailReal, memBuffer, memCached (KB). Buffers+caché son
+    // memoria reclamable → se descuentan para reportar el uso REAL (equivalente a
+    // MemAvailable de Linux), no la caché de disco (que haría ver ~99% falsamente).
+    const mem = await get(['1.3.6.1.4.1.2021.4.5.0', '1.3.6.1.4.1.2021.4.6.0', '1.3.6.1.4.1.2021.4.14.0', '1.3.6.1.4.1.2021.4.15.0']);
     const tot = Number(mem['1.3.6.1.4.1.2021.4.5.0']); const av = Number(mem['1.3.6.1.4.1.2021.4.6.0']);
-    if (tot > 0 && Number.isFinite(av)) res.memPct = Math.max(0, Math.min(100, Math.round((100 * (tot - av)) / tot)));
+    const buf = Number(mem['1.3.6.1.4.1.2021.4.14.0']) || 0; const cache = Number(mem['1.3.6.1.4.1.2021.4.15.0']) || 0;
+    if (tot > 0 && Number.isFinite(av)) res.memPct = Math.max(0, Math.min(100, Math.round((100 * (tot - av - buf - cache)) / tot)));
     if (res.memPct == null) { // SonicWALL sonicCurrentRAMUtil (%)
       const sw = await get(['1.3.6.1.4.1.8741.1.3.1.4.0']);
       const v = Number(sw['1.3.6.1.4.1.8741.1.3.1.4.0']);
