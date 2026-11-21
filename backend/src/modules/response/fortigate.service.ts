@@ -15,25 +15,29 @@ const BLOCK_GROUP = 'HexWatch-Blocked-IPs';
 const agent = new https.Agent({ rejectUnauthorized: false });
 
 let cookie: string | null = null;
+let bearer: string | null = null;
 
 async function swAuth(): Promise<void> {
   const r = await axios.post(`${SW_URL}/api/sonicos/auth`, null, {
     httpsAgent: agent, timeout: 15000, auth: { username: SW_USER, password: SW_PASS },
   });
+  // SonicOS 7.3.4+ autentica por Bearer token (en el cuerpo JSON); firmware viejo usaba cookie.
+  const bt = (r.data as any)?.status?.info?.[0]?.bearer_token as string | undefined;
+  if (bt) { bearer = bt; cookie = null; return; }
   const sc = r.headers['set-cookie'];
   if (sc && sc.length) cookie = sc[0].split(';')[0];
 }
 
 async function swReq<T = any>(method: string, path: string, data?: unknown): Promise<T> {
-  if (!cookie) await swAuth();
+  if (!bearer && !cookie) await swAuth();
   const doReq = () => axios.request<T>({
     method, url: `${SW_URL}/api/sonicos${path}`, data, httpsAgent: agent, timeout: 15000,
-    headers: { ...(cookie ? { Cookie: cookie } : {}), 'Content-Type': 'application/json' },
+    headers: { ...(bearer ? { Authorization: `Bearer ${bearer}` } : cookie ? { Cookie: cookie } : {}), 'Content-Type': 'application/json' },
   });
   try {
     return (await doReq()).data;
   } catch (e: any) {
-    if (e?.response?.status === 401) { await swAuth(); return (await doReq()).data; }
+    if (e?.response?.status === 401) { bearer = null; cookie = null; await swAuth(); return (await doReq()).data; }
     throw e;
   }
 }
@@ -132,7 +136,8 @@ export async function blockIP(ip: string, _expirySeconds?: number): Promise<void
     if (await swPendingDirty()) throw new HttpError(409, 'Config pendiente de otro admin; bloqueo diferido para no pisar cambios');
     await swReq('POST', '/config-mode');
     const nm = `HXW-Block-${ip}`;
-    await swReq('POST', '/address-objects/ipv4', { address_objects: [{ ipv4: { name: nm, zone: 'WAN', host: { ip } } }] });
+    try { await swReq('POST', '/address-objects/ipv4', { address_objects: [{ ipv4: { name: nm, zone: 'WAN', host: { ip } } }] }); }
+    catch { /* el objeto ya existe (IP re-bloqueada); la pertenencia al grupo se asegura en el PUT de abajo */ }
     const m = await groupMembers(); m.push(nm);
     await swReq('PUT', `/address-groups/ipv4/name/${BLOCK_GROUP}`, { address_groups: [{ ipv4: { name: BLOCK_GROUP, address_object: { ipv4: [...new Set(m)].map((n) => ({ name: n })) } } }] });
     await swReq('POST', '/config/pending');
