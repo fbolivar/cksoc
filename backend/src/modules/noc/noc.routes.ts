@@ -78,6 +78,9 @@ nocRouter.delete('/targets/:id', canManage, async (req, res) => {
 nocRouter.post('/check', canManage, async (_req, res) => {
   try { const r = await runChecks(); res.json({ ok: true, ...r }); } catch (e) { handle(e, res); }
 });
+nocRouter.post('/digest', canManage, async (_req, res) => {
+  try { await nocDigest(); res.json({ ok: true }); } catch (e) { handle(e, res); }
+});
 
 type Trans = { name: string; host: string; grupo: string; to: string; downMin: number | null };
 
@@ -118,6 +121,42 @@ async function alertTransitions(trans: Trans[]): Promise<void> {
   }
 }
 
+// Resumen periódico de disponibilidad del NOC a Telegram (monitoreo de estado),
+// además de las alertas por transición. Gateado por licencia (sendTelegram).
+async function nocDigest(): Promise<void> {
+  if (!env.TELEGRAM_CHAT_ID) return;
+  const ov = await getOverview();
+  const k = ov.kpis;
+  const all = ov.grupos.flatMap((g) => g.targets).filter((t) => t.enabled);
+  const down = all.filter((t) => t.status === 'down');
+  const snmp = all.filter((t) => t.snmp_enabled);
+  const hot = snmp.filter((t) => (t.cpu_pct != null && t.cpu_pct >= 85) || (t.mem_pct != null && t.mem_pct >= 90));
+  const L: string[] = ['📡 CKAgentico · NOC — Resumen de disponibilidad', ''];
+  L.push(`🗓 ${new Date().toLocaleString('es-CO', { hour12: false })}`);
+  L.push(down.length ? `Estado: 🔴 ${down.length} equipo(s) caído(s)` : 'Estado: 🟢 OPERATIVO');
+  L.push(`Objetivos: ${k.up}/${k.total} arriba · Uptime 30d prom: ${k.avgUptime30 != null ? k.avgUptime30.toFixed(2) + '%' : '—'} · Latencia prom: ${k.avgLatency ?? '—'} ms`);
+  if (down.length) { L.push('', '🔴 Caídos:'); for (const t of down) L.push(` • ${t.name} (${t.host})`); }
+  if (hot.length) {
+    L.push('', '⚠ Recursos altos:');
+    for (const t of hot) {
+      const p: string[] = [];
+      if (t.cpu_pct != null && t.cpu_pct >= 85) p.push(`CPU ${t.cpu_pct}%`);
+      if (t.mem_pct != null && t.mem_pct >= 90) p.push(`RAM ${t.mem_pct}%`);
+      L.push(` • ${t.name}: ${p.join(' · ')}`);
+    }
+  }
+  if (!down.length && !hot.length) L.push('', `✅ Todo operativo · ${all.length} objetivos monitoreados (${snmp.length} con SNMP).`);
+  await sendTelegram([env.TELEGRAM_CHAT_ID], L.join('\n'), { plain: true }).catch(() => undefined);
+}
+
+/** Digest programado del NOC (resumen de disponibilidad a Telegram). */
+export function startNocDigest(): void {
+  const spec = process.env.NOC_DIGEST_CRON || '0 7,19 * * *'; // 7:00 y 19:00 por defecto
+  if (!cron.validate(spec)) { logger.error({ cron: spec }, 'Cron de NOC digest inválido'); return; }
+  cron.schedule(spec, () => { void nocDigest().catch((e) => logger.error({ err: e }, 'NOC digest: error')); });
+  logger.info(`📡 NOC digest a Telegram activo (${spec})`);
+}
+
 /** Scheduler del NOC: chequeo periódico + aviso por transición. */
 export function startNocScheduler(): void {
   if (!isNocEnabled()) { logger.info('📡 NOC desactivado (NOC_ENABLED=false)'); return; }
@@ -130,4 +169,5 @@ export function startNocScheduler(): void {
   });
   setTimeout(() => { void runChecks().catch(() => undefined); }, 15_000); // primera pasada al arranque
   logger.info(`📡 NOC activo (${spec})`);
+  startNocDigest(); // resumen periódico de disponibilidad a Telegram
 }
