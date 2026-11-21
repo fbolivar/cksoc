@@ -12,6 +12,7 @@ import { getSummary } from '../wazuh/wazuh.service';
 import { getAgentsSummary } from '../wazuh/agents.service';
 import { getAttackGeo } from '../attacks/attacks.service';
 import { getIndexerClient } from '../wazuh/wazuh.client';
+import { socInfraMustNot } from '../wazuh/agents.service';
 import { env } from '../../config/env';
 
 /** Conteo de eventos criticos (nivel>=12) en 24h, excluyendo falsos positivos
@@ -26,6 +27,10 @@ async function criticosReales24h(): Promise<number | null> {
     { range: { 'rule.level': { gte: 12 } } },
   ];
   if (exclude.length) filter.push({ bool: { must_not: [{ terms: { 'rule.id': exclude } }] } });
+  // Las detecciones de vulnerabilidad/hardening (CVE/SCA) NO son amenazas de ataque:
+  // se gestionan en Vulnerabilidades/Hardening, no cuentan como "criticas". Tampoco la
+  // infra propia del SOC (su ruido no es un ataque al cliente).
+  filter.push({ bool: { must_not: [{ terms: { 'rule.groups': ['vulnerability-detector', 'sca'] } }, ...socInfraMustNot()] } });
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const { data } = await getIndexerClient().post<{ count: number }>(
