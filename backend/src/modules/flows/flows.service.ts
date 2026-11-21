@@ -57,7 +57,7 @@ export async function getOverview(rangeIn = '24h'): Promise<unknown> {
   const iocs = await iocIpSet();
   const topDst = (a?.dst.buckets ?? []).filter((b) => isPublicIP(b.key)).slice(0, 15).map((b) => {
     const g = geolocate(b.key);
-    return { ip: b.key, flows: b.doc_count, talker: b.s.buckets[0]?.key ?? '', pais: g?.country ?? null, ioc: iocs.has(b.key) };
+    return { ip: b.key, flows: b.doc_count, talker: b.s.buckets[0]?.key ?? '', pais: g?.country ?? null, lat: g?.lat ?? null, lon: g?.lon ?? null, ioc: iocs.has(b.key) };
   });
   return {
     range, flows: total,

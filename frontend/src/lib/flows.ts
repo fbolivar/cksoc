@@ -5,7 +5,7 @@ export interface FlowsOverview {
   range: string; flows: number;
   timeline: { ts: string; flows: number }[];
   topTalkers: { ip: string; flows: number; destinos: number }[];
-  topDst: { ip: string; flows: number; talker: string; pais: string | null; ioc: boolean }[];
+  topDst: { ip: string; flows: number; talker: string; pais: string | null; lat: number | null; lon: number | null; ioc: boolean }[];
   topPorts: { port: string; flows: number }[];
   topApps: { app: string; flows: number }[];
 }

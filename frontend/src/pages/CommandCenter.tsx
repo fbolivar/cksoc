@@ -159,6 +159,66 @@ function Spark({ data, color = TEAL }: { data: number[]; color?: string }) {
   return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}><polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} /></svg>;
 }
 
+/* ---------- Mapa mundial de conexiones ---------- */
+// Continentes aproximados (perímetros lon/lat) para contexto geográfico; los
+// puntos de conexión se proyectan con la MISMA proyección equirectangular, así
+// que quedan alineados aunque los contornos sean simplificados.
+const CONTINENTS: [number, number][][] = [
+  [[-165,60],[-168,66],[-155,71],[-128,70],[-100,72],[-82,73],[-62,60],[-52,47],[-66,45],[-70,41],[-75,35],[-81,25],[-97,16],[-106,20],[-114,28],[-124,40],[-125,48],[-135,57],[-150,59]],
+  [[-78,8],[-60,10],[-50,0],[-35,-6],[-40,-20],[-55,-34],[-65,-42],[-72,-52],[-74,-48],[-71,-35],[-70,-20],[-76,-4],[-80,3]],
+  [[-16,14],[-6,30],[10,32],[24,32],[32,31],[36,15],[44,11],[51,12],[42,-3],[40,-16],[33,-26],[20,-35],[14,-23],[9,2],[-8,4]],
+  [[-10,43],[-4,50],[8,57],[28,64],[55,67],[90,72],[130,71],[160,67],[160,60],[142,52],[140,45],[130,34],[122,30],[120,22],[106,16],[100,7],[94,16],[80,8],[73,18],[60,24],[50,28],[43,13],[36,22],[30,30],[22,38],[12,44],[-6,36]],
+  [[114,-20],[130,-12],[143,-11],[150,-24],[147,-38],[135,-37],[120,-34],[114,-28]],
+];
+const HOME: [number, number] = [-74.1, 4.7]; // Bogotá
+
+function WorldMap({ conns, totalFlows }: { conns: { ip: string; flows: number; pais: string | null; lat: number | null; lon: number | null; ioc: boolean }[]; totalFlows: number }) {
+  const W = 640, H = 320;
+  const px = (lon: number) => ((lon + 180) / 360) * W;
+  const py = (lat: number) => ((90 - lat) / 180) * H;
+  const geo = conns.filter((c) => c.lat != null && c.lon != null).slice(0, 14);
+  const maxF = Math.max(1, ...geo.map((c) => c.flows));
+  const [hx, hy] = [px(HOME[0]), py(HOME[1])];
+  const iocCount = geo.filter((c) => c.ioc).length;
+  return (
+    <div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ maxHeight: 360 }}>
+        <rect x={0} y={0} width={W} height={H} fill="hsl(var(--primary) / 0.02)" />
+        {/* grácula */}
+        {[-120, -60, 0, 60, 120].map((lon) => <line key={`m${lon}`} x1={px(lon)} y1={0} x2={px(lon)} y2={H} stroke="hsl(var(--border))" strokeOpacity={0.15} />)}
+        {[-60, -30, 0, 30, 60].map((lat) => <line key={`p${lat}`} x1={0} y1={py(lat)} x2={W} y2={py(lat)} stroke="hsl(var(--border))" strokeOpacity={0.15} />)}
+        {/* continentes */}
+        {CONTINENTS.map((poly, i) => (
+          <polygon key={i} points={poly.map(([lo, la]) => `${px(lo).toFixed(1)},${py(la).toFixed(1)}`).join(' ')}
+            fill="hsl(var(--primary) / 0.10)" stroke="hsl(var(--primary) / 0.25)" strokeWidth={0.7} />
+        ))}
+        {/* arcos de conexión */}
+        {geo.map((c, i) => {
+          const x = px(c.lon!), y = py(c.lat!); const col = c.ioc ? RED : TEAL;
+          const mx = (hx + x) / 2, my = (hy + y) / 2 - Math.hypot(x - hx, y - hy) * 0.28;
+          return (
+            <g key={i}>
+              <path d={`M${hx} ${hy} Q${mx} ${my} ${x} ${y}`} fill="none" stroke={col} strokeWidth={1} strokeOpacity={0.55} strokeDasharray="4 5" className="cc-flow" style={{ filter: `drop-shadow(0 0 2px ${col})` }} />
+              <circle cx={x} cy={y} r={3 + (c.flows / maxF) * 4} fill={col} fillOpacity={0.9} style={{ filter: `drop-shadow(0 0 5px ${col})` }}>
+                <title>{`${c.ip}${c.pais ? ' · ' + c.pais : ''} · ${c.flows.toLocaleString('es-CO')} flujos${c.ioc ? ' · IOC' : ''}`}</title>
+              </circle>
+            </g>
+          );
+        })}
+        {/* origen (Bogotá) */}
+        <circle cx={hx} cy={hy} r={14} fill="none" stroke={GREEN} strokeWidth={1.2} className="cc-pulse" />
+        <circle cx={hx} cy={hy} r={5} fill={GREEN} style={{ filter: `drop-shadow(0 0 6px ${GREEN})` }}><title>SOC · Bogotá (origen)</title></circle>
+      </svg>
+      <div className="hw-mono mt-1 flex flex-wrap items-center justify-center gap-4 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: GREEN }} /> SOC Bogotá</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: TEAL }} /> destinos ({geo.length})</span>
+        {iocCount > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: RED }} /> IOC ({iocCount})</span>}
+        <span>{totalFlows.toLocaleString('es-CO')} flujos / 24h</span>
+      </div>
+    </div>
+  );
+}
+
 function timeShort(ts: string): string { try { return new Date(ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } }
 
 export default function CommandCenter() {
@@ -224,6 +284,12 @@ export default function CommandCenter() {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-3">
+      <style>{`
+        @keyframes cc-dash { to { stroke-dashoffset: -36; } }
+        .cc-flow { animation: cc-dash 1.1s linear infinite; }
+        @keyframes cc-pz { 0%{ transform: scale(.7); opacity:.9 } 100%{ transform: scale(1.9); opacity:0 } }
+        .cc-pulse { transform-box: fill-box; transform-origin: center; animation: cc-pz 1.6s ease-out infinite; }
+      `}</style>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-card/60 px-4 py-2.5">
         <div className="flex items-center gap-3">
@@ -280,6 +346,11 @@ export default function CommandCenter() {
           </Panel>
         </div>
       </div>
+
+      {/* Mapa mundial de conexiones */}
+      <Panel title="Mapa mundial de conexiones" icon={Globe2} right={flows && <span className="hw-mono text-[10px] text-muted-foreground">tráfico saliente geolocalizado · 24h</span>}>
+        {flows ? <WorldMap conns={flows.topDst} totalFlows={flows.flows} /> : <div className="flex h-56 items-center justify-center text-muted-foreground">Cargando mapa…</div>}
+      </Panel>
 
       {/* Alertas + Tráfico + Dispositivos */}
       <div className="grid gap-3 lg:grid-cols-3">
