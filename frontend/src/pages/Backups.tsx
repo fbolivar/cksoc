@@ -254,8 +254,8 @@ export default function Backups() {
                     variant="ghost"
                     size="sm"
                     onClick={() => void onDelete(b.id)}
-                    disabled={!!busy[b.id]}
-                    title="Eliminar"
+                    disabled={!!busy[b.id] || items.length <= 1}
+                    title={items.length <= 1 ? 'No se puede borrar el ultimo respaldo disponible' : 'Eliminar'}
                     className="text-destructive/80 hover:text-destructive"
                   >
                     {busy[b.id] === 'delete' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

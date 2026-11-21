@@ -83,6 +83,12 @@ export async function getBackupIntegrity(req: Request, res: Response): Promise<v
 
 export async function removeBackup(req: Request, res: Response): Promise<void> {
   try {
+    // Guard: nunca dejar al cliente sin punto de recuperacion.
+    const current = await listBackups();
+    if (current.length <= 1) {
+      res.status(409).json({ error: 'No se puede eliminar el ultimo respaldo disponible. Crea uno nuevo antes de borrar este para no quedar sin punto de recuperacion.' });
+      return;
+    }
     const ok = await deleteBackup(req.params.id);
     if (!ok) {
       res.status(404).json({ error: 'Respaldo no encontrado' });
