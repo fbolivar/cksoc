@@ -1,4 +1,4 @@
-/** Controladores de respaldos .pnnc (todo rol admin). */
+/** Controladores de respaldos .bbg (todo rol admin). */
 import type { Request, Response } from 'express';
 import { createReadStream } from 'node:fs';
 import { z } from 'zod';

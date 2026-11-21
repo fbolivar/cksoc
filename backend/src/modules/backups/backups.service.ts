@@ -1,8 +1,8 @@
 /**
- * Respaldos de la base de datos en formato propio .pnnc
+ * Respaldos de la base de datos en formato propio .bbg (lee .pnnc por compatibilidad)
  *
- * Estructura del archivo .pnnc (contenedor binario):
- *   [0..4)   magic  "PNNC"          (4 bytes ASCII)
+ * Estructura del archivo .bbg (contenedor binario):
+ *   [0..4)   magic  "BBG1" (o "PNNC" en respaldos previos)  (4 bytes ASCII)
  *   [4]      version 0x01           (1 byte)
  *   [5..9)   longitud metadata M    (uint32 big-endian)
  *   [9..9+M) metadata JSON (UTF-8)  { createdAt, dbName, appVersion, sha256, ... }
@@ -21,7 +21,8 @@ import os from 'node:os';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 
-const MAGIC = Buffer.from('PNNC', 'ascii');
+const MAGIC = Buffer.from('BBG1', 'ascii'); // formato .bbg (BBG LATAM)
+const MAGIC_LEGACY = Buffer.from('PNNC', 'ascii'); // compat: lectura de respaldos .pnnc previos
 const VERSION = 1;
 const APP_VERSION = '1.0.0';
 
@@ -90,7 +91,7 @@ export async function getRecoveryPosture(): Promise<RecoveryPosture> {
     }
   }
   if (!offsite) {
-    warnings.push('Sin copia externa: todos los respaldos están en el mismo servidor que la base de datos. Si el servidor se pierde (falla de disco, ransomware, borrado), se pierden con él. Recomendado: copiar los .pnnc a un destino externo (otro servidor, NAS o nube).');
+    warnings.push('Sin copia externa: todos los respaldos están en el mismo servidor que la base de datos. Si el servidor se pierde (falla de disco, ransomware, borrado), se pierden con él. Recomendado: copiar los .bbg a un destino externo (otro servidor, NAS o nube).');
     if (estado === 'ok') estado = 'warn';
   }
 
@@ -123,9 +124,9 @@ function pgConn(): { args: string[]; env: NodeJS.ProcessEnv; dbName: string } {
   return { args, env: { ...process.env, PGPASSWORD: decodeURIComponent(u.password) }, dbName };
 }
 
-/** Valida que el id sea un nombre de archivo .pnnc simple (anti path traversal). */
+/** Valida que el id sea un nombre de archivo .bbg/.pnnc simple (anti path traversal). */
 function safeName(id: string): string {
-  if (!/^[A-Za-z0-9._-]+\.pnnc$/.test(id) || id.includes('..')) {
+  if (!/^[A-Za-z0-9._-]+\.(bbg|pnnc)$/.test(id) || id.includes('..')) {
     throw new HttpBackupError(400, 'Nombre de respaldo invalido');
   }
   return id;
@@ -154,7 +155,7 @@ function pgDump(): Promise<Buffer> {
   });
 }
 
-/** Crea un respaldo .pnnc y lo guarda en disco. */
+/** Crea un respaldo .bbg y lo guarda en disco. */
 export async function createBackup(opts: { origin?: 'manual' | 'automatico'; note?: string } = {}): Promise<BackupItem> {
   const dir = backupDir();
   await fs.mkdir(dir, { recursive: true });
@@ -168,7 +169,7 @@ export async function createBackup(opts: { origin?: 'manual' | 'automatico'; not
     createdAt,
     dbName,
     appVersion: APP_VERSION,
-    generator: 'soc-pnnc-backend',
+    generator: 'hexwatch-bbg',
     origin: opts.origin ?? 'manual',
     note: opts.note,
     sha256,
@@ -182,9 +183,9 @@ export async function createBackup(opts: { origin?: 'manual' | 'automatico'; not
   const file = Buffer.concat([header, gz]);
 
   const stamp = createdAt.replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
-  const id = `soc-pnnc-${stamp}.pnnc`;
+  const id = `bbg-${stamp}.bbg`;
   await fs.writeFile(path.join(dir, id), file, { mode: 0o600 });
-  logger.info({ id, bytes: file.length, origin: meta.origin }, 'Respaldo .pnnc creado');
+  logger.info({ id, bytes: file.length, origin: meta.origin }, 'Respaldo .bbg creado');
 
   return {
     id,
@@ -197,13 +198,13 @@ export async function createBackup(opts: { origin?: 'manual' | 'automatico'; not
   };
 }
 
-/** Lee el header .pnnc (magic + metadata) sin cargar el dump completo. */
+/** Lee el header .bbg/.pnnc (magic + metadata) sin cargar el dump completo. */
 async function readMeta(fullPath: string): Promise<{ meta: BackupMeta; fileBytes: number } | null> {
   const fd = await fs.open(fullPath, 'r');
   try {
     const head = Buffer.alloc(9);
     await fd.read(head, 0, 9, 0);
-    if (!head.subarray(0, 4).equals(MAGIC)) return null;
+    if (!head.subarray(0, 4).equals(MAGIC) && !head.subarray(0, 4).equals(MAGIC_LEGACY)) return null;
     const mLen = head.readUInt32BE(5);
     const mBuf = Buffer.alloc(mLen);
     await fd.read(mBuf, 0, mLen, 9);
@@ -221,7 +222,7 @@ export async function listBackups(): Promise<BackupItem[]> {
   const dir = backupDir();
   let names: string[];
   try {
-    names = (await fs.readdir(dir)).filter((n) => n.endsWith('.pnnc'));
+    names = (await fs.readdir(dir)).filter((n) => n.endsWith('.bbg') || n.endsWith('.pnnc'));
   } catch {
     return [];
   }
@@ -263,7 +264,7 @@ export async function deleteBackup(id: string): Promise<boolean> {
   const p = backupFilePath(id);
   try {
     await fs.unlink(p);
-    logger.info({ id }, 'Respaldo .pnnc eliminado');
+    logger.info({ id }, 'Respaldo eliminado');
     return true;
   } catch {
     return false;

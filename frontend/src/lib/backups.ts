@@ -1,4 +1,4 @@
-/** Cliente de respaldos de base de datos (.pnnc). Solo admin. */
+/** Cliente de respaldos de base de datos (.bbg). Solo admin. */
 import { api } from './api';
 
 export interface BackupItem {

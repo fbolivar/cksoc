@@ -1,8 +1,8 @@
 /**
- * Rutas de respaldos de la base de datos (.pnnc). Todo requiere rol admin.
+ * Rutas de respaldos de la base de datos (.bbg). Todo requiere rol admin.
  *   GET    /api/backups              lista
  *   POST   /api/backups              crear respaldo manual
- *   GET    /api/backups/:id/download descargar el .pnnc
+ *   GET    /api/backups/:id/download descargar el .bbg
  *   GET    /api/backups/:id/verify   verificar integridad (sha256)
  *   DELETE /api/backups/:id          eliminar
  */

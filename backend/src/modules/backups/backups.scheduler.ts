@@ -1,6 +1,6 @@
 /**
  * Respaldo automatico diario de la base de datos (node-cron).
- * Genera un .pnnc con origin 'automatico' y aplica retencion (BACKUP_RETENTION).
+ * Genera un .bbg con origin 'automatico' y aplica retencion (BACKUP_RETENTION).
  */
 import cron from 'node-cron';
 import { env } from '../../config/env';

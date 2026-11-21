@@ -124,7 +124,7 @@ export default function Backups() {
       <div>
         <h1 className="hw-mono text-2xl font-bold tracking-tight">Respaldos</h1>
         <p className="text-sm text-muted-foreground">
-          Copias de seguridad de la base de datos en formato <span className="font-mono text-brand">.pnnc</span> · respaldo
+          Copias de seguridad de la base de datos en formato <span className="font-mono text-brand">.bbg</span> · respaldo
           automático diario + creación manual
         </p>
       </div>
@@ -247,7 +247,7 @@ export default function Backups() {
                   <Button variant="ghost" size="sm" onClick={() => void onVerify(b.id)} disabled={!!busy[b.id]} title="Verificar integridad">
                     {busy[b.id] === 'verify' ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void onDownload(b.id)} disabled={!!busy[b.id]} title="Descargar .pnnc">
+                  <Button variant="ghost" size="sm" onClick={() => void onDownload(b.id)} disabled={!!busy[b.id]} title="Descargar .bbg">
                     {busy[b.id] === 'download' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                   </Button>
                   <Button
@@ -268,7 +268,7 @@ export default function Backups() {
       </div>
 
       <p className="text-center text-[11px] text-muted-foreground/70">
-        El formato .pnnc es un contenedor propio: volcado SQL comprimido con metadatos y verificación de integridad
+        El formato .bbg es un contenedor propio: volcado SQL comprimido con metadatos y verificación de integridad
         (SHA-256). El respaldo automático corre a diario y conserva los últimos configurados.
       </p>
     </div>
