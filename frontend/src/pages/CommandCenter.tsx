@@ -1,463 +1,374 @@
 /**
- * Command Center — panel-héroe del rediseño "HexWatch Tactical" (HUD).
- * Radar de activos, gauge de riesgo global, feed en vivo, mapa de sedes,
- * acciones rápidas y tendencia de seguridad. Datos reales (overview/incidentes/
- * UEBA) con degradación elegante si algún endpoint no responde.
+ * Command Center SOC — panel-héroe estilo "security operations dashboard".
+ * Resumen (amenazas/casos/vulns/estado), actividad de amenazas (tendencia por
+ * severidad), reporte de vulnerabilidades (donut), alertas recientes, tráfico de
+ * red (flujos), estado de dispositivos, incidentes resueltos vs creados y
+ * actividad de usuarios (UEBA). Datos 100% reales con degradación elegante.
  */
-import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { overviewApi, type Pulse, type RadarAsset, type RiskBand, type SedeMetrics } from '@/lib/overview';
-import { incidentsApi } from '@/lib/incidents';
-import { uebaApi } from '@/lib/ueba';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  ShieldAlert, CheckCircle2, Bug, Server, Gauge as GaugeIcon, ShieldCheck, TriangleAlert,
+  Globe2, MonitorDot, Activity, ScanLine, ChevronRight, Radio, Zap,
+} from 'lucide-react';
+import { overviewApi, type OverviewData, type AlertTrend, type AssetRadar } from '@/lib/overview';
+import { metricsApi, type SocMetrics } from '@/lib/metrics';
 import { alertsApi, type AlertHit } from '@/lib/alerts';
-import { entityRiskApi, BAND_VAR, type EntityRisk } from '@/lib/entityRisk';
+import { uebaApi, type Anomaly, DETECTOR_ES } from '@/lib/ueba';
+import { flowsApi, type FlowsOverview } from '@/lib/flows';
+import { Card, CardContent } from '@/components/ui/card';
 
-type Col = 'primary' | 'destructive' | 'success' | 'warn-orange' | 'cyan';
-const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
-const C = (n: string, a?: number) => { const v = cssVar(n); return a == null ? `hsl(${v})` : `hsl(${v} / ${a})`; };
+const TEAL = 'hsl(var(--primary))';
+const RED = 'hsl(var(--destructive))';
+const ORANGE = 'hsl(var(--warn-orange))';
+const GREEN = 'hsl(var(--success))';
+const CYAN = 'hsl(var(--cyan))';
+const MUTE = 'hsl(var(--muted-foreground))';
+const sevColor: Record<string, string> = { critica: RED, alta: ORANGE, media: TEAL, baja: GREEN };
+const SEMA: Record<string, { label: string; color: string }> = {
+  verde: { label: 'SEGURO', color: GREEN }, amarillo: { label: 'EN GESTIÓN', color: ORANGE }, rojo: { label: 'ATENCIÓN', color: RED },
+};
 
-interface KpiData {
-  alertas24h: number | null; criticas: number | null; agActivos: number | null; agTotal: number | null;
-  siemPct: number; vulnCrit: number; incOpen: number; incBreached: number; slaPct: number | null; uebaOpen: number;
-  risk: number;
+/* ---------- KPI ---------- */
+function Kpi({ icon: Icon, value, label, color, to }: { icon: typeof Server; value: string | number; label: string; color: string; to?: string }) {
+  const inner = (
+    <CardContent className="flex items-center gap-3 p-3">
+      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+        style={{ background: `color-mix(in srgb, ${color} 14%, transparent)`, boxShadow: `0 0 14px color-mix(in srgb, ${color} 45%, transparent)`, border: `1px solid color-mix(in srgb, ${color} 40%, transparent)` }}>
+        <Icon className="h-5 w-5" style={{ color }} />
+      </div>
+      <div className="min-w-0">
+        <div className="hw-mono text-xl font-bold tabular-nums leading-none" style={{ color }}>{value}</div>
+        <div className="hw-mono mt-1 truncate text-[9px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      </div>
+      {to && <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />}
+    </CardContent>
+  );
+  return to ? <Card className="relative overflow-hidden transition-colors hover:border-primary/50"><Link to={to}>{inner}</Link></Card> : <Card className="relative overflow-hidden">{inner}</Card>;
 }
-// Estado inicial DESCONOCIDO (null): antes de que respondan las APIs mostramos
-// "—", nunca un 0 que se leería como "no hay nada". Los valores reales llegan en
-// el primer fetch; si una consulta se cae, se queda en "—" (no en 0 falso).
-const FALLBACK: KpiData = { alertas24h: null, criticas: null, agActivos: null, agTotal: null, siemPct: 0, vulnCrit: 0, incOpen: 0, incBreached: 0, slaPct: null, uebaOpen: 0, risk: 0 };
 
-const BAND_COL: Record<string, Col> = { critica: 'destructive', alta: 'warn-orange', media: 'primary', baja: 'cyan' };
-const SEDES: [string, number, number][] = [['Bogotá', .30, .55]];
-// Respaldo mientras carga /overview/sedes: solo sedes con presencia real. El
-// backend ya filtra las ubicaciones sin telemetría; no sembramos fantasmas.
-const SEDE_INFO: { name: string; region: string; rol?: string }[] = [
-  { name: 'Bogotá', region: 'Cundinamarca', rol: 'Principal' },
-];
-
-export default function CommandCenter() {
-  const [d, setD] = useState<KpiData>(FALLBACK);
-  const [clock, setClock] = useState('');
-  const [feed, setFeed] = useState<AlertHit[]>([]);
-  const [feedLoaded, setFeedLoaded] = useState(false);
-  const [range, setRange] = useState<'24h' | '7d' | '30d' | '90d'>('7d');
-  const [filter, setFilter] = useState<'all' | 'ep' | 'srv' | 'net'>('all');
-
-  const [radarData, setRadarData] = useState<{ total: number; assets: RadarAsset[] }>({ total: 0, assets: [] });
-  const [sedes, setSedes] = useState<SedeMetrics[] | null>(null);
-  const [pulse, setPulse] = useState<Pulse | null>(null);
-  const [triage, setTriage] = useState<EntityRisk[]>([]);
-  const navigate = useNavigate();
-
-  const riskRef = useRef(FALLBACK.risk);
-  const filterRef = useRef(filter); filterRef.current = filter;
-  const navRef = useRef(navigate); navRef.current = navigate;
-  const assetsRef = useRef<RadarAsset[]>([]);
-  const totalRef = useRef(0);
-  const doPlaceRef = useRef<() => void>(() => {});
-  const trendDataRef = useRef<{ critica: number[]; alta: number[] }>({ critica: [], alta: [] });
-  const redrawTrendRef = useRef<() => void>(() => {});
-
-  // --- datos reales ---
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const [ov, mx, ue] = await Promise.allSettled([overviewApi.get(), incidentsApi.metrics(), uebaApi.anomalies({ status: 'open' })]);
-      if (!alive) return;
-      const nd: KpiData = { ...FALLBACK };
-      if (ov.status === 'fulfilled') { const o = ov.value; nd.alertas24h = o.amenazas.alertas24h; nd.criticas = o.amenazas.criticas24h; nd.agActivos = o.agentes.activos; nd.agTotal = o.agentes.total; nd.siemPct = o.siem.total ? Math.round(o.siem.ok / o.siem.total * 100) : nd.siemPct; nd.vulnCrit = o.endpoints.vulnCriticas; }
-      if (mx.status === 'fulfilled') { const m = mx.value; nd.incOpen = m.counts.abierto + m.counts.en_curso; nd.incBreached = m.sla.openBreached; nd.slaPct = m.sla.compliancePct; }
-      if (ue.status === 'fulfilled') nd.uebaOpen = ue.value.anomalies.length;
-      // Riesgo: lo desconocido no suma (no inflamos por un dato ausente).
-      nd.risk = Math.max(8, Math.min(100, Math.round((nd.criticas ?? 0) * 0.16 + nd.incBreached * 16 + nd.uebaOpen * 3 + nd.vulnCrit * 0.04 + (100 - nd.siemPct) * 0.6)));
-      riskRef.current = nd.risk;
-      setD(nd);
-    })();
-    overviewApi.radar().then((r) => { if (alive) setRadarData(r); }).catch(() => undefined);
-    overviewApi.sedes().then((r) => { if (alive) setSedes(r); }).catch(() => undefined);
-    const loadPulse = () => overviewApi.pulse().then((p) => { if (alive) setPulse(p); }).catch(() => undefined);
-    void loadPulse();
-    const pulseIv = setInterval(loadPulse, 60000);
-    const loadTriage = () => entityRiskApi.triage(6).then((t) => { if (alive) setTriage(t); }).catch(() => undefined);
-    void loadTriage();
-    const triageIv = setInterval(loadTriage, 90000);
-    return () => { alive = false; clearInterval(pulseIv); clearInterval(triageIv); };
-  }, []);
-
-  // Tendencia real: recarga al cambiar el rango y refresca cada 60s.
-  useEffect(() => {
-    let alive = true;
-    const load = () => overviewApi.trend(range).then((t) => {
-      if (!alive) return;
-      trendDataRef.current = { critica: t.critica, alta: t.alta };
-      redrawTrendRef.current();
-    }).catch(() => undefined);
-    void load();
-    const iv = setInterval(load, 60000);
-    return () => { alive = false; clearInterval(iv); };
-  }, [range]);
-
-  // Cuando llegan los activos, recolocar los puntos del radar y redibujar.
-  useEffect(() => {
-    assetsRef.current = radarData.assets;
-    totalRef.current = radarData.total;
-    doPlaceRef.current();
-  }, [radarData]);
-
-  // reloj + feed en vivo
-  useEffect(() => {
-    const t = setInterval(() => setClock(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })), 1000);
-    setClock(new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    return () => { clearInterval(t); };
-  }, []);
-
-  // Feed en vivo: últimas alertas de nivel alto+ (crítica + alta), refresco cada 45s.
-  useEffect(() => {
-    let alive = true;
-    const fetchFeed = async () => {
-      try {
-        const [crit, alta] = await Promise.all([
-          alertsApi.search({ range: '24h', band: 'critica', page: 0, size: 6 }),
-          alertsApi.search({ range: '24h', band: 'alta', page: 0, size: 6 }),
-        ]);
-        if (!alive) return;
-        const merged = [...crit.items, ...alta.items].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 8);
-        setFeed(merged);
-      } catch { /* mantiene lo anterior */ }
-      finally { if (alive) setFeedLoaded(true); }
-    };
-    void fetchFeed();
-    const iv = setInterval(fetchFeed, 45000);
-    return () => { alive = false; clearInterval(iv); };
-  }, []);
-
-  // --- canvases ---
-  const bgRef = useRef<HTMLCanvasElement>(null);
-  const radarRef = useRef<HTMLCanvasElement>(null);
-  const gaugeRef = useRef<HTMLCanvasElement>(null);
-  const mapRef = useRef<HTMLCanvasElement>(null);
-  const trendRef = useRef<HTMLCanvasElement>(null);
-  const tipRef = useRef<HTMLDivElement>(null);
-  const radarTipRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
-    let raf = 0, t = 0, gauge = 0;
-    const dpr = (cvs: HTMLCanvasElement) => { const r = cvs.getBoundingClientRect(); const p = window.devicePixelRatio || 1; cvs.width = Math.max(1, r.width * p); cvs.height = Math.max(1, r.height * p); const c = cvs.getContext('2d')!; c.setTransform(p, 0, 0, p, 0, 0); return { c, w: r.width, h: r.height }; };
-
-    // --- radar de activos REALES: un punto por agente, colocado por su riesgo ---
-    interface Placed { ang: number; rf: number; size: number; band: RiskBand; asset: RadarAsset }
-    let placed: Placed[] = [];
-    const hash = (s: string, salt: number) => { let h = salt >>> 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return (h % 10000) / 10000; };
-    const CAT_BASE: Record<string, number> = { ep: Math.PI * 0.5, srv: Math.PI * (7 / 6), net: Math.PI * (11 / 6) };
-    const bandCol: Record<RiskBand, Col> = { critico: 'destructive', alto: 'warn-orange', medio: 'primary', monitoreado: 'cyan', sano: 'success' };
-    const placeDots = () => {
-      placed = assetsRef.current.map((a) => {
-        const h1 = hash(a.name, 7), h2 = hash(a.name, 99);
-        const ang = (CAT_BASE[a.category] ?? 0) + (h1 - 0.5) * 1.7;
-        let rf = 0.12 + (1 - a.risk / 100) * 0.8 + (h2 - 0.5) * 0.05;
-        rf = Math.max(0.11, Math.min(0.96, rf));
-        const size = a.risk >= 70 ? 5 : a.risk >= 45 ? 4 : a.risk >= 25 ? 3.2 : a.risk >= 10 ? 2.6 : 2.2;
-        return { ang, rf, size, band: a.band, asset: a };
-      });
-      radar();
-    };
-    doPlaceRef.current = placeDots;
-
-    // trend data
-
-    const drawBg = () => { const cvs = bgRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); c.clearRect(0, 0, w, h); const step = 40; c.strokeStyle = C('foreground', .04); c.lineWidth = 1; for (let x = 0; x < w; x += step) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); } for (let y = 0; y < h; y += step) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } };
-
-    const radar = () => {
-      const cvs = radarRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 10; c.clearRect(0, 0, w, h);
-      for (let i = 1; i <= 5; i++) { const rr = R * i / 5; c.beginPath(); for (let a = 0; a <= 6; a++) { const an = Math.PI / 6 + a * Math.PI / 3, x = cx + Math.cos(an) * rr, y = cy + Math.sin(an) * rr; if (a) c.lineTo(x, y); else c.moveTo(x, y); } c.closePath(); c.strokeStyle = C('foreground', .1); c.lineWidth = 1; c.stroke(); }
-      c.strokeStyle = C('foreground', .06); for (let s = 0; s < 6; s++) { const an = Math.PI / 6 + s * Math.PI / 3; c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(an) * R, cy + Math.sin(an) * R); c.stroke(); }
-      const cg = (c as CanvasRenderingContext2D & { createConicGradient?: (a: number, x: number, y: number) => CanvasGradient }).createConicGradient;
-      if (cg) { const g = cg.call(c, t, cx, cy); g.addColorStop(0, C('primary', .2)); g.addColorStop(.1, C('primary', 0)); g.addColorStop(1, C('primary', 0)); c.beginPath(); c.arc(cx, cy, R, 0, 7); c.fillStyle = g; c.fill(); }
-      c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(t) * R, cy + Math.sin(t) * R); c.strokeStyle = C('primary', .5); c.lineWidth = 1.5; c.stroke();
-      placed.forEach((p) => {
-        if (filterRef.current !== 'all' && p.asset.category !== filterRef.current) return;
-        const col = bandCol[p.band]; const high = p.band === 'critico' || p.band === 'alto';
-        const pulse = high ? (1 + Math.sin(t * 3 + p.ang * 5) * 0.3) : 1; const sz = p.size * pulse;
-        const x = cx + Math.cos(p.ang) * R * p.rf, y = cy + Math.sin(p.ang) * R * p.rf;
-        c.beginPath(); c.arc(x, y, sz * 2.2, 0, 7); c.fillStyle = C(col, .12); c.fill();
-        c.beginPath(); c.arc(x, y, sz, 0, 7); c.fillStyle = C(col); c.shadowBlur = high ? 10 : 0; c.shadowColor = C(col); c.fill(); c.shadowBlur = 0;
-        if (p.band === 'critico') { const b = sz + 4; c.strokeStyle = C(col, .85); c.lineWidth = 1; ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as number[][]).forEach((q) => { c.beginPath(); c.moveTo(x + q[0] * b, y + q[1] * b - q[1] * 3); c.lineTo(x + q[0] * b, y + q[1] * b); c.lineTo(x + q[0] * b - q[0] * 3, y + q[1] * b); c.stroke(); }); }
-      });
-      c.beginPath(); for (let a = 0; a <= 6; a++) { const an = Math.PI / 6 + a * Math.PI / 3, rr = R * .13, x = cx + Math.cos(an) * rr, y = cy + Math.sin(an) * rr; if (a) c.lineTo(x, y); else c.moveTo(x, y); } c.closePath(); c.fillStyle = C('card', .9); c.fill(); c.strokeStyle = C('primary', .6); c.lineWidth = 1.5; c.stroke();
-      c.fillStyle = C('foreground'); c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 ${R * .085}px ${cssVar('--hw-mono')}`; c.fillText(String(totalRef.current || placed.length), cx, cy - R * .02); c.font = `600 ${R * .032}px ${cssVar('--hw-mono')}`; c.fillStyle = C('muted-foreground'); c.fillText('ACTIVOS', cx, cy + R * .05);
-    };
-
-    const drawGauge = () => { const cvs = gaugeRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 8; c.clearRect(0, 0, w, h); const start = Math.PI * .75, end = Math.PI * 2.25, val = gauge / 100; c.beginPath(); c.arc(cx, cy, R, start, end); c.strokeStyle = C('foreground', .08); c.lineWidth = 9; c.lineCap = 'round'; c.stroke(); const col: Col = gauge > 66 ? 'destructive' : gauge > 40 ? 'warn-orange' : 'success'; c.beginPath(); c.arc(cx, cy, R, start, start + (end - start) * val); c.strokeStyle = C(col); c.lineWidth = 9; c.lineCap = 'round'; c.shadowBlur = 14; c.shadowColor = C(col); c.stroke(); c.shadowBlur = 0; for (let k = 0; k <= 10; k++) { const an = start + (end - start) * k / 10; c.beginPath(); c.moveTo(cx + Math.cos(an) * (R - 13), cy + Math.sin(an) * (R - 13)); c.lineTo(cx + Math.cos(an) * (R - 18), cy + Math.sin(an) * (R - 18)); c.strokeStyle = C('foreground', .18); c.lineWidth = 1.5; c.stroke(); } c.fillStyle = C('foreground'); c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `800 ${R * .42}px ${cssVar('--hw-mono')}`; c.fillText(String(Math.round(gauge)), cx, cy); };
-
-    const drawMap = () => { const cvs = mapRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); c.clearRect(0, 0, w, h); const step = 15; c.fillStyle = C('foreground', .12); for (let x = step; x < w; x += step) for (let y = step; y < h; y += step) { const nx = x / w, ny = y / h; const inMass = (nx > .14 && nx < .44 && ny > .2 && ny < .9) || (nx > .44 && nx < .62 && ny > .15 && ny < .55) || (nx > .6 && nx < .9 && ny > .2 && ny < .7); if (inMass) { c.beginPath(); c.arc(x, y, 1.1, 0, 7); c.fill(); } } const hub = [SEDES[0][1] * w, SEDES[0][2] * h]; SEDES.slice(1).forEach((s) => { const p = [s[1] * w, s[2] * h], mx = (hub[0] + p[0]) / 2, my = Math.min(hub[1], p[1]) - 40; c.beginPath(); c.moveTo(hub[0], hub[1]); c.quadraticCurveTo(mx, my, p[0], p[1]); c.strokeStyle = C('primary', .4); c.lineWidth = 1.2; c.stroke(); }); };
-
-
-    const drawTrend = () => { const cvs = trendRef.current; if (!cvs) return; const { c, w, h } = dpr(cvs); c.clearRect(0, 0, w, h); const td = trendDataRef.current; const series = [td.critica, td.alta]; const pad = 8, n = Math.max(series[0].length, series[1].length); c.strokeStyle = C('foreground', .06); for (let gy = 0; gy <= 4; gy++) { const y = pad + (h - 2 * pad) * gy / 4; c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } if (n < 2) { (cvs as HTMLCanvasElement & { _m?: { n: number; w: number } })._m = { n: 0, w }; return; } let maxV = 0; series.forEach((s) => s.forEach((v) => { if (v > maxV) maxV = v; })); maxV = Math.max(1, maxV) * 1.15; const cols: Col[] = ['destructive', 'warn-orange']; for (let k = 1; k >= 0; k--) { const s = series[k]; c.beginPath(); s.forEach((v, i) => { const x = i / (n - 1) * w, y = pad + (h - 2 * pad) * (1 - v / maxV); if (i) c.lineTo(x, y); else c.moveTo(x, y); }); const g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, C(cols[k], .22)); g.addColorStop(1, C(cols[k], 0)); c.lineTo(w, h); c.lineTo(0, h); c.closePath(); c.fillStyle = g; c.fill(); c.beginPath(); s.forEach((v, i) => { const x = i / (n - 1) * w, y = pad + (h - 2 * pad) * (1 - v / maxV); if (i) c.lineTo(x, y); else c.moveTo(x, y); }); c.strokeStyle = C(cols[k]); c.lineWidth = 2; c.lineJoin = 'round'; c.shadowBlur = 8; c.shadowColor = C(cols[k], .5); c.stroke(); c.shadowBlur = 0; } (cvs as HTMLCanvasElement & { _m?: { n: number; w: number } })._m = { n, w }; };
-    redrawTrendRef.current = drawTrend;
-
-    const renderStatic = () => { drawBg(); drawGauge(); drawMap(); drawTrend(); };
-    renderStatic();
-
-    // animación gauge → target
-    let g0: number | null = null; const gTarget = () => riskRef.current;
-    const animGauge = (ts: number) => { if (g0 == null) g0 = ts; const p = Math.min((ts - g0) / 1300, 1), e = 1 - Math.pow(1 - p, 3); gauge = gTarget() * e; drawGauge(); if (p < 1) requestAnimationFrame(animGauge); };
-    requestAnimationFrame(animGauge);
-
-    const loop = () => { t += 0.014; radar(); drawBg(); raf = requestAnimationFrame(loop); };
-    if (reduce) radar(); else raf = requestAnimationFrame(loop);
-
-    // trend hover
-    const cvs = trendRef.current, tip = tipRef.current;
-    const onMove = (e: MouseEvent) => { const m = (cvs as HTMLCanvasElement & { _m?: { n: number; w: number } })._m; if (!m || m.n < 2 || !tip || !cvs) return; const rect = cvs.getBoundingClientRect(), mx = e.clientX - rect.left, i = Math.max(0, Math.min(m.n - 1, Math.round(mx / m.w * (m.n - 1)))); const td = trendDataRef.current; const series = [td.critica, td.alta], L = ['Críticas', 'Altas'], cc: Col[] = ['destructive', 'warn-orange']; let html = `<div>PUNTO ${i + 1}</div>`; [0, 1].forEach((k) => { html += `<div class="r"><i style="background:${C(cc[k])}"></i>${L[k]}: <b>${series[k][i] ?? 0}</b></div>`; }); tip.innerHTML = html; tip.style.opacity = '1'; const x = i / (m.n - 1) * rect.width; tip.style.left = Math.min(rect.width - 140, Math.max(0, x - 60)) + 'px'; tip.style.top = '6px'; };
-    const onLeave = () => { if (tip) tip.style.opacity = '0'; };
-    cvs?.addEventListener('mousemove', onMove); cvs?.addEventListener('mouseleave', onLeave);
-
-    // radar: hover + clic sobre activos reales
-    const rcvs = radarRef.current, rtip = radarTipRef.current;
-    const CATLBL: Record<string, string> = { ep: 'Endpoint', srv: 'Servidor', net: 'Red' };
-    const hitAt = (e: MouseEvent): Placed | null => {
-      if (!rcvs) return null; const rect = rcvs.getBoundingClientRect(); const cx = rect.width / 2, cy = rect.height / 2, R = Math.min(rect.width, rect.height) / 2 - 10;
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top; let best: Placed | null = null, bd = 11;
-      for (const p of placed) { if (filterRef.current !== 'all' && p.asset.category !== filterRef.current) continue; const x = cx + Math.cos(p.ang) * R * p.rf, y = cy + Math.sin(p.ang) * R * p.rf; const dd = Math.hypot(mx - x, my - y); if (dd < bd) { bd = dd; best = p; } }
-      return best;
-    };
-    const rMove = (e: MouseEvent) => {
-      if (!rcvs || !rtip) return; const p = hitAt(e);
-      if (!p) { rtip.style.opacity = '0'; rcvs.style.cursor = 'default'; return; }
-      const a = p.asset, rect = rcvs.getBoundingClientRect();
-      rtip.innerHTML = `<div style="font-weight:700">${a.name}</div><div class="r">${CATLBL[a.category]} · ${a.status === 'active' ? 'activo' : 'desconectado'}</div><div class="r"><i style="background:${C(bandCol[p.band])}"></i>riesgo ${a.risk} · ${a.band}</div><div class="r">${a.criticalVulns} vulns críticas · ${a.alerts24h} alertas 24h</div>`;
-      rtip.style.opacity = '1'; rcvs.style.cursor = 'pointer';
-      rtip.style.left = Math.min(rect.width - 175, Math.max(0, e.clientX - rect.left + 12)) + 'px';
-      rtip.style.top = Math.max(0, e.clientY - rect.top + 12) + 'px';
-    };
-    const rLeave = () => { if (rtip) rtip.style.opacity = '0'; if (rcvs) rcvs.style.cursor = 'default'; };
-    const rClick = (e: MouseEvent) => { const p = hitAt(e); if (p) navRef.current(`/alertas?agent=${encodeURIComponent(p.asset.name)}`); };
-    rcvs?.addEventListener('mousemove', rMove); rcvs?.addEventListener('mouseleave', rLeave); rcvs?.addEventListener('click', rClick);
-
-    const onResize = () => { renderStatic(); radar(); };
-    let rt: number; const rl = () => { clearTimeout(rt); rt = window.setTimeout(onResize, 150); };
-    window.addEventListener('resize', rl);
-    const obs = new MutationObserver(() => { renderStatic(); }); obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-
-    return () => { cancelAnimationFrame(raf); cvs?.removeEventListener('mousemove', onMove); cvs?.removeEventListener('mouseleave', onLeave); rcvs?.removeEventListener('mousemove', rMove); rcvs?.removeEventListener('mouseleave', rLeave); rcvs?.removeEventListener('click', rClick); window.removeEventListener('resize', rl); obs.disconnect(); };
-  }, []);
-
-  const fmt = (n: number) => n.toLocaleString('es-CO');
-  const show = (n: number | null | undefined) => (n == null ? '—' : fmt(n));
-  const relTime = (iso: string | null): string => {
-    if (!iso) return '';
-    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-    if (s < 3600) return `hace ${Math.round(s / 60)} min`;
-    if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
-    return `hace ${Math.round(s / 86400)} d`;
-  };
-  const sedeList: SedeMetrics[] = sedes ?? SEDE_INFO.map((s) => ({ ...s, agentes: 0, agentesActivos: 0, logins7d: 0, usuarios: 0, users: [], agentNames: [], ultimaActividad: null, estado: 'activa' as const }));
-  const sedesActivas = sedeList.filter((s) => s.estado === 'activa').length;
-  // Agentes: una sola fuente para que KPI, radar y offline concuerden. Preferimos
-  // el universo del radar (endpoints, sin el activo de red); overview de respaldo.
-  const epAssets = radarData.assets.filter((a) => a.category !== 'net');
-  const agTotal = epAssets.length > 0 ? epAssets.length : d.agTotal;
-  const agActivos = epAssets.length > 0 ? epAssets.filter((a) => a.status === 'active').length : d.agActivos;
-  const offlineAssets = epAssets.filter((a) => a.status !== 'active');
-  const offlineCount = agTotal != null && agActivos != null ? Math.max(0, agTotal - agActivos) : offlineAssets.length;
-  const sistema = pulse?.sistema ?? 'OPERATIVO';
-  const sysColor = sistema === 'ATENCIÓN' ? 'destructive' : sistema === 'EN GESTIÓN' ? 'warn-orange' : 'success';
-  const deltaPct = pulse?.deltaPct ?? null;
-
+function Panel({ title, icon: Icon, children, right }: { title: string; icon: typeof Server; children: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <div className="relative mx-auto max-w-[1480px]">
-      <canvas ref={bgRef} className="pointer-events-none absolute inset-0 -z-10 h-full w-full opacity-70" />
-      <div className="flex flex-col gap-4">
-        {/* ticker */}
-        <div className="hw-ticker hw-reveal">
-          <span className="t"><i style={{ background: `hsl(var(--${sysColor}))`, boxShadow: `0 0 6px hsl(var(--${sysColor}))` }} />SISTEMA <b className="hw-blink" style={{ color: `hsl(var(--${sysColor}))` }}>{sistema}</b></span>
-          <span className="t">INGESTA <b>{show(pulse?.ingestaMin)}</b> ev/min</span>
-          <span className="t">INDEXER <b>{pulse?.discoPct != null ? pulse.discoPct + '%' : '—'}</b> disco</span>
-          <span className="t">AGENTES <b>{show(agActivos)}/{show(agTotal)}</b></span>
-          <span className="t"><i style={{ background: `hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))`, boxShadow: `0 0 6px hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))` }} />{d.incBreached} SLA <b style={{ color: `hsl(var(--${d.incBreached > 0 ? 'destructive' : 'success'}))` }}>{d.incBreached > 0 ? 'VENCIDO' : 'EN PLAZO'}</b></span>
-          <span className="t">KEV <b style={{ color: `hsl(var(--${(pulse?.kevEnv ?? 0) > 0 ? 'destructive' : 'success'}))` }}>{pulse?.kevEnv != null ? `${pulse.kevEnv} activas` : '—'}</b></span>
+    <Card className="h-full">
+      <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
+        <div className="hw-mono flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-foreground/90">
+          <span style={{ color: TEAL }}>▸</span><Icon className="h-3.5 w-3.5" style={{ color: TEAL }} /> {title}
         </div>
+        {right}
+      </div>
+      <CardContent className="p-3">{children}</CardContent>
+    </Card>
+  );
+}
 
-        {/* head */}
-        <div className="hw-reveal flex flex-wrap items-end justify-between gap-3" style={{ animationDelay: '.03s' }}>
-          <div>
-            <h1 className="m-0 text-2xl font-bold tracking-tight">COMMAND <span style={{ color: 'hsl(var(--primary))', textShadow: '0 0 16px hsl(var(--primary)/.5)' }}>CENTER</span></h1>
-            <p className="hw-mono mt-1 text-[11px] tracking-wide text-muted-foreground">GVM CORPORATION // POSTURA EN TIEMPO REAL // {clock}</p>
-          </div>
-        </div>
-
-        {/* KPIs */}
-        <div className="hw-reveal grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" style={{ animationDelay: '.06s' }}>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M4 6h16M4 12h16M4 18h10" /> Alertas 24h</div><div className="v">{show(d.alertas24h)}</div><div className={`d ${deltaPct != null && deltaPct > 0 ? 'hw-up' : deltaPct != null && deltaPct < 0 ? 'hw-down' : 'hw-flat'}`}>{deltaPct != null ? `${deltaPct > 0 ? '▲' : deltaPct < 0 ? '▼' : '='} ${Math.abs(deltaPct)}% VS AYER` : '—'}</div></div>
-          <div className="hud hw-kpi crit"><div className="l"><Ico d="M12 3l9 16H3z" /> Críticas</div><div className="v">{show(d.criticas)}</div><div className="d hw-flat">NIVEL ≥12 · 24H</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M4 7h16v13H4z" /> Incidentes</div><div className="v">{d.incOpen}</div><div className={`d ${d.incBreached > 0 ? 'hw-down' : 'hw-flat'}`}>{d.incBreached > 0 ? `${d.incBreached} SLA VENCIDO` : 'SIN VENCIMIENTOS'}</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> UEBA</div><div className="v">{d.uebaOpen}</div><div className="d hw-flat">ANOMALÍAS ABIERTAS</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M12 2 4 5v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V5z" /> Agentes</div><div className="v">{show(agActivos)}<span className="text-sm text-muted-foreground">/{show(agTotal)}</span></div><div className={`d ${offlineCount > 0 ? 'hw-down' : 'hw-up'}`}>{offlineCount > 0 ? `▼ ${offlineCount} OFFLINE` : '✓ TODOS ONLINE'}</div></div>
-          <div className="hud hw-kpi"><div className="l"><Ico d="M12 8v4l3 2" circle /> SLA</div><div className={`v ${d.incBreached > 0 ? 'hw-down' : ''}`}>{d.slaPct != null ? d.slaPct + '%' : '—'}</div><div className={`d ${d.incBreached > 0 ? 'hw-down' : 'hw-up'}`}>{d.incBreached > 0 ? `${d.incBreached} FUERA DE PLAZO` : '✓ CASOS EN PLAZO'}</div></div>
-        </div>
-
-        {/* radar + risk/feed */}
-        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-          <div className="hud hw-reveal" style={{ animationDelay: '.1s' }}>
-            <div className="hw-chdr"><h3>Threat Radar</h3><span className="sub">activos en un vistazo</span><div className="flex-1" />
-              <div className="flex flex-wrap gap-1">{(['all', 'ep', 'srv', 'net'] as const).map((f) => <button key={f} className={`hw-chip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)}>{{ all: 'Todos', ep: 'Endpoints', srv: 'Servidores', net: 'Red' }[f]}</button>)}</div>
-            </div>
-            <div className="relative grid min-h-[360px] place-items-center">
-              <canvas ref={radarRef} className="block aspect-square w-full max-w-[460px]" style={{ filter: 'drop-shadow(0 0 20px hsl(var(--primary)/.12))' }} />
-              <div id="hw-ttip" ref={radarTipRef} className="hw-clip" style={{ maxWidth: 175 }} />
-            </div>
-            <div className="hw-legend mt-2">
-              {([['destructive', 'Crítico'], ['warn-orange', 'Alto'], ['primary', 'Medio'], ['cyan', 'Monitoreado'], ['success', 'Sano']] as [string, string][]).map((l) => <span key={l[1]}><i style={{ background: `hsl(var(--${l[0]}))` }} />{l[1]}</span>)}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="hud hw-reveal" style={{ animationDelay: '.14s' }}>
-              <div className="hw-chdr"><h3>Riesgo global</h3><span className="sub">índice compuesto</span></div>
-              <div className="flex items-center gap-4">
-                <canvas ref={gaugeRef} className="h-[104px] w-[104px] flex-none" style={{ filter: 'drop-shadow(0 0 12px hsl(var(--primary)/.25))' }} />
-                <div>
-                  <div className="text-[32px] font-extrabold leading-none tracking-tight">{d.risk}</div>
-                  <div className="hw-tag mt-1">nivel: <span style={{ color: d.risk > 66 ? 'hsl(var(--destructive))' : 'hsl(var(--warn-orange))' }}>{d.risk > 66 ? 'crítico' : d.risk > 40 ? 'elevado' : 'bajo'}</span></div>
-                  <div className="hw-mono mt-2 text-[11px]" style={{ color: 'hsl(var(--warn-orange))' }}>▲ críticas + {d.incBreached} SLA vencido</div>
-                </div>
-              </div>
-            </div>
-            <div className="hud hw-reveal flex-1" style={{ animationDelay: '.18s' }}>
-              <div className="hw-chdr"><h3>Feed en vivo</h3><span className="sub">alertas nivel alto+ · 24h</span></div>
-              <div className="flex max-h-[230px] flex-col overflow-y-auto">
-                {feed.length === 0 ? (
-                  <p className="hw-mono py-8 text-center text-[11px] text-muted-foreground">{feedLoaded ? 'Sin alertas de nivel alto en las últimas 24 h.' : 'Cargando…'}</p>
-                ) : feed.map((a) => {
-                  const col = BAND_COL[a.band] ?? 'primary';
-                  return (
-                    <div className="hw-fe cursor-pointer" key={a.id} onClick={() => navigate(`/alertas?agent=${encodeURIComponent(a.agent)}`)} title={`Nivel ${a.level} · ${a.agent}`}>
-                      <span className="sev" style={{ background: `hsl(var(--${col}))`, boxShadow: `0 0 6px hsl(var(--${col}))` }} />
-                      <span className="ft">{new Date(a.timestamp).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}</span>
-                      <span className="fx">[{a.ruleId}] {a.description}</span>
-                      <span className="fa">{a.agent}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* prioridad de triage (RBA) */}
-        <div className="hud hw-reveal" style={{ animationDelay: '.19s' }}>
-          <div className="hw-chdr"><h3>Prioridad de triage</h3><span className="sub">riesgo acumulado por entidad · RBA</span><div className="flex-1" />
-            <button className="hw-mono text-[10px] uppercase tracking-wide text-primary hover:underline" onClick={() => navigate('/riesgo-entidad')}>ver todo →</button>
-          </div>
-          {triage.length === 0 ? (
-            <p className="hw-mono py-6 text-center text-[11px] text-muted-foreground">Calculando prioridad…</p>
-          ) : (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {triage.map((e) => {
-                const v = BAND_VAR[e.band];
-                const go = () => navigate(e.type === 'host' ? `/alertas?agent=${encodeURIComponent(e.entity)}` : `/comportamiento?user=${encodeURIComponent(e.entity)}`);
-                return (
-                  <div key={`${e.type}-${e.entity}`} onClick={go} title={`${e.entity} · riesgo ${e.score}`}
-                    className="hw-clip flex cursor-pointer items-center gap-2.5 border border-border bg-secondary/20 p-2.5 transition-colors hover:border-primary/50">
-                    <span className="hw-tabular flex h-9 w-9 shrink-0 items-center justify-center rounded text-sm font-bold" style={{ color: `hsl(var(--${v}))`, background: `hsl(var(--${v}) / .12)` }}>{e.score}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="hw-mono text-[8.5px] uppercase tracking-wide text-muted-foreground">{e.type === 'host' ? 'HOST' : 'USER'}</span>
-                        <span className="truncate text-[12px] font-semibold">{e.entity}</span>
-                      </div>
-                      <p className="hw-mono truncate text-[9.5px] text-muted-foreground">{e.contributions[0]?.label ?? ''}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* map + quick/offline */}
-        <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-          <div className="hud hw-reveal" style={{ animationDelay: '.2s' }}>
-            <div className="hw-chdr"><h3>Ubicaciones · sedes</h3><span className="sub">{sedesActivas} activas</span></div>
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {sedeList.map((s) => {
-                const activa = s.estado === 'activa';
-                const metric = s.agentes > 0 ? `${s.agentesActivos}/${s.agentes} agentes` : s.logins7d > 0 ? `${fmt(s.logins7d)} logins 7d` : '';
-                const go = () => {
-                  const qp = s.users.length ? `user=${encodeURIComponent(s.users.join(','))}` : s.agentNames.length ? `agent=${encodeURIComponent(s.agentNames[0])}` : '';
-                  if (qp) navigate(`/alertas?${qp}`);
-                };
-                const clickable = s.users.length > 0 || s.agentNames.length > 0;
-                return (
-                  <div key={s.name} onClick={clickable ? go : undefined} role={clickable ? 'button' : undefined} tabIndex={clickable ? 0 : undefined}
-                    onKeyDown={clickable ? (e) => { if (e.key === 'Enter') go(); } : undefined}
-                    title={clickable ? `Ver alertas de ${s.name}` : undefined}
-                    className={`hw-clip flex flex-col gap-1.5 border border-border bg-secondary/20 p-2.5 transition-colors ${clickable ? 'cursor-pointer hover:border-primary/50' : ''}`}>
-                    <div className="flex items-center gap-2.5">
-                      <span className="hw-clip flex h-8 w-8 shrink-0 items-center justify-center bg-primary/12 text-primary"><Ico d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z M12 10a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2z" /></span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-semibold">{s.name}</div>
-                        <div className="hw-mono truncate text-[9.5px] uppercase tracking-wide text-muted-foreground">{s.region}{s.rol && <span className="text-primary"> · {s.rol}</span>}</div>
-                      </div>
-                      <span className="hw-mono flex shrink-0 items-center gap-1 text-[9.5px] uppercase" style={{ color: activa ? 'hsl(var(--success))' : 'hsl(var(--muted-foreground))' }}>
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'currentColor', boxShadow: activa ? '0 0 6px currentColor' : 'none' }} />{activa ? 'activa' : 'inactiva'}
-                      </span>
-                    </div>
-                    {(metric || s.ultimaActividad) && (
-                      <div className="hw-mono flex items-center justify-between border-t border-border/50 pt-1.5 text-[9.5px] text-muted-foreground">
-                        <span className="truncate text-foreground/70">{metric || '—'}</span>
-                        {s.ultimaActividad && <span className="shrink-0 pl-2">{relTime(s.ultimaActividad)}</span>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <div className="hw-clip flex items-center justify-center gap-2 border border-dashed border-border/70 p-2.5 text-muted-foreground">
-                <Ico d="M12 5v14M5 12h14" /><span className="hw-mono text-[10px] uppercase tracking-wide">Agregar sede</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-4">
-            <div className="hud hw-reveal" style={{ animationDelay: '.24s' }}>
-              <div className="hw-chdr"><h3>Acción rápida</h3></div>
-              <div className="grid grid-cols-3 gap-2">
-                <Link to="/respuesta" className="hw-qab"><Ico d="M5 5l14 14" circle /><span>Bloquear IP</span></Link>
-                <Link to="/velociraptor" className="hw-qab"><Ico d="M12 3 4 6v5c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z" /><span>Aislar host</span></Link>
-                <Link to="/incidentes" className="hw-qab"><Ico d="M4 7h16v13H4z" /><span>Crear caso</span></Link>
-              </div>
-            </div>
-            <div className="hud hw-reveal" style={{ animationDelay: '.28s' }}>
-              <div className="hw-chdr"><h3>Offline</h3><span className="sub">agentes ahora</span></div>
-              <div className="flex items-baseline gap-2"><span className="hw-tabular text-[26px] font-bold" style={{ color: offlineCount > 0 ? 'hsl(var(--destructive))' : 'hsl(var(--success))' }}>{offlineCount}</span><span className="hw-tag">de {show(agTotal)} desconectados</span></div>
-              <div className="mt-2 flex max-h-[104px] flex-col gap-1 overflow-y-auto">
-                {offlineAssets.length === 0 ? (
-                  <p className="hw-mono py-4 text-center text-[11px] text-muted-foreground">{offlineCount > 0 ? `${offlineCount} sin detalle de host` : 'Todos los agentes conectados.'}</p>
-                ) : offlineAssets.map((a) => (
-                  <div key={a.name} onClick={() => navigate(`/alertas?agent=${encodeURIComponent(a.name)}`)} title={`${a.os || 'host'} · ${a.ip || ''}`}
-                    className="hw-clip flex cursor-pointer items-center gap-2 border border-border/60 bg-secondary/20 px-2 py-1 transition-colors hover:border-destructive/50">
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'hsl(var(--destructive))', boxShadow: '0 0 6px hsl(var(--destructive))' }} />
-                    <span className="truncate text-[12px] font-medium">{a.name}</span>
-                    <span className="hw-mono ml-auto shrink-0 text-[9.5px] uppercase text-muted-foreground">{a.category}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* trend */}
-        <div className="hud hw-reveal" style={{ animationDelay: '.3s' }}>
-          <div className="hw-chdr"><h3>Tendencia de seguridad</h3><div className="flex-1" />
-            <div className="flex gap-0.5 bg-secondary/60 p-0.5">{(['24h', '7d', '30d', '90d'] as const).map((r) => <button key={r} className={`hw-tab ${range === r ? 'on' : ''}`} onClick={() => setRange(r)}>{r.toUpperCase()}</button>)}</div>
-          </div>
-          <div className="hw-legend mb-1.5">{([['destructive', 'Críticas'], ['warn-orange', 'Altas']] as [string, string][]).map((l) => <span key={l[1]}><i style={{ background: `hsl(var(--${l[0]}))` }} />{l[1]}</span>)}</div>
-          <div className="relative h-[220px]"><canvas ref={trendRef} className="block h-[220px] w-full" /><div id="hw-ttip" ref={tipRef} className="hw-clip" /></div>
-        </div>
+/* ---------- Gráfico de área (tendencia por severidad) ---------- */
+function AreaChart({ series, labels }: { series: { name: string; color: string; data: number[] }[]; labels: string[] }) {
+  const W = 620, H = 190, pad = { l: 26, r: 8, t: 12, b: 20 };
+  const n = Math.max(1, ...series.map((s) => s.data.length));
+  const max = Math.max(1, ...series.flatMap((s) => s.data));
+  const x = (i: number) => pad.l + (n <= 1 ? 0 : (i / (n - 1)) * (W - pad.l - pad.r));
+  const y = (v: number) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
+  const path = (d: number[]) => d.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ');
+  const area = (d: number[]) => `${path(d)} L${x(d.length - 1).toFixed(1)} ${y(0)} L${x(0).toFixed(1)} ${y(0)} Z`;
+  const ticks = [0, 0.5, 1].map((f) => Math.round(max * f));
+  return (
+    <div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ maxHeight: 210 }}>
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={pad.l} x2={W - pad.r} y1={y(t)} y2={y(t)} stroke="hsl(var(--border))" strokeOpacity={0.3} />
+            <text x={2} y={y(t) + 3} className="hw-mono" fill={MUTE} style={{ fontSize: 8 }}>{t}</text>
+          </g>
+        ))}
+        {series.map((s) => (
+          <g key={s.name}>
+            <path d={area(s.data)} fill={s.color} opacity={0.1} />
+            <path d={path(s.data)} fill="none" stroke={s.color} strokeWidth={1.8} style={{ filter: `drop-shadow(0 0 3px ${s.color})` }} />
+          </g>
+        ))}
+        {labels.map((lb, i) => i % Math.ceil(n / 6) === 0 && (
+          <text key={i} x={x(i)} y={H - 6} textAnchor="middle" className="hw-mono" fill={MUTE} style={{ fontSize: 8 }}>{lb}</text>
+        ))}
+      </svg>
+      <div className="hw-mono mt-1 flex flex-wrap justify-center gap-3 text-[10px] text-muted-foreground">
+        {series.map((s) => <span key={s.name} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: s.color }} /> {s.name}</span>)}
       </div>
     </div>
   );
 }
 
-/** Icono inline mínimo (stroke). */
-function Ico({ d, circle }: { d: string; circle?: boolean }) {
-  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">{circle && <circle cx="12" cy="12" r="9" />}<path d={d} strokeLinecap="round" strokeLinejoin="round" /></svg>;
+/* ---------- Donut de vulnerabilidades ---------- */
+function Donut({ segs, centerPct, centerLabel }: { segs: { label: string; value: number; color: string }[]; centerPct: number | null; centerLabel: string }) {
+  const size = 150, stroke = 16, r = (size - stroke) / 2, C = 2 * Math.PI * r, cx = size / 2;
+  const total = segs.reduce((a, b) => a + b.value, 0) || 1;
+  let acc = 0;
+  return (
+    <div className="flex items-center gap-3">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke="hsl(var(--border))" strokeOpacity={0.3} strokeWidth={stroke} />
+        {segs.map((s, i) => {
+          const frac = s.value / total; const dash = frac * C; const off = -acc * C; acc += frac;
+          return <circle key={i} cx={cx} cy={cx} r={r} fill="none" stroke={s.color} strokeWidth={stroke}
+            strokeDasharray={`${dash} ${C - dash}`} strokeDashoffset={off} transform={`rotate(-90 ${cx} ${cx})`} style={{ filter: `drop-shadow(0 0 3px ${s.color})` }} />;
+        })}
+        <text x={cx} y={cx - 2} textAnchor="middle" className="hw-mono" fill={RED} style={{ fontSize: 26, fontWeight: 700 }}>{centerPct != null ? `${centerPct}%` : '—'}</text>
+        <text x={cx} y={cx + 16} textAnchor="middle" fill={MUTE} style={{ fontSize: 9 }}>{centerLabel}</text>
+      </svg>
+      <div className="space-y-1.5">
+        {segs.map((s) => (
+          <div key={s.label} className="flex items-center gap-2">
+            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: s.color, boxShadow: `0 0 5px ${s.color}` }} />
+            <span className="hw-mono text-[11px] text-muted-foreground">{s.label}</span>
+            <span className="hw-mono ml-auto text-sm font-bold tabular-nums" style={{ color: s.color }}>{s.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Barras agrupadas (resueltos vs creados) ---------- */
+function GroupBars({ data }: { data: { label: string; resolved: number; created: number }[] }) {
+  const max = Math.max(1, ...data.flatMap((d) => [d.resolved, d.created]));
+  return (
+    <div>
+      <div className="flex h-28 items-end gap-1">
+        {data.map((d, i) => (
+          <div key={i} className="group flex flex-1 flex-col items-stretch justify-end" title={`${d.label}: ${d.resolved} resueltos, ${d.created} creados`}>
+            <div className="flex items-end justify-center gap-0.5" style={{ height: '100%' }}>
+              <div className="w-1.5 rounded-t" style={{ height: `${Math.max(2, (d.resolved / max) * 100)}%`, background: GREEN, boxShadow: `0 0 4px ${GREEN}` }} />
+              <div className="w-1.5 rounded-t" style={{ height: `${Math.max(2, (d.created / max) * 100)}%`, background: RED, boxShadow: `0 0 4px ${RED}` }} />
+            </div>
+            <div className="hw-mono mt-1 truncate text-center text-[7px] text-muted-foreground">{d.label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="hw-mono mt-1 flex justify-center gap-3 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: GREEN }} /> Resueltos</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: RED }} /> Creados</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Sparkline ---------- */
+function Spark({ data, color = TEAL }: { data: number[]; color?: string }) {
+  if (!data.length) return null;
+  const W = 120, H = 28, max = Math.max(1, ...data);
+  const pts = data.map((v, i) => `${(i / Math.max(1, data.length - 1)) * W},${H - (v / max) * H}`).join(' ');
+  return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}><polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} /></svg>;
+}
+
+function timeShort(ts: string): string { try { return new Date(ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } }
+
+export default function CommandCenter() {
+  const [ov, setOv] = useState<OverviewData | null>(null);
+  const [soc, setSoc] = useState<SocMetrics | null>(null);
+  const [trend, setTrend] = useState<AlertTrend | null>(null);
+  const [trendRange, setTrendRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [barDays, setBarDays] = useState(30);
+  const [bars, setBars] = useState<SocMetrics | null>(null);
+  const [alerts, setAlerts] = useState<AlertHit[] | null>(null);
+  const [anoms, setAnoms] = useState<Anomaly[] | null>(null);
+  const [flows, setFlows] = useState<FlowsOverview | null>(null);
+  const [radar, setRadar] = useState<AssetRadar | null>(null);
+  const [clock, setClock] = useState(new Date());
+
+  const loadCore = useCallback(async () => {
+    const [o, m, a, u, f, r] = await Promise.allSettled([
+      overviewApi.get(), metricsApi.soc(30),
+      alertsApi.search({ range: '24h', triage: true, page: 1, size: 8 }),
+      uebaApi.anomalies({ status: 'open' }), flowsApi.overview('24h'), overviewApi.radar(),
+    ]);
+    if (o.status === 'fulfilled') setOv(o.value);
+    if (m.status === 'fulfilled') setSoc(m.value);
+    if (a.status === 'fulfilled') setAlerts(a.value.items);
+    if (u.status === 'fulfilled') setAnoms(u.value.anomalies);
+    if (f.status === 'fulfilled') setFlows(f.value);
+    if (r.status === 'fulfilled') setRadar(r.value);
+  }, []);
+  useEffect(() => { void loadCore(); const i = setInterval(() => void loadCore(), 30_000); return () => clearInterval(i); }, [loadCore]);
+  useEffect(() => { overviewApi.trend(trendRange).then(setTrend).catch(() => undefined); }, [trendRange]);
+  useEffect(() => { metricsApi.soc(barDays).then(setBars).catch(() => undefined); }, [barDays]);
+  useEffect(() => { const i = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(i); }, []);
+
+  // --- derivados ---
+  const sema = ov ? SEMA[ov.global.semaforo] : null;
+  const vulnCrit = ov?.endpoints.vulnCriticas ?? 0;
+  const vulnAlta = ov?.endpoints.vulnAltas ?? 0;
+  const vulnTotal = ov?.endpoints.vulnTotal ?? 0;
+  const vulnMedia = Math.max(0, vulnTotal - vulnCrit - vulnAlta);
+  const highRiskPct = vulnTotal > 0 ? Math.round(((vulnCrit + vulnAlta) / vulnTotal) * 100) : null;
+  const resueltos = soc ? soc.counts.resuelto + soc.counts.cerrado : null;
+  const incOpen = soc ? soc.counts.abierto + soc.counts.en_curso : null;
+  const risk = useMemo(() => {
+    const crit = ov?.amenazas.criticas24h ?? 0; const breached = soc?.sla.overallPct != null ? 0 : 0;
+    const siemPct = ov && ov.siem.total ? Math.round((ov.siem.ok / ov.siem.total) * 100) : 100;
+    const anOpen = anoms?.length ?? 0;
+    return Math.max(8, Math.min(100, Math.round(crit * 0.6 + (incOpen ?? 0) * 2 + anOpen * 3 + vulnCrit * 0.06 + (100 - siemPct) * 0.6 + breached)));
+  }, [ov, soc, anoms, incOpen, vulnCrit]);
+
+  const trendLabels = useMemo(() => {
+    const n = trend?.critica.length ?? 0; const now = Date.now();
+    const step = trendRange === '7d' ? 86400000 : trendRange === '30d' ? 86400000 : 86400000;
+    return Array.from({ length: n }, (_, i) => { const d = new Date(now - (n - 1 - i) * step); return `${d.getDate()}/${d.getMonth() + 1}`; });
+  }, [trend, trendRange]);
+
+  const barData = useMemo(() => {
+    const tp = bars?.throughput ?? soc?.throughput ?? [];
+    return tp.slice(-24).map((p) => ({ label: p.date.slice(5), resolved: p.resolved, created: p.created }));
+  }, [bars, soc]);
+
+  const assets = (radar?.assets ?? []).slice().sort((a, b) => b.risk - a.risk).slice(0, 6);
+  const assetChip = (band: string) => band === 'critico' || band === 'alto' ? { t: 'En riesgo', c: band === 'critico' ? RED : ORANGE } : band === 'medio' || band === 'monitoreado' ? { t: 'Monitoreado', c: TEAL } : { t: 'Seguro', c: GREEN };
+
+  return (
+    <div className="mx-auto max-w-[1400px] space-y-3">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-card/60 px-4 py-2.5">
+        <div className="flex items-center gap-3">
+          <div className="relative flex h-9 w-9 items-center justify-center rounded-full" style={{ background: 'color-mix(in srgb, hsl(var(--primary)) 16%, transparent)', boxShadow: `0 0 16px color-mix(in srgb, ${TEAL} 55%, transparent)` }}>
+            <Zap className="h-5 w-5" style={{ color: TEAL }} />
+          </div>
+          <div>
+            <h1 className="hw-mono text-lg font-bold tracking-tight">CENTRO DE COMANDO · SOC</h1>
+            <p className="hw-mono text-[10px] uppercase tracking-wide text-muted-foreground">HexWatch // Operaciones de seguridad en tiempo real</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          {sema && <div className="hw-mono flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-bold" style={{ borderColor: `color-mix(in srgb, ${sema.color} 50%, transparent)`, color: sema.color, boxShadow: `0 0 12px color-mix(in srgb, ${sema.color} 30%, transparent)` }}>
+            <ShieldCheck className="h-4 w-4" /> {sema.label}
+          </div>}
+          <div className="text-right">
+            <div className="hw-mono text-base font-bold tabular-nums" style={{ color: TEAL }}>{clock.toLocaleTimeString('es-CO', { hour12: false })}</div>
+            <div className="hw-mono text-[10px] text-muted-foreground">{clock.toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' })}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <Kpi icon={ShieldAlert} value={ov?.amenazas.criticas24h ?? '—'} label="Amenazas críticas 24h" color={RED} to="/alertas" />
+        <Kpi icon={CheckCircle2} value={resueltos ?? '—'} label="Casos resueltos (30d)" color={GREEN} to="/incidentes" />
+        <Kpi icon={Bug} value={vulnTotal || '—'} label="Vulnerabilidades" color={ORANGE} to="/vulnerabilidades" />
+        <Kpi icon={Server} value={ov?.agentes.activos != null ? `${ov.agentes.activos}/${ov.agentes.total ?? '—'}` : '—'} label="Agentes activos" color={TEAL} to="/activos" />
+        <Kpi icon={GaugeIcon} value={risk} label="Riesgo global" color={risk > 66 ? RED : risk > 40 ? ORANGE : GREEN} />
+        <Kpi icon={TriangleAlert} value={incOpen ?? '—'} label="Incidentes abiertos" color={incOpen && incOpen > 0 ? ORANGE : GREEN} to="/incidentes" />
+      </div>
+
+      {/* Actividad de amenazas + Vulnerabilidades */}
+      <div className="grid gap-3 lg:grid-cols-12">
+        <div className="lg:col-span-8">
+          <Panel title="Actividad de amenazas" icon={Activity} right={
+            <div className="flex gap-1">{(['7d', '30d', '90d'] as const).map((r) => (
+              <button key={r} onClick={() => setTrendRange(r)} className={`hw-mono rounded border px-2 py-0.5 text-[11px] ${trendRange === r ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}>{r}</button>
+            ))}</div>}>
+            {trend ? <AreaChart labels={trendLabels} series={[
+              { name: 'Críticas', color: RED, data: trend.critica },
+              { name: 'Altas', color: ORANGE, data: trend.alta },
+              { name: 'Medias', color: CYAN, data: trend.media },
+            ]} /> : <div className="flex h-48 items-center justify-center text-muted-foreground">Cargando…</div>}
+          </Panel>
+        </div>
+        <div className="lg:col-span-4">
+          <Panel title="Reporte de vulnerabilidades" icon={Bug} right={<Link to="/vulnerabilidades" className="hw-mono flex items-center gap-1 rounded bg-primary/15 px-2 py-0.5 text-[11px] text-primary hover:bg-primary/25"><ScanLine className="h-3.5 w-3.5" /> Escanear</Link>}>
+            <Donut centerPct={highRiskPct} centerLabel="alto riesgo" segs={[
+              { label: 'Críticas', value: vulnCrit, color: RED },
+              { label: 'Altas', value: vulnAlta, color: ORANGE },
+              { label: 'Medias', value: vulnMedia, color: TEAL },
+            ]} />
+          </Panel>
+        </div>
+      </div>
+
+      {/* Alertas + Tráfico + Dispositivos */}
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Panel title="Alertas recientes" icon={TriangleAlert} right={<Link to="/alertas" className="hw-mono text-[10px] text-muted-foreground hover:text-foreground">ver todas</Link>}>
+          <div className="space-y-1.5">
+            {(alerts ?? []).map((a) => (
+              <Link key={a.id} to={`/alertas?agent=${encodeURIComponent(a.agent)}`} className="block rounded-md border border-border/60 bg-card/60 px-2 py-1.5 hover:border-primary/40" style={{ borderLeft: `3px solid ${sevColor[a.band] ?? TEAL}` }}>
+                <div className="flex items-center gap-2">
+                  <span className="hw-mono truncate text-[11px] font-medium text-foreground/90">{a.description}</span>
+                  <span className="hw-mono ml-auto shrink-0 rounded px-1.5 py-0.5 text-[8px] font-bold uppercase" style={{ background: `color-mix(in srgb, ${sevColor[a.band]} 20%, transparent)`, color: sevColor[a.band] }}>{a.band}</span>
+                </div>
+                <div className="hw-mono mt-0.5 flex items-center gap-2 text-[9px] text-muted-foreground"><span>{timeShort(a.timestamp)}</span><span className="truncate">{a.agent}</span>{a.srcip && <span className="ml-auto">{a.srcip}</span>}</div>
+              </Link>
+            ))}
+            {alerts && alerts.length === 0 && <div className="hw-mono flex items-center gap-2 py-4 text-[11px]" style={{ color: GREEN }}><CheckCircle2 className="h-4 w-4" /> Sin alertas de nivel alto en 24h.</div>}
+            {alerts == null && <div className="hw-mono py-4 text-center text-[11px] text-muted-foreground">Cargando…</div>}
+          </div>
+        </Panel>
+
+        <Panel title="Tráfico de red" icon={Globe2} right={flows && <span className="hw-mono text-[10px] text-muted-foreground">{flows.flows.toLocaleString('es-CO')} flujos/24h</span>}>
+          {flows ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div><div className="hw-mono text-[9px] uppercase text-muted-foreground">Flujos 24h</div><div className="hw-mono text-lg font-bold tabular-nums" style={{ color: TEAL }}>{flows.flows.toLocaleString('es-CO')}</div></div>
+                <Spark data={flows.timeline.map((t) => t.flows)} color={TEAL} />
+              </div>
+              <div className="hw-mono text-[9px] uppercase text-muted-foreground">Top destinos externos</div>
+              {flows.topDst.slice(0, 4).map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-[10px]">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: d.ioc ? RED : TEAL, boxShadow: `0 0 5px ${d.ioc ? RED : TEAL}` }} />
+                  <span className="hw-mono truncate text-foreground/85">{d.ip}</span>
+                  {d.pais && <span className="hw-mono text-muted-foreground">{d.pais}</span>}
+                  {d.ioc && <span className="hw-mono rounded bg-destructive/15 px-1 text-[8px] font-bold text-destructive">IOC</span>}
+                  <span className="hw-mono ml-auto tabular-nums text-muted-foreground">{d.flows.toLocaleString('es-CO')}</span>
+                </div>
+              ))}
+            </div>
+          ) : <div className="hw-mono py-6 text-center text-[11px] text-muted-foreground">Cargando…</div>}
+        </Panel>
+
+        <Panel title="Estado de dispositivos" icon={MonitorDot} right={<Link to="/activos" className="hw-mono text-[10px] text-muted-foreground hover:text-foreground">ver activos</Link>}>
+          <div className="space-y-1.5">
+            {assets.map((a) => { const ch = assetChip(a.band); return (
+              <div key={a.name} className="flex items-center gap-2">
+                <Server className="h-3.5 w-3.5 shrink-0" style={{ color: ch.c }} />
+                <span className="hw-mono truncate text-[11px] text-foreground/90" title={a.ip}>{a.name}</span>
+                <span className="hw-mono ml-auto shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: `color-mix(in srgb, ${ch.c} 18%, transparent)`, color: ch.c }}>{ch.t}</span>
+              </div>
+            ); })}
+            {radar && assets.length === 0 && <div className="hw-mono py-4 text-center text-[11px] text-muted-foreground">Sin activos.</div>}
+            {radar == null && <div className="hw-mono py-4 text-center text-[11px] text-muted-foreground">Cargando…</div>}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Incidentes + Actividad de usuarios */}
+      <div className="grid gap-3 lg:grid-cols-12">
+        <div className="lg:col-span-7">
+          <Panel title="Incidentes · resueltos vs creados" icon={CheckCircle2} right={
+            <div className="flex gap-1">{([['7d', 7], ['30d', 30], ['90d', 90]] as const).map(([lb, dv]) => (
+              <button key={dv} onClick={() => setBarDays(dv)} className={`hw-mono rounded border px-2 py-0.5 text-[11px] ${barDays === dv ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}>{lb}</button>
+            ))}</div>}>
+            {barData.length ? <GroupBars data={barData} /> : <div className="flex h-28 items-center justify-center text-muted-foreground">Sin datos de incidentes en la ventana.</div>}
+            <div className="hw-mono mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-border/50 pt-2 text-[10px] text-muted-foreground">
+              <span>SLA cumplimiento: <b style={{ color: (soc?.sla.overallPct ?? 100) >= 90 ? GREEN : ORANGE }}>{soc?.sla.overallPct != null ? `${soc.sla.overallPct}%` : '—'}</b></span>
+              <span>MTTR: <b className="text-foreground/80">{soc?.mttr.avgMinutes != null ? `${(soc.mttr.avgMinutes / 60).toFixed(1)} h` : '—'}</b></span>
+              <span>Abiertos +24h: <b style={{ color: (soc?.aging.openOver24h ?? 0) > 0 ? ORANGE : GREEN }}>{soc?.aging.openOver24h ?? '—'}</b></span>
+            </div>
+          </Panel>
+        </div>
+        <div className="lg:col-span-5">
+          <Panel title="Actividad de usuarios · UEBA" icon={Radio} right={<Link to="/comportamiento" className="hw-mono text-[10px] text-muted-foreground hover:text-foreground">ver UEBA</Link>}>
+            <div className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
+              {(anoms ?? []).slice(0, 10).map((an) => (
+                <div key={an.id} className="flex items-center gap-2">
+                  <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: sevColor[an.severity] ?? TEAL, boxShadow: `0 0 5px ${sevColor[an.severity] ?? TEAL}` }} />
+                  <span className="hw-mono truncate text-[11px] text-foreground/90">{an.entity}</span>
+                  <span className="hw-mono truncate text-[9px] text-muted-foreground">{DETECTOR_ES[an.detector] ?? an.detector}</span>
+                  <span className="hw-mono ml-auto shrink-0 text-[9px] text-muted-foreground">{timeShort(an.last_seen)}</span>
+                </div>
+              ))}
+              {anoms && anoms.length === 0 && <div className="hw-mono flex items-center gap-2 py-4 text-[11px]" style={{ color: GREEN }}><CheckCircle2 className="h-4 w-4" /> Sin anomalías de comportamiento abiertas.</div>}
+              {anoms == null && <div className="hw-mono py-4 text-center text-[11px] text-muted-foreground">Cargando…</div>}
+            </div>
+          </Panel>
+        </div>
+      </div>
+
+      <p className="hw-mono flex items-center gap-1 text-[10px] text-muted-foreground"><Activity className="h-3 w-3" style={{ color: TEAL }} /> Datos en vivo · refresco 30s · fuentes: overview/incidentes/alertas/UEBA/flujos (SonicWall) · degradación elegante si una fuente no responde.</p>
+    </div>
+  );
 }
