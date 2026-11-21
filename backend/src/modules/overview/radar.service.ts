@@ -5,6 +5,7 @@
  * sea un activo interpretable (cerca del centro = más riesgo).
  */
 import { getAssetList } from '../assets/assets.service';
+import { isSocInfra } from '../wazuh/agents.service';
 import { getVulnerabilities } from '../vulnerabilities/vuln.service';
 import { getIndexerClient } from '../wazuh/wazuh.client';
 import { isFortigateConfigured } from '../response/fortigate.service';
@@ -100,7 +101,9 @@ async function getFortigateAsset(): Promise<RadarAsset | null> {
 
 export async function getAssetRadar(): Promise<AssetRadar> {
   const [agentsR, vulnR] = await Promise.allSettled([getAssetList(), getVulnerabilities()]);
-  const agents = agentsR.status === 'fulfilled' ? agentsR.value : [];
+  // Excluye la infraestructura PROPIA del SOC (cs-soc-*/pmx-soc/gvm-soc): no es un
+  // activo-cliente y su riesgo es solo vulns de paquetes del SO (ruido), no amenazas.
+  const agents = (agentsR.status === 'fulfilled' ? agentsR.value : []).filter((a) => !isSocInfra(a.name));
 
   // Vulns por agente.
   const vmap = new Map<string, { critical: number; high: number }>();
