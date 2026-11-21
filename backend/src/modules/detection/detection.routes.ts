@@ -9,7 +9,7 @@ import { requireRole } from '../../middleware/roles';
 import { auditFromReq } from '../audit/audit.service';
 import { HttpError } from '../auth/auth.service';
 import {
-  getNoisyRules, getCustomRules, listSuppressions, addSuppression, removeSuppression, ALLOWED_FIELDS,
+  getNoisyRules, getCustomRules, listSuppressions, addSuppression, removeSuppression, ALLOWED_FIELDS, getTuningRecommendations,
 } from './detection.service';
 
 export const detectionRouter = Router();
@@ -25,6 +25,12 @@ function handle(err: unknown, res: Response): void {
 detectionRouter.get('/noisy', requireRole('admin', 'analista'), async (req, res) => {
   const range = typeof req.query.range === 'string' ? req.query.range : '24h';
   try { res.json({ range, rules: await getNoisyRules(range) }); }
+  catch (err) { handle(err, res); }
+});
+
+detectionRouter.get('/recommendations', requireRole('admin', 'analista'), async (req, res) => {
+  const range = typeof req.query.range === 'string' ? req.query.range : '24h';
+  try { res.json({ range, recommendations: await getTuningRecommendations(range) }); }
   catch (err) { handle(err, res); }
 });
 

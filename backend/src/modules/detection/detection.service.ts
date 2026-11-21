@@ -227,3 +227,100 @@ export async function removeSuppression(id: number): Promise<void> {
   const newFile = remaining.length === 0 ? removeBlockFromFile(file) : spliceBlock(file, renderBlock(remaining));
   await writeAndReload(newFile);
 }
+
+// --- Motor de recomendaciones de afinamiento (reduccion de falsos positivos) ---
+// Para cada regla ruidosa busca el CAMPO DISCRIMINANTE dominante (IP/usuario/equipo)
+// y recomienda una supresion acotada a ese valor: quita el ruido sin silenciar la
+// deteccion para el resto. Datos reales del Indexer; se aplica con addSuppression().
+export interface TuningDiscriminator { field: string; value: string; coverage: number; docCount: number }
+export interface TuningRecommendation {
+  ruleId: string;
+  description: string;
+  level: number;
+  count: number;
+  groups: string[];
+  action: 'suppress' | 'review';
+  discriminator: TuningDiscriminator | null;
+  rationale: string;
+  confidence: 'alta' | 'media' | 'baja';
+  caution: boolean;
+  alreadySuppressed: boolean;
+}
+
+// Campos suprimibles sobre los que medimos concentracion (subset de ALLOWED_FIELDS).
+const DISCRIM_FIELDS: Record<string, string> = {
+  'data.srcip': 'f0',
+  'data.dstip': 'f1',
+  'data.win.eventdata.subjectUserName': 'f2',
+  'data.win.eventdata.targetUserName': 'f3',
+  'data.win.system.computer': 'f4',
+};
+
+export async function getTuningRecommendations(range: string): Promise<TuningRecommendation[]> {
+  const client = getIndexerClient();
+  const gte = /^\d+[hd]$/.test(range) ? `now-${range}` : 'now-24h';
+  const [noisy, sups] = await Promise.all([getNoisyRules(range), listSuppressions().catch(() => [] as Suppression[])]);
+  const suppressed = new Set(sups.map((s) => s.targetRuleId));
+  const cand = noisy.filter(
+    (r) => r.level > 0 && r.count >= 50 && !r.groups.includes('vulnerability-detector') && !r.groups.includes('sca'),
+  ).slice(0, 15);
+  if (cand.length === 0) return [];
+
+  const ids = cand.map((r) => r.ruleId);
+  const subAggs: Record<string, unknown> = { agent: { terms: { field: 'agent.name', size: 1 } } };
+  for (const [field, key] of Object.entries(DISCRIM_FIELDS)) subAggs[key] = { terms: { field, size: 1 } };
+
+  type Top = { buckets?: { key: unknown; doc_count: number }[] };
+  type RB = { key: string; doc_count: number; agent?: Top; [k: string]: unknown };
+  const { data } = await client.post<{ aggregations?: { r: { buckets: RB[] } } }>(
+    `/${env.WAZUH_ALERTS_INDEX}/_search`,
+    {
+      size: 0,
+      query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { terms: { 'rule.id': ids } }] } },
+      aggs: { r: { terms: { field: 'rule.id', size: ids.length }, aggs: subAggs } },
+    },
+  );
+  const byRule = new Map<string, RB>();
+  for (const b of data.aggregations?.r?.buckets ?? []) byRule.set(String(b.key), b);
+
+  const top1 = (o: unknown): { key: unknown; doc_count: number } | undefined => (o as Top | undefined)?.buckets?.[0];
+
+  const recs: TuningRecommendation[] = cand.map((r) => {
+    const b = byRule.get(r.ruleId);
+    const total = b?.doc_count ?? r.count;
+    let best: TuningDiscriminator | null = null;
+    for (const [field, key] of Object.entries(DISCRIM_FIELDS)) {
+      const t = top1(b?.[key]);
+      if (t && t.key != null && String(t.key) !== '') {
+        const cov = total ? t.doc_count / total : 0;
+        if (cov >= 0.5 && (!best || cov > best.coverage)) best = { field, value: String(t.key), coverage: cov, docCount: t.doc_count };
+      }
+    }
+    const agentTop = top1(b?.agent);
+    const agentCov = agentTop && total ? agentTop.doc_count / total : 0;
+    const already = suppressed.has(r.ruleId);
+    const caution = r.level >= 12;
+    const nfmt = r.count.toLocaleString('es-CO');
+
+    if (best) {
+      const pct = Math.round(best.coverage * 100);
+      const conf: 'alta' | 'media' | 'baja' = best.coverage >= 0.8 && r.level < 10 ? 'alta' : best.coverage >= 0.6 || r.level < 12 ? 'media' : 'baja';
+      return {
+        ruleId: r.ruleId, description: r.description, level: r.level, count: r.count, groups: r.groups,
+        action: 'suppress', discriminator: best,
+        rationale: `El ${pct}% de los ${nfmt} eventos comparten ${best.field} = ${best.value}. Suprimir la regla SOLO para ese valor elimina el ruido sin silenciar la deteccion para el resto.${caution ? ' OJO: regla de nivel alto; confirma que ese origen es benigno antes de aplicar.' : ''}`,
+        confidence: conf, caution, alreadySuppressed: already,
+      };
+    }
+    const pctA = Math.round(agentCov * 100);
+    return {
+      ruleId: r.ruleId, description: r.description, level: r.level, count: r.count, groups: r.groups,
+      action: 'review', discriminator: null,
+      rationale: agentCov >= 0.5 && agentTop
+        ? `El ${pctA}% proviene del agente ${String(agentTop.key)}, pero el agente no es un campo suprimible. Afina por un campo discriminante (IP/usuario) o baja el nivel de la regla.`
+        : 'Trafico diverso sin un valor dominante; conviene revisar manualmente antes de suprimir para no silenciar detecciones legitimas.',
+      confidence: 'baja', caution, alreadySuppressed: already,
+    };
+  });
+  return recs.sort((a, b) => b.count - a.count);
+}

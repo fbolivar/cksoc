@@ -5,8 +5,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
-import { SlidersHorizontal, RefreshCw, Loader2, VolumeX, Trash2, X, AlertTriangle, ShieldOff } from 'lucide-react';
-import { detectionApi, type NoisyRule, type Suppression } from '@/lib/detection';
+import { SlidersHorizontal, RefreshCw, Loader2, VolumeX, Trash2, X, AlertTriangle, ShieldOff, Sparkles } from 'lucide-react';
+import { detectionApi, type NoisyRule, type Suppression, type TuningRecommendation } from '@/lib/detection';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,8 @@ export default function Detection() {
   const [supErr, setSupErr] = useState<string | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
   const [modalFor, setModalFor] = useState<NoisyRule | null>(null);
+  const [recs, setRecs] = useState<TuningRecommendation[] | null>(null);
+  const [applying, setApplying] = useState<string | null>(null);
 
   const seq = useRef(0);
   const loadNoisy = useCallback(async (r: string) => {
@@ -58,7 +60,12 @@ export default function Detection() {
     }
   }, []);
 
-  useEffect(() => { void loadNoisy(range); }, [range, loadNoisy]);
+  const loadRecs = useCallback(async (r: string) => {
+    try { setRecs(await detectionApi.recommendations(r)); }
+    catch { setRecs([]); }
+  }, []);
+
+  useEffect(() => { void loadNoisy(range); void loadRecs(range); }, [range, loadNoisy, loadRecs]);
   useEffect(() => { void loadSuppressions(); }, [loadSuppressions]);
 
   async function remove(id: number) {
@@ -71,6 +78,21 @@ export default function Detection() {
       setSupErr((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo eliminar');
     } finally {
       setRemoving(null);
+    }
+  }
+
+  async function applyRec(rec: TuningRecommendation) {
+    if (!rec.discriminator) return;
+    if (!confirm(`Aplicar supresion para la regla ${rec.ruleId} cuando ${rec.discriminator.field} = ${rec.discriminator.value}? Se reinicia el manager (~15 s).`)) return;
+    setApplying(rec.ruleId);
+    try {
+      await detectionApi.addSuppression({ targetRuleId: rec.ruleId, field: rec.discriminator.field, value: rec.discriminator.value, comment: `Afinamiento (${Math.round(rec.discriminator.coverage * 100)}%)` });
+      await loadSuppressions();
+      await loadRecs(range);
+    } catch (e) {
+      setSupErr((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo aplicar la supresion');
+    } finally {
+      setApplying(null);
     }
   }
 
@@ -137,6 +159,49 @@ export default function Detection() {
                 </tbody>
               </table>
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Recomendaciones de afinamiento */}
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
+            <span className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-neon" /> Recomendaciones de afinamiento &middot; {range}</span>
+            <span className="text-xs text-muted-foreground">{recs?.length ?? 0}</span>
+          </div>
+          {!recs ? (
+            <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Analizando distribucion&hellip;</p>
+          ) : recs.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Sin recomendaciones en el rango.</p>
+          ) : (
+            <ul className="divide-y divide-border/30">
+              {recs.map((rec) => (
+                <li key={rec.ruleId} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                  <div className="min-w-[260px] flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs">{rec.ruleId}</span>
+                      <span className="text-xs font-semibold" style={{ color: levelColor(rec.level) }}>N{rec.level}</span>
+                      <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: rec.confidence === 'alta' ? '#16a34a22' : rec.confidence === 'media' ? '#ca8a0422' : '#6b728022', color: rec.confidence === 'alta' ? '#16a34a' : rec.confidence === 'media' ? '#ca8a04' : '#6b7280' }}>confianza {rec.confidence}</span>
+                      {rec.alreadySuppressed && <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-600"><ShieldOff className="h-3 w-3" /> ya suprimida</span>}
+                      {rec.caution && <span className="inline-flex items-center gap-1 rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-500"><AlertTriangle className="h-3 w-3" /> nivel alto</span>}
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{rec.description}</p>
+                    <p className="mt-1 text-xs">{rec.rationale}</p>
+                    {rec.discriminator && <p className="mt-1 font-mono text-[11px] text-neon">{rec.discriminator.field} = {rec.discriminator.value} &middot; {Math.round(rec.discriminator.coverage * 100)}% de {rec.count.toLocaleString('es-CO')}</p>}
+                  </div>
+                  {isAdmin && (rec.action === 'suppress' && rec.discriminator && !rec.alreadySuppressed ? (
+                    <Button size="sm" onClick={() => void applyRec(rec)} disabled={applying === rec.ruleId} title="Aplicar la supresion recomendada">
+                      {applying === rec.ruleId ? <Loader2 className="h-4 w-4 animate-spin" /> : <VolumeX className="h-4 w-4" />} Aplicar
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => setModalFor({ ruleId: rec.ruleId, description: rec.description, level: rec.level, count: rec.count, groups: rec.groups })} title="Revisar y crear supresion manual">
+                      <VolumeX className="h-4 w-4" /> Revisar
+                    </Button>
+                  ))}
+                </li>
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>

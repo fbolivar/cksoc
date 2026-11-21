@@ -17,7 +17,20 @@ export interface Suppression {
   comment: string;
 }
 
+export interface TuningDiscriminator { field: string; value: string; coverage: number; docCount: number }
+export interface TuningRecommendation {
+  ruleId: string; description: string; level: number; count: number; groups: string[];
+  action: 'suppress' | 'review';
+  discriminator: TuningDiscriminator | null;
+  rationale: string;
+  confidence: 'alta' | 'media' | 'baja';
+  caution: boolean;
+  alreadySuppressed: boolean;
+}
+
 export const detectionApi = {
+  recommendations: (range: string) =>
+    api.get<{ range: string; recommendations: TuningRecommendation[] }>('/detection/recommendations', { params: { range } }).then((r) => r.data.recommendations),
   noisy: (range: string) =>
     api.get<{ range: string; rules: NoisyRule[] }>('/detection/noisy', { params: { range } }).then((r) => r.data.rules),
   suppressions: () =>
