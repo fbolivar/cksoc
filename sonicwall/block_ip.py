@@ -13,7 +13,7 @@ import time
 _raw = os.environ.get("SONICWALL_API_URL", "https://192.168.20.1/api/sonicos").rstrip("/")
 BASE = _raw if _raw.endswith("/api/sonicos") else _raw + "/api/sonicos"
 USER = os.environ.get("SONICWALL_USER", "admin")
-PASS = os.environ.get("SONICWALL_PASS", "R3dN3tw0rk2026")
+PASS = os.environ.get("SONICWALL_PASS", "")
 GROUP = "HexWatch-Blocked-IPs"
 CTX = ssl.create_default_context(); CTX.check_hostname=False; CTX.verify_mode=ssl.CERT_NONE
 _cookie = None
@@ -104,6 +104,7 @@ def lst():
 if __name__ == "__main__":
     if len(sys.argv) < 2: print(__doc__); sys.exit(1)
     a = sys.argv[1]
+    if not PASS: print(json.dumps({"ok": False, "error": "Falta SONICWALL_PASS en el entorno"})); sys.exit(2)
     if a == "block" and len(sys.argv) >= 3: block(sys.argv[2], sys.argv[3] if len(sys.argv)>3 else "")
     elif a == "unblock" and len(sys.argv) >= 3: unblock(sys.argv[2])
     elif a == "list": lst()

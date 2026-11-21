@@ -10,7 +10,7 @@ import { HttpError } from '../auth/auth.service';
 
 const SW_URL = process.env.SONICWALL_API_URL || 'https://192.168.20.1';
 const SW_USER = process.env.SONICWALL_USER || 'admin';
-const SW_PASS = process.env.SONICWALL_PASS || 'R3dN3tw0rk2026';
+const SW_PASS = process.env.SONICWALL_PASS || '';
 const BLOCK_GROUP = 'HexWatch-Blocked-IPs';
 const agent = new https.Agent({ rejectUnauthorized: false });
 
