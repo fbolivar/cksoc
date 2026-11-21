@@ -74,34 +74,53 @@ def set_group(names):
     return call("PUT", "/address-groups/ipv4/name/" + GROUP, payload)
 
 def block(ip, reason=""):
-    login()
-    if cfg() == "Yes":
-        print(json.dumps({"action":"block","ip":ip,"ok":False,"deferred":True,"reason":"otro admin tiene el config-mode (read-only); bloqueo diferido para no interrumpir"})); return
     name = f"HXW-Block-{ip}"
-    call("POST", "/address-objects/ipv4", {"address_objects":[{"ipv4":{"name":name,"zone":"WAN","host":{"ip":ip},"comment":reason[:120]}}]})
-    members = get_group_members(); members.append(name)
-    set_group(members)
-    ok, r = commit_confirm()
-    out = {"action":"block","ip":ip,"ok":ok,"detail":r}
-    if (not ok) and isinstance(r, dict) and r.get("deferred"):
-        out["deferred"] = True; out["reason"] = "config-mode tomado por otro admin durante el commit; diferido"
-    print(json.dumps(out))
+    last = None
+    for _ in range(3):
+        login()
+        if cfg() == "Yes":
+            print(json.dumps({"action":"block","ip":ip,"ok":False,"deferred":True,"reason":"otro admin tiene el config-mode (read-only); bloqueo diferido para no interrumpir"})); return
+        call("POST", "/address-objects/ipv4", {"address_objects":[{"ipv4":{"name":name,"zone":"WAN","host":{"ip":ip},"comment":reason[:120]}}]})
+        members = get_group_members()
+        if not members:
+            last = {"error":"lectura del grupo vacia (sesion preempida)"}; time.sleep(1.5); continue
+        if name not in members: members.append(name)
+        set_group(members)
+        ok, r = commit_confirm(); last = r
+        if ok:
+            print(json.dumps({"action":"block","ip":ip,"ok":True,"detail":r})); return
+        if isinstance(r, dict) and r.get("deferred"):
+            print(json.dumps({"action":"block","ip":ip,"ok":False,"deferred":True,"reason":"config-mode tomado por otro admin durante el commit; diferido"})); return
+        time.sleep(1.5)
+    print(json.dumps({"action":"block","ip":ip,"ok":False,"detail":last}))
 
 def unblock(ip):
-    login()
-    if cfg() == "Yes":
-        print(json.dumps({"action":"unblock","ip":ip,"ok":False,"deferred":True,"reason":"otro admin tiene el config-mode (read-only); desbloqueo diferido"})); return
     name = f"HXW-Block-{ip}"
-    members = [m for m in get_group_members() if m != name]
-    if not members: members = ["HexWatch-Block-Seed"]
-    set_group(members)
-    call("DELETE", "/address-objects/ipv4", {"address_objects":[{"ipv4":{"name":name}}]})
-    st, r = commit()
-    print(json.dumps({"action":"unblock","ip":ip,"ok":isinstance(r,dict) and r.get("status",{}).get("success",False),"detail":r}))
+    last = None
+    for _ in range(3):
+        login()
+        if cfg() == "Yes":
+            print(json.dumps({"action":"unblock","ip":ip,"ok":False,"deferred":True,"reason":"otro admin tiene el config-mode (read-only); desbloqueo diferido"})); return
+        current = get_group_members()
+        if not current:
+            last = {"error":"lectura del grupo vacia (sesion preempida)"}; time.sleep(1.5); continue
+        members = [m for m in current if m != name]
+        if not members: members = ["HexWatch-Block-Seed"]
+        set_group(members)
+        call("DELETE", "/address-objects/ipv4", {"address_objects":[{"ipv4":{"name":name}}]})
+        ok, r = commit_confirm(); last = r
+        if ok:
+            print(json.dumps({"action":"unblock","ip":ip,"ok":True,"detail":r})); return
+        time.sleep(1.5)
+    print(json.dumps({"action":"unblock","ip":ip,"ok":False,"detail":last}))
 
 def lst():
-    login()
-    print(json.dumps({"blocked": [m for m in get_group_members() if m != "HexWatch-Block-Seed"]}))
+    m = []
+    for _ in range(2):
+        login(); m = get_group_members()
+        if m: break
+        time.sleep(1)
+    print(json.dumps({"blocked": [x for x in m if x != "HexWatch-Block-Seed"]}))
 
 if __name__ == "__main__":
     if len(sys.argv) < 2: print(__doc__); sys.exit(1)
