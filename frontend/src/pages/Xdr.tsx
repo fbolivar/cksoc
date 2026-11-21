@@ -4,8 +4,10 @@
  */
 import { useEffect, useState, useCallback } from 'react';
 import { AxiosError } from 'axios';
-import { Share2, Loader2, Search, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Share2, Loader2, Search, ArrowLeft, ShieldAlert, Briefcase } from 'lucide-react';
 import { xdrApi, type ActivityGroup, type ActivityGraph, type GraphNode, type EntType } from '@/lib/xdr';
+import { incidentsApi, type Severity } from '@/lib/incidents';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +15,7 @@ import { Input } from '@/components/ui/input';
 const TYPE_COLOR: Record<EntType, string> = { ip: 'hsl(190 80% 55%)', host: 'hsl(210 90% 62%)', user: 'hsl(28 90% 58%)', domain: 'hsl(265 70% 66%)' };
 const TYPE_LABEL: Record<EntType, string> = { ip: 'IP', host: 'Host', user: 'Usuario', domain: 'Dominio' };
 const IOC_COLOR = 'hsl(0 82% 60%)';
+function levelBand(lvl: number): Severity { if (lvl >= 12) return 'critica'; if (lvl >= 8) return 'alta'; if (lvl >= 5) return 'media'; return 'baja'; }
 
 function fmt(ts: string) { return ts ? new Date(ts).toLocaleString('es-CO') : ''; }
 
@@ -57,6 +60,8 @@ export default function Xdr() {
   const [seedVal, setSeedVal] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [incBusy, setIncBusy] = useState(false);
+  const navigate = useNavigate();
 
   const loadGroups = useCallback(async () => {
     try { setGroups(await xdrApi.groups(range)); } catch { setGroups([]); }
@@ -68,6 +73,29 @@ export default function Xdr() {
     try { setGraph(await xdrApi.graph(type, value, '30d')); }
     catch (e) { setMsg((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo construir el grafo'); }
     finally { setBusy(false); }
+  }
+
+  async function createIncidentFromGraph(g: ActivityGraph) {
+    setIncBusy(true); setMsg(null);
+    try {
+      const maxLevel = Math.max(0, ...g.nodes.map((n) => n.maxLevel), ...g.timeline.map((t) => t.level));
+      const iocCount = g.nodes.filter((n) => n.ioc).length;
+      const topRule = [...g.timeline].sort((a, b) => b.level - a.level)[0];
+      const ipNode = g.seed.type === 'ip' ? g.seed.value : g.nodes.find((n) => n.type === 'ip')?.label;
+      const hostNode = g.nodes.find((n) => n.type === 'host')?.label;
+      const desc = `Investigacion XDR sobre ${TYPE_LABEL[g.seed.type]} ${g.seed.value}: ${g.nodes.length} entidades relacionadas, ${g.stats.alertas} alertas`
+        + `${iocCount ? `, ${iocCount} IOC` : ''}. Regla representativa: ${topRule?.rule ?? 'n/a'} (nivel ${maxLevel}).`;
+      await incidentsApi.create({
+        title: `Investigacion XDR: ${TYPE_LABEL[g.seed.type]} ${g.seed.value} (${g.stats.alertas} alertas)`.slice(0, 180),
+        description: desc,
+        severity: levelBand(maxLevel) as Severity,
+        source: { ip: ipNode, agent: hostNode, description: topRule?.rule, alertTime: g.timeline[0]?.ts },
+      });
+      navigate('/incidentes');
+    } catch (e) {
+      setMsg((e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo crear el incidente');
+      setIncBusy(false);
+    }
   }
 
   return (
@@ -118,7 +146,12 @@ export default function Xdr() {
               Grafo · {TYPE_LABEL[graph.seed.type]} <span className="hw-mono text-foreground">{graph.seed.value}</span>
               <span className="ml-2 text-[11px] font-normal">({graph.nodes.length} entidades · {graph.stats.alertas.toLocaleString('es-CO')} alertas)</span>
             </CardTitle>
-            <Button size="sm" variant="ghost" onClick={() => setGraph(null)}><ArrowLeft className="h-4 w-4" /> Grupos</Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => createIncidentFromGraph(graph)} disabled={incBusy}>
+                {incBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Briefcase className="h-4 w-4" />} Crear incidente
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setGraph(null)}><ArrowLeft className="h-4 w-4" /> Grupos</Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="mb-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
