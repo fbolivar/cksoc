@@ -4,7 +4,7 @@
  * Reutiliza los servicios de cada modulo, tolerante a fallos individuales.
  */
 import { getOverallHealth } from '../health/siem-health.service';
-import { getVulnerabilities } from '../vulnerabilities/vuln.service';
+import { getVulnerabilities, clientVulnResumen } from '../vulnerabilities/vuln.service';
 import { getSca } from '../sca/sca.service';
 import { getCompliance } from '../compliance/compliance.service';
 import { getFim } from '../fim/fim.service';
@@ -85,7 +85,11 @@ export async function getOverview(opts?: { force?: boolean }): Promise<OverviewD
 
   const altasCriticas24h = summary ? (summary.byBand.alta ?? 0) + (summary.byBand.critica ?? 0) : null;
   const ataquesExternos = attacks ? attacks.filter((o) => o.esExterno).length : 0;
-  const vulnCriticas = vuln?.resumen.critical ?? 0;
+  // Vulnerabilidades SOLO de equipos del cliente (excluye infra del SOC:
+  // cs-soc, pmx-soc, gvm-soc) para no disparar el semaforo global ni los
+  // KPIs de endpoints con la deuda de parches de los servidores del SOC.
+  const vc = vuln ? clientVulnResumen(vuln) : null;
+  const vulnCriticas = vc?.critical ?? 0;
   const hardeningScore = sca?.resumen.scorePromedio ?? 0;
   const siemSem = health?.semaforo ?? 'verde';
   const compsOk = health ? health.componentes.filter((c) => c.estado === 'ok').length : 0;
@@ -126,8 +130,8 @@ export async function getOverview(opts?: { force?: boolean }): Promise<OverviewD
     },
     endpoints: {
       vulnCriticas,
-      vulnAltas: vuln?.resumen.high ?? 0,
-      vulnTotal: vuln?.resumen.total ?? 0,
+      vulnAltas: vc?.high ?? 0,
+      vulnTotal: vc?.total ?? 0,
       hardeningScore,
       fimCambios: fim?.resumen.total ?? 0,
     },

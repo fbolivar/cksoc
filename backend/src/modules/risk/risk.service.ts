@@ -8,7 +8,7 @@
  */
 import { query } from '../../config/db';
 import { getSocMetrics } from '../metrics/metrics.service';
-import { getVulnerabilities } from '../vulnerabilities/vuln.service';
+import { getVulnerabilities, clientVulnResumen } from '../vulnerabilities/vuln.service';
 import { getSca } from '../sca/sca.service';
 import { getAgents } from '../wazuh/agents.service';
 import { listBackups } from '../backups/backups.service';
@@ -96,7 +96,10 @@ export async function getRiskBoard(): Promise<RiskBoard> {
   // ---------- 2. Reducir la exposición ----------
   try {
     const v = await getVulnerabilities();
-    const crit = v.resumen.critical, high = v.resumen.high;
+    // Solo vulnerabilidades de equipos del CLIENTE (excluye infra del SOC),
+    // igual que el reporte ejecutivo: la deuda de parches de los servidores
+    // del SOC no debe degradar la exposicion ni el indice compuesto de riesgo.
+    const { critical: crit, high } = clientVulnResumen(v);
     let cis = 0;
     try { cis = (await getSca()).resumen.scorePromedio; } catch { /* opcional */ }
     // Postura combina vulnerabilidades (peso) y hardening CIS.

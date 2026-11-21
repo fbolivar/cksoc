@@ -4,6 +4,7 @@
  * agente y paquete) y construye resumen + top CVE + por agente + por paquete.
  */
 import { getStatesClient } from '../wazuh/wazuh.client';
+import { isSocInfra } from '../wazuh/agents.service';
 import { HttpError } from '../auth/auth.service';
 import { getIntelMap, type CveIntel } from './cveintel.service';
 
@@ -322,5 +323,18 @@ function emptyData(): VulnData {
     topPaquetes: [],
     priorizadas: [],
     items: [],
+  };
+}
+
+// Resumen de vulnerabilidades SOLO de equipos del cliente (excluye la infra del
+// SOC: cs-soc, pmx-soc, gvm-soc). La deuda de parches de los servidores del SOC
+// no debe contar como exposicion del cliente. Mismo criterio que el reporte ejecutivo.
+export function clientVulnResumen(v: VulnData): { critical: number; high: number; total: number; equipos: number } {
+  const cli = (v.porAgente ?? []).filter((a) => !isSocInfra(a.agent));
+  return {
+    critical: cli.reduce((n, a) => n + (a.critical ?? 0), 0),
+    high: cli.reduce((n, a) => n + (a.high ?? 0), 0),
+    total: cli.reduce((n, a) => n + (a.total ?? 0), 0),
+    equipos: cli.filter((a) => (a.total ?? 0) > 0).length,
   };
 }
