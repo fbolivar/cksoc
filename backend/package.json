@@ -23,6 +23,7 @@
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "maxmind": "^4.3.24",
+    "net-snmp": "^3.29.3",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.16",
     "otplib": "^12.0.1",
@@ -36,9 +37,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
-    "eslint": "^9.17.0",
-    "globals": "^15.14.0",
-    "typescript-eslint": "^8.19.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
@@ -48,8 +46,11 @@
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.10",
     "@types/qrcode": "^1.5.5",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.19.0",
     "vitest": "^2.1.8"
   }
 }
