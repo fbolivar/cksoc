@@ -348,7 +348,7 @@ export default function CommandCenter() {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi icon={ShieldAlert} value={ov?.amenazas.criticas24h ?? '—'} label="Amenazas críticas 24h" color={RED} to="/alertas" />
         <Kpi icon={CheckCircle2} value={resueltos ?? '—'} label="Casos resueltos (30d)" color={GREEN} to="/incidentes" />
-        <Kpi icon={Bug} value={vulnTotal || '—'} label="Vulnerabilidades" color={ORANGE} to="/vulnerabilidades" />
+        <Kpi icon={Bug} value={ov ? vulnTotal : '—'} label="Vulnerabilidades" color={ORANGE} to="/vulnerabilidades" />
         <Kpi icon={Server} value={ov?.agentes.activos != null ? `${ov.agentes.activos}/${ov.agentes.total ?? '—'}` : '—'} label="Agentes activos" color={TEAL} to="/activos" />
         <Kpi icon={GaugeIcon} value={risk} label="Riesgo global" color={risk > 66 ? RED : risk > 40 ? ORANGE : GREEN} />
         <Kpi icon={TriangleAlert} value={incOpen ?? '—'} label="Incidentes abiertos" color={incOpen && incOpen > 0 ? ORANGE : GREEN} to="/incidentes" />
