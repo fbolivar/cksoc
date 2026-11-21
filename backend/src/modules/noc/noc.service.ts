@@ -125,10 +125,20 @@ async function snmpLite(host: string, community: string): Promise<NocSnmp | null
       const idle = Number(uc['1.3.6.1.4.1.2021.11.11.0']);
       if (Number.isFinite(idle)) res.cpuPct = Math.max(0, Math.min(100, 100 - idle));
     }
+    if (res.cpuPct == null) { // SonicWALL sonicCurrentCPUUtil (%)
+      const sw = await get(['1.3.6.1.4.1.8741.1.3.1.3.0']);
+      const v = Number(sw['1.3.6.1.4.1.8741.1.3.1.3.0']);
+      if (Number.isFinite(v)) res.cpuPct = Math.max(0, Math.min(100, Math.round(v)));
+    }
 
     const mem = await get(['1.3.6.1.4.1.2021.4.5.0', '1.3.6.1.4.1.2021.4.6.0']); // UCD memTotalReal, memAvailReal (KB)
     const tot = Number(mem['1.3.6.1.4.1.2021.4.5.0']); const av = Number(mem['1.3.6.1.4.1.2021.4.6.0']);
     if (tot > 0 && Number.isFinite(av)) res.memPct = Math.max(0, Math.min(100, Math.round((100 * (tot - av)) / tot)));
+    if (res.memPct == null) { // SonicWALL sonicCurrentRAMUtil (%)
+      const sw = await get(['1.3.6.1.4.1.8741.1.3.1.4.0']);
+      const v = Number(sw['1.3.6.1.4.1.8741.1.3.1.4.0']);
+      if (Number.isFinite(v)) res.memPct = Math.max(0, Math.min(100, Math.round(v)));
+    }
 
     const temp = await walk('1.3.6.1.2.1.99.1.1.1.4'); // ENTITY-SENSOR entPhySensorValue (best-effort)
     if (temp.length) { const t = Number(temp[0]); if (Number.isFinite(t) && t > 0 && t < 150) res.tempC = Math.round(t); }
