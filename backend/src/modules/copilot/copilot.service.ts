@@ -16,6 +16,7 @@ import { getVulnerabilities } from '../vulnerabilities/vuln.service';
 import { listAnomalies } from '../ueba/ueba.service';
 import { HttpError } from '../auth/auth.service';
 import { logger } from '../../config/logger';
+import { guardPayload, recordGuardEvent } from '../llm-guard/llm-guard.service';
 
 export interface ChatMessage { role: 'user' | 'assistant'; content: string }
 
@@ -45,11 +46,15 @@ async function callClaudeRaw(system: string, messages: AnyMessage[], tools?: unk
     throw new HttpError(503, 'El copiloto no está configurado (falta ANTHROPIC_API_KEY).');
   }
   try {
+    // LLM Guardrail: redacta secretos + detecta prompt-injection/jailbreak +
+    // endurece el system ANTES de enviar a la nube de Anthropic. No bloquea.
+    const guard = guardPayload(system, messages);
+    void recordGuardEvent(guard.report);
     const body: Record<string, unknown> = {
       model: env.ANTHROPIC_MODEL,
       max_tokens: maxTokens ?? env.COPILOT_MAX_TOKENS,
-      system,
-      messages,
+      system: guard.system,
+      messages: guard.messages,
     };
     if (tools && tools.length) body.tools = tools;
     const { data } = await axios.post(`${env.ANTHROPIC_BASE_URL.replace(/\/$/, '')}/v1/messages`, body, {

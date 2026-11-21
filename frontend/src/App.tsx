@@ -47,6 +47,7 @@ const Ueba = lazy(() => import('@/pages/Ueba'));
 const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
 const IncidentDossier = lazy(() => import('@/pages/IncidentDossier'));
 const DdosDetection = lazy(() => import('@/pages/DdosDetection'));
+const LlmGuard = lazy(() => import('@/pages/LlmGuard'));
 const Ndr = lazy(() => import('@/pages/Ndr'));
 const Office365 = lazy(() => import('@/pages/Office365'));
 const EmailPosture = lazy(() => import('@/pages/EmailPosture'));
@@ -448,6 +449,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <DdosDetection />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/llm-guard"
+        element={
+          <Protected>
+            <AppLayout>
+              <LlmGuard />
             </AppLayout>
           </Protected>
         }
