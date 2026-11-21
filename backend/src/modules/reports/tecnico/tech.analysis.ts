@@ -212,7 +212,7 @@ export function detectarHallazgos(m: TechMetrics): HallazgoTecnico[] {
       titulo: `${ciegas.length} táctica(s) de MITRE ATT&CK sin una sola detección`,
       severidad: ciegas.length >= 6 ? 'alta' : 'media',
       confianza: 'alta',
-      evidencia: `De ${m.cobertura?.tacticsTotal ?? 0} tácticas del marco, ${m.cobertura?.tacticsCovered ?? 0} registraron detecciones y ${ciegas.length} ninguna. Técnicas distintas observadas: ${m.cobertura?.techniquesDetected ?? 0}.`,
+      evidencia: `De ${m.cobertura?.tacticsTotal ?? 0} tácticas del marco, ${m.cobertura?.tacticsCovered ?? 0} registraron detecciones y ${ciegas.length} ninguna. Técnicas distintas observadas en el periodo: ${m.mitre.tecnicas.length}.`,
       detalle: ciegas.slice(0, 10).map((t) => `${t.tactic} — 0 de ${t.total} técnicas del marco con detección`),
       impacto: 'Un adversario que opere dentro de esas tácticas no generará ninguna alerta. Los puntos ciegos no se manifiestan como fallos: se manifiestan como silencio.',
       consulta: dsl(IDX, [ventana(m), { exists: { field: 'rule.mitre.tactic' } }], {

@@ -201,7 +201,7 @@ function seccionAlcance(m: TechMetrics): string {
       ['Ventana analizada', `${esc(m.periodo.rangoTexto)}`],
       ['Granularidad de la serie', esc(m.periodo.granularidad)],
       ['Índice consultado', mono(`${process.env.WAZUH_ALERTS_INDEX ?? 'wazuh-alerts-*'}`)],
-      ['Agentes registrados / activos', `${fmt(m.agentes.total)} / ${fmt(m.agentes.activos)}`],
+      ['Agentes registrados / activos', m.agentes.total ? `${fmt(m.agentes.total)} / ${fmt(m.agentes.activos)}` : '0 / 0 — visibilidad del cliente por red y nube (SonicWall + O365)'],
       ['Reglas distintas disparadas', fmt(m.reglasDistintas)],
       ['Reglas propias cargadas', fmt(m.reglasPropias.length)],
       ['Supresiones activas', fmt(m.supresiones.length)],
@@ -409,7 +409,7 @@ function seccionDominios(m: TechMetrics): string {
         ]),
       { anchos: ['30%', '14%', '14%', '30%', '12%'] }
     );
-    out += nota(`Cobertura calculada sobre los últimos ${cob.days} días: ${cob.tacticsCovered} de ${cob.tacticsTotal} tácticas con al menos una detección; ${cob.techniquesDetected} técnicas distintas observadas.`);
+    out += nota(`De las ${cob.tacticsTotal} tácticas del marco, ${cob.tacticsCovered} registran alguna detección reciente (últimos ${cob.days} días); en el periodo del informe se observaron ${m.mitre.tecnicas.length} técnicas distintas sobre ${m.mitre.tacticas.length} táctica(s).`);
   }
 
   // --- FIM
@@ -829,7 +829,7 @@ export function buildTechnicalHtml(m: TechMetrics): string {
       <table style="width:100%;border-collapse:collapse;font-size:9.5px;color:${C.texto}">
         <tr><td style="padding:4px 13px;width:26%;color:${C.suave}">Ventana analizada</td><td style="padding:4px 13px"><b>${esc(m.periodo.rangoTexto)}</b></td></tr>
         <tr><td style="padding:4px 13px;color:${C.suave}">Emitido</td><td style="padding:4px 13px">${esc(fechaGen)}</td></tr>
-        <tr><td style="padding:4px 13px;color:${C.suave}">Alcance</td><td style="padding:4px 13px">${fmt(m.agentes.activos)} de ${fmt(m.agentes.total)} agentes activos · ${fmt(m.total)} eventos · ${fmt(m.reglasDistintas)} reglas distintas</td></tr>
+        <tr><td style="padding:4px 13px;color:${C.suave}">Alcance</td><td style="padding:4px 13px">${m.agentes.total ? `${fmt(m.agentes.activos)} de ${fmt(m.agentes.total)} agentes activos` : 'Visibilidad por red y nube (SonicWall + O365), sin agentes de endpoint del cliente'} · ${fmt(m.total)} eventos · ${fmt(m.reglasDistintas)} reglas distintas</td></tr>
         <tr><td style="padding:4px 13px;color:${C.suave}">Destinatarios</td><td style="padding:4px 13px">Analistas del SOC · Administración de sistemas y de red</td></tr>
         <tr><td style="padding:4px 13px;color:${C.suave}">Clasificación</td><td style="padding:4px 13px">Uso interno — Confidencial. Contiene detalle de infraestructura.</td></tr>
       </table>
