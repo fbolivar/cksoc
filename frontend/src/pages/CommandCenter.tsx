@@ -17,6 +17,8 @@ import { alertsApi, type AlertHit } from '@/lib/alerts';
 import { uebaApi, type Anomaly, DETECTOR_ES } from '@/lib/ueba';
 import { flowsApi, type FlowsOverview } from '@/lib/flows';
 import { attacksApi, type AttackOrigin } from '@/lib/attacks';
+import { responseApi } from '@/lib/response';
+import { ShieldX } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 const TEAL = 'hsl(var(--primary))';
@@ -174,7 +176,7 @@ const CONTINENTS: [number, number][][] = [
 ];
 const HOME: [number, number] = [-74.1, 4.7]; // Bogotá
 
-function WorldMap({ conns, totalFlows, attacks }: { conns: { ip: string; flows: number; pais: string | null; lat: number | null; lon: number | null; ioc: boolean }[]; totalFlows: number; attacks: AttackOrigin[] }) {
+function WorldMap({ conns, totalFlows, attacks, blockedToday }: { conns: { ip: string; flows: number; pais: string | null; lat: number | null; lon: number | null; ioc: boolean }[]; totalFlows: number; attacks: AttackOrigin[]; blockedToday: number | null }) {
   const W = 640, H = 320;
   const px = (lon: number) => ((lon + 180) / 360) * W;
   const py = (lat: number) => ((90 - lat) / 180) * H;
@@ -233,6 +235,9 @@ function WorldMap({ conns, totalFlows, attacks }: { conns: { ip: string; flows: 
         {iocCount > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: RED }} /> IOC ({iocCount})</span>}
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: ATK }} /> ataques entrantes ({atk.length})</span>
         <span>{totalFlows.toLocaleString('es-CO')} flujos / 24h</span>
+        <span className="flex items-center gap-1 rounded-md border px-2 py-0.5 font-bold" style={{ borderColor: `color-mix(in srgb, ${GREEN} 50%, transparent)`, color: GREEN, boxShadow: `0 0 10px color-mix(in srgb, ${GREEN} 25%, transparent)` }}>
+          <ShieldX className="h-3 w-3" /> {blockedToday != null ? blockedToday : '—'} bloqueados hoy
+        </span>
       </div>
     </div>
   );
@@ -251,15 +256,16 @@ export default function CommandCenter() {
   const [anoms, setAnoms] = useState<Anomaly[] | null>(null);
   const [flows, setFlows] = useState<FlowsOverview | null>(null);
   const [attacks, setAttacks] = useState<AttackOrigin[]>([]);
+  const [blockedToday, setBlockedToday] = useState<number | null>(null);
   const [radar, setRadar] = useState<AssetRadar | null>(null);
   const [clock, setClock] = useState(new Date());
 
   const loadCore = useCallback(async () => {
-    const [o, m, a, u, f, r, at] = await Promise.allSettled([
+    const [o, m, a, u, f, r, at, hb] = await Promise.allSettled([
       overviewApi.get(), metricsApi.soc(30),
       alertsApi.search({ range: '24h', triage: true, page: 1, size: 8 }),
       uebaApi.anomalies({ status: 'open' }), flowsApi.overview('24h'), overviewApi.radar(),
-      attacksApi.geo(24, true),
+      attacksApi.geo(24, true), responseApi.history(),
     ]);
     if (o.status === 'fulfilled') setOv(o.value);
     if (m.status === 'fulfilled') setSoc(m.value);
@@ -268,6 +274,10 @@ export default function CommandCenter() {
     if (f.status === 'fulfilled') setFlows(f.value);
     if (r.status === 'fulfilled') setRadar(r.value);
     if (at.status === 'fulfilled') setAttacks(at.value.origins);
+    if (hb.status === 'fulfilled') {
+      const today = new Date().toDateString();
+      setBlockedToday(hb.value.filter((h) => h.accion === 'block' && h.resultado === 'success' && new Date(h.created_at).toDateString() === today).length);
+    }
   }, []);
   useEffect(() => { void loadCore(); const i = setInterval(() => void loadCore(), 30_000); return () => clearInterval(i); }, [loadCore]);
   useEffect(() => { overviewApi.trend(trendRange).then(setTrend).catch(() => undefined); }, [trendRange]);
@@ -371,7 +381,7 @@ export default function CommandCenter() {
 
       {/* Mapa mundial de conexiones */}
       <Panel title="Mapa mundial de conexiones" icon={Globe2} right={flows && <span className="hw-mono text-[10px] text-muted-foreground">entrante + saliente · geolocalizado · 24h</span>}>
-        {flows ? <WorldMap conns={flows.topDst} totalFlows={flows.flows} attacks={attacks} /> : <div className="flex h-56 items-center justify-center text-muted-foreground">Cargando mapa…</div>}
+        {flows ? <WorldMap conns={flows.topDst} totalFlows={flows.flows} attacks={attacks} blockedToday={blockedToday} /> : <div className="flex h-56 items-center justify-center text-muted-foreground">Cargando mapa…</div>}
       </Panel>
 
       {/* Alertas + Tráfico + Dispositivos */}
