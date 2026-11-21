@@ -49,6 +49,7 @@ import {
   Mail,
   Wrench,
   BrainCircuit,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -72,6 +73,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/resumen', label: 'Resumen Ejecutivo', icon: ShieldCheck },
       { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
       { to: '/noc', label: 'NOC · Disponibilidad', icon: Activity, roles: ['admin', 'analista'] },
+      { to: '/noc/centro', label: 'NOC · Centro de Comando', icon: Gauge, roles: ['admin', 'analista'] },
     ],
   },
   {

@@ -23,10 +23,12 @@ export interface NocReport {
   dias: number;
   objetivos: { name: string; host: string; grupo: string; esCliente: boolean; status: NocStatus; uptimePct: number; caidas: number; downMin: number }[];
 }
+export interface NocTrend { dias: number; puntos: { dia: string; caidas: number; equipos: number }[] }
 
 export const nocApi = {
   overview: () => api.get<NocOverview>('/noc/overview').then((r) => r.data),
   report: (days = 30) => api.get<NocReport>('/noc/report', { params: { days } }).then((r) => r.data),
+  trend: (days = 14) => api.get<NocTrend>('/noc/trend', { params: { days } }).then((r) => r.data),
   add: (t: { name: string; host: string; kind: CheckKind; port?: number | null; path?: string | null; grupo?: string; snmpEnabled?: boolean; snmpCommunity?: string }) =>
     api.post<{ id: string }>('/noc/targets', t).then((r) => r.data),
   toggle: (id: string, enabled: boolean) => api.put(`/noc/targets/${id}`, { enabled }).then((r) => r.data),

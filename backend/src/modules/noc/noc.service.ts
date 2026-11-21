@@ -307,6 +307,27 @@ export async function getReport(days = 30): Promise<{
   return { dias: d, objetivos };
 }
 
+// Tendencia diaria de caídas (y objetivos distintos afectados) para el centro de comando.
+export async function getTrend(days = 14): Promise<{ dias: number; puntos: { dia: string; caidas: number; equipos: number }[] }> {
+  const d = Math.max(1, Math.min(60, Math.round(days)));
+  const rows = await query<{ at: string; target_id: string }>(
+    `SELECT at, target_id FROM noc_events WHERE status='down' AND at > now() - ($1 || ' days')::interval`, [d]
+  );
+  const buckets = new Map<string, { caidas: number; ids: Set<string> }>();
+  for (const r of rows) {
+    const key = new Date(r.at).toISOString().slice(0, 10);
+    const b = buckets.get(key) ?? { caidas: 0, ids: new Set<string>() };
+    b.caidas++; if (r.target_id) b.ids.add(r.target_id); buckets.set(key, b);
+  }
+  const puntos: { dia: string; caidas: number; equipos: number }[] = [];
+  for (let i = d - 1; i >= 0; i--) {
+    const dt = new Date(Date.now() - i * 86400000); const key = dt.toISOString().slice(0, 10);
+    const b = buckets.get(key);
+    puntos.push({ dia: key.slice(5), caidas: b?.caidas ?? 0, equipos: b?.ids.size ?? 0 });
+  }
+  return { dias: d, puntos };
+}
+
 export async function addTarget(input: { name: string; host: string; kind?: CheckKind; port?: number | null; path?: string | null; grupo?: string; snmpEnabled?: boolean; snmpCommunity?: string | null }): Promise<string> {
   const id = crypto.randomUUID();
   const kind: CheckKind = input.kind && ['icmp', 'tcp', 'http'].includes(input.kind) ? input.kind : 'icmp';

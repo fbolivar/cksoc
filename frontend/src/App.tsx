@@ -55,6 +55,7 @@ const Asm = lazy(() => import('@/pages/Asm'));
 const ShadowAi = lazy(() => import('@/pages/ShadowAi'));
 const AiSecurity = lazy(() => import('@/pages/AiSecurity'));
 const Noc = lazy(() => import('@/pages/Noc'));
+const NocCommand = lazy(() => import('@/pages/NocCommand'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
 const Bec = lazy(() => import('@/pages/Bec'));
 const Drp = lazy(() => import('@/pages/Drp'));
@@ -485,6 +486,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <AiSecurity />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/noc/centro"
+        element={
+          <Protected>
+            <AppLayout>
+              <NocCommand />
             </AppLayout>
           </Protected>
         }

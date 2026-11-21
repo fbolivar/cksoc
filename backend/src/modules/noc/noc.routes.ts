@@ -19,7 +19,7 @@ import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
 import { sendTelegram } from '../notifications/telegram.service';
-import { getOverview, getReport, addTarget, setEnabled, setSnmp, deleteTarget, runChecks, ensureNocSchema, isNocEnabled, SOC_GROUPS } from './noc.service';
+import { getOverview, getReport, getTrend, addTarget, setEnabled, setSnmp, deleteTarget, runChecks, ensureNocSchema, isNocEnabled, SOC_GROUPS } from './noc.service';
 
 export const nocRouter = Router();
 nocRouter.use(authenticate);
@@ -34,6 +34,9 @@ function handle(err: unknown, res: Response): void {
 nocRouter.get('/overview', canManage, async (_req, res) => { try { res.json(await getOverview()); } catch (e) { handle(e, res); } });
 nocRouter.get('/report', canManage, async (req, res) => {
   try { const days = req.query.days != null ? Number(req.query.days) : 30; res.json(await getReport(Number.isFinite(days) ? days : 30)); } catch (e) { handle(e, res); }
+});
+nocRouter.get('/trend', canManage, async (req, res) => {
+  try { const days = req.query.days != null ? Number(req.query.days) : 14; res.json(await getTrend(Number.isFinite(days) ? days : 14)); } catch (e) { handle(e, res); }
 });
 nocRouter.post('/targets', canManage, async (req, res) => {
   try {
