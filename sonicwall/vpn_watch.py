@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Watchdog SOLO-LECTURA de la VPN SSL de DG&A.
+"""Watchdog SOLO-LECTURA de la VPN SSL de BBG LATAM.
 Verifica que 'ksolution' conserve su acceso VPN (rutas X0/X3 y membresia al grupo
 SSLVPN Services). Si detecta una regresion, avisa por Telegram (con cooldown).
 NO escribe nada en el firewall — solo lee y alerta. Cron cada 10 min.
@@ -80,7 +80,7 @@ def main():
     if problems:
         last_sig, last_ts = (prev.split("@@") + ["", "0"])[:2]
         if sig != last_sig or (now - int(last_ts or 0)) > COOLDOWN:
-            telegram("Soy CKAgentico. Aviso operativo importante para DG&A:\n\n"
+            telegram("Soy CKAgentico. Aviso operativo importante para BBG LATAM:\n\n"
                      "Detecte una regresion en el acceso VPN de la cuenta '" + VPN_USER + "':\n- " + "\n- ".join(problems) +
                      "\n\nEsto NO lo causa el bloqueo de HexWatch (su codigo no toca la VPN). Puede venir de la gestion central (GMS) o de una edicion manual. "
                      "Recomiendo revisar y restaurar en Device > Users: agregar '" + VPN_USER + "' al grupo '" + VPN_GROUP + "' y las rutas X0/X3. Quedamos atentos.")

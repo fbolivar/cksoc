@@ -17,7 +17,7 @@ function pct(part: number, total: number): number {
 
 export function renderShiftReport(d: ShiftReportData): string {
   const ORG = (process.env.REPORT_ORG_NAME || 'Click Solutions').replace(/&/g,'&amp;');
-  const CLIENT = (process.env.REPORT_CLIENT_NAME || 'DG&A ABOGADOS').replace(/&/g,'&amp;');
+  const CLIENT = (process.env.REPORT_CLIENT_NAME || 'BBG LATAM').replace(/&/g,'&amp;');
   const total = d.estaciones || 1;
   const onPct = Math.max(d.wkEnLinea ? 8 : 0, pct(d.wkEnLinea, total));
   const attPct = Math.max(d.wkAtencion ? 8 : 0, pct(d.wkAtencion, total));
