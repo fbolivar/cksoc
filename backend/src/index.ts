@@ -86,6 +86,8 @@ import { copilotRouter } from './modules/copilot/copilot.routes';
 import { dossierRouter } from './modules/incident-dossier/dossier.routes';
 import { ddosRouter } from './modules/ddos/ddos.routes';
 import { llmGuardRouter } from './modules/llm-guard/llm-guard.routes';
+import { apiExposureRouter } from './modules/api-exposure/api-exposure.routes';
+import { ensureApiExposureSchema } from './modules/api-exposure/api-exposure.service';
 import { ensureLlmGuardSchema } from './modules/llm-guard/llm-guard.service';
 import { ensureDossierSchema } from './modules/incident-dossier/dossier.service';
 import { actionCenterRouter } from './modules/action-center/action-center.routes';
@@ -169,6 +171,7 @@ app.use('/api/xdr', xdrRouter);
 app.use('/api/dossier', dossierRouter);
 app.use('/api/ddos', ddosRouter);
 app.use('/api/llm-guard', llmGuardRouter);
+app.use('/api/api-exposure', apiExposureRouter);
 app.use('/api/drp', drpRouter);
 app.use('/api/edr', edrRouter);
 app.use('/api/flows', flowsRouter);
@@ -309,6 +312,7 @@ startActionDigestScheduler();
 startUebaScheduler();
 ensureDossierSchema().catch(() => {});
 ensureLlmGuardSchema().catch(() => {});
+ensureApiExposureSchema().catch(() => {});
 
 // Inteligencia de CVEs (CISA KEV diario + EPSS cada 6 h) para priorizar vulns
 startCveIntelScheduler();

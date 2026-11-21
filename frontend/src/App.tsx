@@ -48,6 +48,7 @@ const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
 const IncidentDossier = lazy(() => import('@/pages/IncidentDossier'));
 const DdosDetection = lazy(() => import('@/pages/DdosDetection'));
 const LlmGuard = lazy(() => import('@/pages/LlmGuard'));
+const ApiExposure = lazy(() => import('@/pages/ApiExposure'));
 const Ndr = lazy(() => import('@/pages/Ndr'));
 const Office365 = lazy(() => import('@/pages/Office365'));
 const EmailPosture = lazy(() => import('@/pages/EmailPosture'));
@@ -459,6 +460,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <LlmGuard />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/exposicion-apis"
+        element={
+          <Protected>
+            <AppLayout>
+              <ApiExposure />
             </AppLayout>
           </Protected>
         }
