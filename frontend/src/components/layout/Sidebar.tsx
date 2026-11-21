@@ -105,7 +105,6 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta · SonicWall', icon: ShieldAlert, roles: ['admin', 'analista'] },
-      { to: '/remediacion', label: 'Remediación', icon: Wrench, roles: ['admin'] },
       { to: '/edr', label: 'EDR · Endpoint', icon: Cpu, roles: ['admin', 'analista'] },
       { to: '/soar', label: 'Automatización (SOAR)', icon: Workflow, roles: ['admin', 'analista'] },
     ],
@@ -115,6 +114,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/activos', label: 'Activos', icon: Server },
       { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug },
+      { to: '/remediacion', label: 'Remediación', icon: Wrench, roles: ['admin'] },
       { to: '/asm', label: 'Superficie externa (ASM)', icon: ScanSearch, roles: ['admin', 'analista'] },
       { to: '/drp', label: 'Riesgo digital (DRP)', icon: Eye, roles: ['admin', 'analista'] },
       { to: '/postura-correo', label: 'Postura de correo', icon: Mail, roles: ['admin', 'analista'] },
