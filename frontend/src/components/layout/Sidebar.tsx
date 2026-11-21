@@ -14,7 +14,6 @@ import {
   Share2,
   MailWarning,
   Fingerprint,
-  Bot,
   ScanSearch,
   BellRing,
   FileBarChart,
@@ -70,7 +69,6 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/', label: 'SOC · Centro de Comando', icon: LayoutDashboard },
       { to: '/centro-accion', label: 'Centro de Acción', icon: Inbox, roles: ['admin', 'analista'] },
       { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
-      { to: '/resumen', label: 'Resumen Ejecutivo', icon: ShieldCheck },
       { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
       { to: '/noc/centro', label: 'NOC · Centro de Comando', icon: Gauge, roles: ['admin', 'analista'] },
     ],
@@ -89,7 +87,6 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/flows', label: 'Flujos de red', icon: Waypoints, roles: ['admin', 'analista'] },
       { to: '/office365', label: 'Office 365', icon: Cloud, roles: ['admin', 'analista'] },
       { to: '/itdr', label: 'ITDR · Identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
-      { to: '/shadow-ai', label: 'Shadow-AI · Uso de IA', icon: Bot, roles: ['admin', 'analista'] },
       { to: '/seguridad-ia', label: 'Seguridad de IA', icon: BrainCircuit, roles: ['admin', 'analista'] },
       { to: '/bec', label: 'Correo · Anti-BEC', icon: MailWarning, roles: ['admin', 'analista'] },
     ],
@@ -132,7 +129,7 @@ const sections: { title: string | null; items: Item[] }[] = [
   },
   {
     title: 'Reportes',
-    items: [{ to: '/reportes', label: 'Reportes', icon: FileBarChart }],
+    items: [{ to: '/reportes', label: 'Reportes', icon: FileBarChart }, { to: '/resumen', label: 'Resumen Ejecutivo', icon: ShieldCheck }],
   },
   {
     title: 'Operación',

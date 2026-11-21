@@ -10,6 +10,7 @@ import {
   FileText, AppWindow, Clock, Upload, Network, Gauge, CircleCheck, CircleAlert, CircleX,
 } from 'lucide-react';
 import { aisecApi, type AiOverview, type RiskNode } from '@/lib/aisec';
+import { shadowAiApi } from '@/lib/shadowai';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -48,6 +49,7 @@ export default function AiSecurity() {
   const [ov, setOv] = useState<AiOverview | null>(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const reload = useCallback(async (r: Range) => {
     setLoading(true); setMsg(null);
@@ -56,6 +58,12 @@ export default function AiSecurity() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void reload(range); }, [range, reload]);
+  const togglePolicy = async (service: string, sanctioned: boolean) => {
+    setBusy(service);
+    try { await shadowAiApi.setPolicy(service, sanctioned); await reload(range); }
+    catch { setMsg('No se pudo cambiar la politica'); }
+    finally { setBusy(null); }
+  };
 
   const inv = ov?.inventory; const cop = ov?.copilot; const exfil = ov?.exfil; const risk = ov?.risk; const posture = ov?.posture;
   const k = inv?.kpis;
@@ -104,7 +112,7 @@ export default function AiSecurity() {
             <CardContent className="overflow-x-auto p-0">
               <table className="w-full text-sm">
                 <thead className="hw-mono text-[10px] uppercase text-muted-foreground"><tr className="border-b border-border">
-                  <th className="px-3 py-2 text-left">Servicio</th><th className="px-3 py-2 text-left">Proveedor</th><th className="px-3 py-2 text-right">Equipos</th><th className="px-3 py-2 text-right">Hits</th><th className="px-3 py-2 text-center">Estado</th><th className="px-3 py-2 text-left">Último</th>
+                  <th className="px-3 py-2 text-left">Servicio</th><th className="px-3 py-2 text-left">Proveedor</th><th className="px-3 py-2 text-right">Equipos</th><th className="px-3 py-2 text-right">Hits</th><th className="px-3 py-2 text-center">Estado</th><th className="px-3 py-2 text-left">Último</th><th className="px-3 py-2 text-right">Acción</th>
                 </tr></thead>
                 <tbody>
                   {(inv?.network ?? []).map((n) => (
@@ -112,7 +120,7 @@ export default function AiSecurity() {
                       <td className="px-3 py-1.5 font-medium">{n.name}</td><td className="px-3 py-1.5 text-muted-foreground">{n.vendor}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{n.devices}</td><td className="px-3 py-1.5 text-right tabular-nums">{n.hits}</td>
                       <td className="px-3 py-1.5 text-center"><Pill ok={n.sanctioned}>{n.sanctioned ? 'Aprobado' : 'Shadow'}</Pill></td>
-                      <td className="hw-mono px-3 py-1.5 text-xs text-muted-foreground">{fmt(n.lastSeen)}</td>
+                      <td className="hw-mono px-3 py-1.5 text-xs text-muted-foreground">{fmt(n.lastSeen)}</td><td className="px-3 py-1.5 text-right"><Button variant="ghost" size="sm" className="h-7 text-[11px]" disabled={busy === n.service} onClick={() => togglePolicy(n.service, !n.sanctioned)}>{busy === n.service ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : (n.sanctioned ? 'Marcar shadow' : 'Aprobar')}</Button></td>
                     </tr>
                   ))}
                   {inv?.copilot && inv.copilot.interactions > 0 && (
@@ -122,13 +130,13 @@ export default function AiSecurity() {
                       <td className="px-3 py-1.5 text-right tabular-nums">{inv.copilot.users}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{inv.copilot.interactions}</td>
                       <td className="px-3 py-1.5 text-center"><Pill ok={inv.copilot.sanctioned}>{inv.copilot.sanctioned ? 'Aprobado' : 'Shadow'}</Pill></td>
-                      <td className="hw-mono px-3 py-1.5 text-xs text-muted-foreground">{fmt(inv.copilot.lastSeen)}</td>
+                      <td className="hw-mono px-3 py-1.5 text-xs text-muted-foreground">{fmt(inv.copilot.lastSeen)}</td><td />
                     </tr>
                   )}
-                  {inv && inv.network.length === 0 && (!inv.copilot || inv.copilot.interactions === 0) && <tr><td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">Sin uso de IA en el periodo.</td></tr>}
+                  {inv && inv.network.length === 0 && (!inv.copilot || inv.copilot.interactions === 0) && <tr><td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">Sin uso de IA en el periodo.</td></tr>}
                 </tbody>
               </table>
-              <p className="px-3 py-2 text-[11px] text-muted-foreground">La aprobación de cada servicio se gestiona en <b>Shadow-AI · Uso de IA</b> (política compartida).</p>
+              <p className="px-3 py-2 text-[11px] text-muted-foreground">Usa <b>Aprobar</b> / <b>Marcar shadow</b> para gobernar cada servicio de IA (política compartida con la detección por red).</p>
             </CardContent>
           </Card>
         </div>
