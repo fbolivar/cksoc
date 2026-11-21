@@ -31,6 +31,12 @@ def call(m, path, auth=False):
     except Exception as e: return 0, str(e)
 
 def telegram(text):
+    # Gate por licencia: sin licencia vigente (bandera != '1') NO se envia. Fail-closed.
+    try:
+        if open('/opt/hexwatch-ops/.lic-notify').read().strip() != '1':
+            return
+    except Exception:
+        return
     if not (TG_TOKEN and TG_CHAT): return
     for chat in [c.strip() for c in TG_CHAT.split(",") if c.strip()]:
         try:
@@ -44,11 +50,15 @@ def nets(obj): return {x.get("name") for x in (obj.get("vpn_client_access") or [
 
 def main():
     st, _ = call("POST", "/auth", auth=True)
+    if st != 200:
+        print(f"[vpn_watch] auth al firewall fallo (HTTP {st}); se omite SIN alarmar.")
+        return
     problems = []
     stu, du = call("GET", "/user/local/users/name/" + VPN_USER)
     if stu != 200 or not isinstance(du, dict):
-        problems.append(f"No se pudo leer el usuario {VPN_USER} (HTTP {stu}).")
-    else:
+        print(f"[vpn_watch] no se pudo LEER {VPN_USER} (HTTP {stu}); se omite SIN alarmar (error de lectura, NO regresion).")
+        return
+    if True:
         u = du["user"]["local"]["user"][0]
         mo = {m.get("name") for m in u.get("member_of", [])}
         if VPN_GROUP not in mo: problems.append(f"{VPN_USER} YA NO es miembro de '{VPN_GROUP}'.")
@@ -70,7 +80,7 @@ def main():
     if problems:
         last_sig, last_ts = (prev.split("@@") + ["", "0"])[:2]
         if sig != last_sig or (now - int(last_ts or 0)) > COOLDOWN:
-            telegram("Soy Agentico. Aviso operativo importante para DG&A:\n\n"
+            telegram("Soy CKAgentico. Aviso operativo importante para DG&A:\n\n"
                      "Detecte una regresion en el acceso VPN de la cuenta '" + VPN_USER + "':\n- " + "\n- ".join(problems) +
                      "\n\nEsto NO lo causa el bloqueo de HexWatch (su codigo no toca la VPN). Puede venir de la gestion central (GMS) o de una edicion manual. "
                      "Recomiendo revisar y restaurar en Device > Users: agregar '" + VPN_USER + "' al grupo '" + VPN_GROUP + "' y las rutas X0/X3. Quedamos atentos.")
