@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Activity, Server, CircleCheck, CircleX, Gauge as GaugeIcon, Radio, ShieldCheck,
-  Cpu, MemoryStick, Cable, Wifi, Zap, TriangleAlert, Table as TableIcon, Building2, Boxes,
+  Cpu, MemoryStick, Cable, Wifi, Zap, TriangleAlert, Table as TableIcon, Building2, Boxes, ArrowRight,
 } from 'lucide-react';
 import { nocApi, type NocOverview, type NocReport, type NocTrend, type NocAgents, type NocTarget } from '@/lib/noc';
 import { Card, CardContent } from '@/components/ui/card';
@@ -110,8 +110,16 @@ function GroupTopology({ targets }: { targets: NocTarget[] }) {
   for (const t of targets.filter((t) => t.enabled)) (buckets.find((b) => b.match(t.grupo || '')) ?? buckets[1]).nodes.push(t);
   return (
     <div className="relative">
+      {/* indicador de flujo */}
+      <div className="hw-mono mb-2 flex items-center justify-center gap-1.5 text-[9px] uppercase tracking-wide text-muted-foreground">
+        <span className="flex items-center gap-1" style={{ color: TEAL }}><Wifi className="h-3 w-3" /> Internet</span>
+        <ArrowRight className="h-3 w-3" style={{ color: TEAL }} />
+        <span className="flex items-center gap-1" style={{ color: TEAL }}><Building2 className="h-3 w-3" /> Cliente</span>
+        <ArrowRight className="h-3 w-3" style={{ color: TEAL }} />
+        <span className="flex items-center gap-1" style={{ color: TEAL }}><Server className="h-3 w-3" /> SOC</span>
+      </div>
       {/* bus horizontal animado detrás */}
-      <div className="pointer-events-none absolute inset-x-6 top-7 h-px" style={{ background: `linear-gradient(90deg, transparent, ${TEAL}, transparent)`, opacity: 0.5 }} />
+      <div className="pointer-events-none absolute inset-x-6 top-16 h-px" style={{ background: `linear-gradient(90deg, transparent, ${TEAL}, transparent)`, opacity: 0.5 }} />
       <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-3">
         {buckets.map((b) => {
           const up = b.nodes.filter((n) => n.status === 'up').length;
