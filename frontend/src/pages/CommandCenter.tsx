@@ -16,6 +16,7 @@ import { metricsApi, type SocMetrics } from '@/lib/metrics';
 import { alertsApi, type AlertHit } from '@/lib/alerts';
 import { uebaApi, type Anomaly, DETECTOR_ES } from '@/lib/ueba';
 import { flowsApi, type FlowsOverview } from '@/lib/flows';
+import { attacksApi, type AttackOrigin } from '@/lib/attacks';
 import { Card, CardContent } from '@/components/ui/card';
 
 const TEAL = 'hsl(var(--primary))';
@@ -23,6 +24,7 @@ const RED = 'hsl(var(--destructive))';
 const ORANGE = 'hsl(var(--warn-orange))';
 const GREEN = 'hsl(var(--success))';
 const CYAN = 'hsl(var(--cyan))';
+const ATK = 'hsl(320 80% 62%)'; // ataques entrantes (magenta, distinto del tráfico saliente)
 const MUTE = 'hsl(var(--muted-foreground))';
 const sevColor: Record<string, string> = { critica: RED, alta: ORANGE, media: TEAL, baja: GREEN };
 const SEMA: Record<string, { label: string; color: string }> = {
@@ -172,12 +174,14 @@ const CONTINENTS: [number, number][][] = [
 ];
 const HOME: [number, number] = [-74.1, 4.7]; // Bogotá
 
-function WorldMap({ conns, totalFlows }: { conns: { ip: string; flows: number; pais: string | null; lat: number | null; lon: number | null; ioc: boolean }[]; totalFlows: number }) {
+function WorldMap({ conns, totalFlows, attacks }: { conns: { ip: string; flows: number; pais: string | null; lat: number | null; lon: number | null; ioc: boolean }[]; totalFlows: number; attacks: AttackOrigin[] }) {
   const W = 640, H = 320;
   const px = (lon: number) => ((lon + 180) / 360) * W;
   const py = (lat: number) => ((90 - lat) / 180) * H;
   const geo = conns.filter((c) => c.lat != null && c.lon != null).slice(0, 14);
+  const atk = attacks.filter((a) => a.esExterno && Number.isFinite(a.lat) && Number.isFinite(a.lon)).slice(0, 14);
   const maxF = Math.max(1, ...geo.map((c) => c.flows));
+  const maxA = Math.max(1, ...atk.map((a) => a.count));
   const [hx, hy] = [px(HOME[0]), py(HOME[1])];
   const iocCount = geo.filter((c) => c.ioc).length;
   return (
@@ -192,7 +196,21 @@ function WorldMap({ conns, totalFlows }: { conns: { ip: string; flows: number; p
           <polygon key={i} points={poly.map(([lo, la]) => `${px(lo).toFixed(1)},${py(la).toFixed(1)}`).join(' ')}
             fill="hsl(var(--primary) / 0.10)" stroke="hsl(var(--primary) / 0.25)" strokeWidth={0.7} />
         ))}
-        {/* arcos de conexión */}
+        {/* arcos de ataques entrantes (origen → SOC), curvados hacia abajo */}
+        {atk.map((a, i) => {
+          const x = px(a.lon), y = py(a.lat);
+          const mx = (hx + x) / 2, my = (hy + y) / 2 + Math.hypot(x - hx, y - hy) * 0.26;
+          return (
+            <g key={`atk${i}`}>
+              <path d={`M${x} ${y} Q${mx} ${my} ${hx} ${hy}`} fill="none" stroke={ATK} strokeWidth={1} strokeOpacity={0.5} strokeDasharray="4 5" className="cc-flow" style={{ filter: `drop-shadow(0 0 2px ${ATK})` }} />
+              <circle cx={x} cy={y} r={11} fill="none" stroke={ATK} strokeWidth={1} className="cc-pulse" />
+              <circle cx={x} cy={y} r={3 + (a.count / maxA) * 4} fill={ATK} fillOpacity={0.9} style={{ filter: `drop-shadow(0 0 5px ${ATK})` }}>
+                <title>{`⚠ Ataque entrante · ${a.country}${a.city ? ' / ' + a.city : ''} · ${a.count} evento(s) · ${a.ips.length} IP(s)`}</title>
+              </circle>
+            </g>
+          );
+        })}
+        {/* arcos de conexión saliente */}
         {geo.map((c, i) => {
           const x = px(c.lon!), y = py(c.lat!); const col = c.ioc ? RED : TEAL;
           const mx = (hx + x) / 2, my = (hy + y) / 2 - Math.hypot(x - hx, y - hy) * 0.28;
@@ -211,8 +229,9 @@ function WorldMap({ conns, totalFlows }: { conns: { ip: string; flows: number; p
       </svg>
       <div className="hw-mono mt-1 flex flex-wrap items-center justify-center gap-4 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: GREEN }} /> SOC Bogotá</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: TEAL }} /> destinos ({geo.length})</span>
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: TEAL }} /> destinos salientes ({geo.length})</span>
         {iocCount > 0 && <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: RED }} /> IOC ({iocCount})</span>}
+        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: ATK }} /> ataques entrantes ({atk.length})</span>
         <span>{totalFlows.toLocaleString('es-CO')} flujos / 24h</span>
       </div>
     </div>
@@ -231,14 +250,16 @@ export default function CommandCenter() {
   const [alerts, setAlerts] = useState<AlertHit[] | null>(null);
   const [anoms, setAnoms] = useState<Anomaly[] | null>(null);
   const [flows, setFlows] = useState<FlowsOverview | null>(null);
+  const [attacks, setAttacks] = useState<AttackOrigin[]>([]);
   const [radar, setRadar] = useState<AssetRadar | null>(null);
   const [clock, setClock] = useState(new Date());
 
   const loadCore = useCallback(async () => {
-    const [o, m, a, u, f, r] = await Promise.allSettled([
+    const [o, m, a, u, f, r, at] = await Promise.allSettled([
       overviewApi.get(), metricsApi.soc(30),
       alertsApi.search({ range: '24h', triage: true, page: 1, size: 8 }),
       uebaApi.anomalies({ status: 'open' }), flowsApi.overview('24h'), overviewApi.radar(),
+      attacksApi.geo(24, true),
     ]);
     if (o.status === 'fulfilled') setOv(o.value);
     if (m.status === 'fulfilled') setSoc(m.value);
@@ -246,6 +267,7 @@ export default function CommandCenter() {
     if (u.status === 'fulfilled') setAnoms(u.value.anomalies);
     if (f.status === 'fulfilled') setFlows(f.value);
     if (r.status === 'fulfilled') setRadar(r.value);
+    if (at.status === 'fulfilled') setAttacks(at.value.origins);
   }, []);
   useEffect(() => { void loadCore(); const i = setInterval(() => void loadCore(), 30_000); return () => clearInterval(i); }, [loadCore]);
   useEffect(() => { overviewApi.trend(trendRange).then(setTrend).catch(() => undefined); }, [trendRange]);
@@ -348,8 +370,8 @@ export default function CommandCenter() {
       </div>
 
       {/* Mapa mundial de conexiones */}
-      <Panel title="Mapa mundial de conexiones" icon={Globe2} right={flows && <span className="hw-mono text-[10px] text-muted-foreground">tráfico saliente geolocalizado · 24h</span>}>
-        {flows ? <WorldMap conns={flows.topDst} totalFlows={flows.flows} /> : <div className="flex h-56 items-center justify-center text-muted-foreground">Cargando mapa…</div>}
+      <Panel title="Mapa mundial de conexiones" icon={Globe2} right={flows && <span className="hw-mono text-[10px] text-muted-foreground">entrante + saliente · geolocalizado · 24h</span>}>
+        {flows ? <WorldMap conns={flows.topDst} totalFlows={flows.flows} attacks={attacks} /> : <div className="flex h-56 items-center justify-center text-muted-foreground">Cargando mapa…</div>}
       </Panel>
 
       {/* Alertas + Tráfico + Dispositivos */}
