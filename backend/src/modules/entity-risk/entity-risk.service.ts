@@ -17,6 +17,7 @@ import { env } from '../../config/env';
 import { getAssetList } from '../assets/assets.service';
 import { getVulnerabilities } from '../vulnerabilities/vuln.service';
 import { collectLogins, listAnomalies, isServiceOrAdmin, type AnomalyRow } from '../ueba/ueba.service';
+import { isSocInfra } from '../wazuh/agents.service';
 
 export type RiskBand = 'critico' | 'alto' | 'medio' | 'bajo';
 
@@ -66,7 +67,11 @@ interface AgAgg { key: string; doc_count: number; max: { value: number | null };
 /** Riesgo por HOST: alertas (por agente) + vulnerabilidades + estado del agente. */
 async function computeHostRisk(hours: number): Promise<EntityRisk[]> {
   const [agentsR, vulnR] = await Promise.allSettled([getAssetList(), getVulnerabilities()]);
-  const agents = agentsR.status === 'fulfilled' ? agentsR.value : [];
+  // Excluir la infra del propio SOC (cs-soc-*/pmx-soc/gvm-soc): el RBA prioriza
+  // activos del CLIENTE, no los servidores del SOC (deuda de parches Ubuntu +
+  // alertas del firewall ingeridas por el agente del manager). Consistente con
+  // el Radar de dispositivos y el Centro de Accion.
+  const agents = (agentsR.status === 'fulfilled' ? agentsR.value : []).filter((a) => !isSocInfra(a.name));
 
   const vmap = new Map<string, { critical: number; high: number }>();
   if (vulnR.status === 'fulfilled') for (const a of vulnR.value.porAgente) vmap.set(a.agent, { critical: a.critical, high: a.high });
