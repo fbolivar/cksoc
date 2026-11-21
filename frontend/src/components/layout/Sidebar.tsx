@@ -35,7 +35,6 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Rss,
-  GitMerge,
   Workflow,
   UserSearch,
   Sparkles,
@@ -95,7 +94,6 @@ const sections: { title: string | null; items: Item[] }[] = [
     title: 'Investigar',
     items: [
       { to: '/xdr', label: 'XDR · Grafo', icon: Share2, roles: ['admin', 'analista'] },
-      { to: '/correlacion', label: 'Correlación', icon: GitMerge, roles: ['admin', 'analista'] },
       { to: '/hunting', label: 'Threat Hunting', icon: Radar, roles: ['admin', 'analista'] },
       { to: '/threat-intel', label: 'Threat Intelligence', icon: Rss, roles: ['admin', 'analista'] },
       { to: '/exposicion-credenciales', label: 'Exposición de Credenciales', icon: KeyRound, roles: ['admin', 'analista'] },
