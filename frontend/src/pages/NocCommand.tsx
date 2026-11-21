@@ -1,15 +1,16 @@
 /**
- * NOC — Centro de Comando. Vista tipo "command center": KPIs con glow, medidor
- * radial de disponibilidad, topología de red en vivo (hub-and-spoke), recursos
- * SNMP, latencia/uptime por objetivo y tendencia de caídas. 100% datos reales
- * (nocApi.overview + report + trend). Identidad HexWatch (hw-mono, teal, oscuro).
+ * NOC — Centro de Comando. Vista tipo "command center" con identidad HexWatch y
+ * datos 100% reales (nocApi.overview + report + trend + agents): KPIs con glow,
+ * medidor radial, topología por grupos (Internet / Cliente / SOC en columnas),
+ * agentes Wazuh como nodos, mini-mapa de calor CPU/RAM, latencia/uptime por
+ * objetivo, tendencia de caídas y eventos.
  */
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Activity, Server, CircleCheck, CircleX, Gauge as GaugeIcon, Radio, ShieldCheck,
-  Cpu, MemoryStick, Cable, Wifi, Zap, TriangleAlert, Table as TableIcon,
+  Cpu, MemoryStick, Cable, Wifi, Zap, TriangleAlert, Table as TableIcon, Building2, Boxes,
 } from 'lucide-react';
-import { nocApi, type NocOverview, type NocReport, type NocTrend, type NocTarget } from '@/lib/noc';
+import { nocApi, type NocOverview, type NocReport, type NocTrend, type NocAgents, type NocTarget } from '@/lib/noc';
 import { Card, CardContent } from '@/components/ui/card';
 import { Link } from 'react-router-dom';
 
@@ -23,6 +24,18 @@ function shortName(n: string): string { return n.replace(/^SOC\s·\s/, '').repla
 function upColor(p: number | null | undefined): string {
   if (p == null) return MUTE; if (p >= 99.9) return UP; if (p >= 99) return 'hsl(152 50% 55%)'; if (p >= 95) return AMBER; return DOWN;
 }
+function stColor(s: NocTarget['status']): string { return s === 'up' ? UP : s === 'down' ? DOWN : MUTE; }
+// color de celda del heatmap según %
+function heatColor(p: number | null): string {
+  if (p == null) return 'hsl(var(--border))';
+  if (p <= 50) return UP; if (p <= 70) return 'hsl(152 50% 55%)'; if (p <= 85) return AMBER; return DOWN;
+}
+// color por salud de agente Wazuh
+function healthColor(h: string): string {
+  if (h === 'ok') return UP; if (h === 'alerta') return DOWN; if (h === 'investigar') return AMBER;
+  if (h === 'fantasma') return 'hsl(280 60% 60%)'; return MUTE; // apagado
+}
+const healthLabel: Record<string, string> = { ok: 'Activo', alerta: 'Servidor caído', investigar: 'Sin reportar', fantasma: 'Fantasma', apagado: 'Apagado' };
 
 /* ---------- Medidor radial ---------- */
 function Gauge({ pct, size = 168, color, label, sub }: { pct: number | null; size?: number; color: string; label: string; sub?: string }) {
@@ -62,75 +75,113 @@ function Kpi({ icon: Icon, value, label, color }: { icon: typeof Server; value: 
   );
 }
 
-/* ---------- Topología hub-and-spoke ---------- */
-function Topology({ targets }: { targets: NocTarget[] }) {
-  const W = 760, H = 430, cx = W / 2, cy = H / 2;
-  const nodes = targets.filter((t) => t.enabled);
-  const rx = 300, ry = 170;
-  const placed = nodes.map((t, i) => {
-    const a = (i / Math.max(1, nodes.length)) * Math.PI * 2 - Math.PI / 2;
-    return { t, x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a), right: Math.cos(a) >= 0 };
-  });
-  const iconFor = (t: NocTarget) => {
-    const g = (t.grupo || '').toLowerCase();
-    if (g.includes('internet') || g.includes('enlace')) return Wifi;
-    if (g.includes('perimetro') || g.includes('firewall')) return ShieldCheck;
-    if (t.snmp_enabled) return Server;
-    return Server;
-  };
+/* ---------- Topología por grupos (columnas) ---------- */
+function NodeChip({ t }: { t: NocTarget }) {
+  const c = stColor(t.status);
+  return (
+    <div className="rounded-md border border-border/60 bg-card/80 px-2 py-1.5" style={{ borderLeft: `3px solid ${c}`, boxShadow: t.status === 'down' ? `0 0 10px color-mix(in srgb, ${DOWN} 35%, transparent)` : undefined }}>
+      <div className="flex items-center gap-1.5">
+        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: c, boxShadow: `0 0 6px ${c}` }} />
+        <span className="hw-mono truncate text-[11px] font-medium text-foreground/90">{shortName(t.name)}</span>
+        <span className="hw-mono ml-auto shrink-0 text-[9px] tabular-nums" style={{ color: c }}>
+          {t.status === 'up' ? (t.latency_ms != null ? `${t.latency_ms}ms` : 'OK') : t.status === 'down' ? 'CAÍDO' : 'off'}
+        </span>
+      </div>
+      <div className="hw-mono mt-0.5 flex items-center gap-2 text-[9px] text-muted-foreground">
+        <span className="truncate">{t.host}{t.port ? `:${t.port}` : ''}</span>
+        {t.snmp_enabled && (t.cpu_pct != null || t.mem_pct != null) && (
+          <span className="ml-auto flex shrink-0 items-center gap-1.5">
+            {t.cpu_pct != null && <span style={{ color: heatColor(t.cpu_pct) }}>C{t.cpu_pct}</span>}
+            {t.mem_pct != null && <span style={{ color: heatColor(t.mem_pct) }}>R{t.mem_pct}</span>}
+            {t.if_total != null && <span><Cable className="inline h-2.5 w-2.5" />{t.if_up ?? 0}/{t.if_total}</span>}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+function GroupTopology({ targets }: { targets: NocTarget[] }) {
+  const cols: { key: string; icon: typeof Server; match: (g: string) => boolean }[] = [
+    { key: 'INTERNET', icon: Wifi, match: (g) => /internet|enlace/i.test(g) },
+    { key: 'CLIENTE', icon: Building2, match: (g) => !/infraestructura soc|internet|enlace/i.test(g) },
+    { key: 'SOC', icon: Server, match: (g) => /infraestructura soc/i.test(g) },
+  ];
+  const buckets = cols.map((c) => ({ ...c, nodes: [] as NocTarget[] }));
+  for (const t of targets.filter((t) => t.enabled)) (buckets.find((b) => b.match(t.grupo || '')) ?? buckets[1]).nodes.push(t);
   return (
     <div className="relative">
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ maxHeight: 440 }}>
-        <defs>
-          <radialGradient id="cc-core" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.9" />
-            <stop offset="70%" stopColor="hsl(var(--primary))" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
-          </radialGradient>
-          <pattern id="cc-grid" width="38" height="38" patternUnits="userSpaceOnUse">
-            <path d="M38 0H0V38" fill="none" stroke="hsl(var(--border))" strokeOpacity="0.18" strokeWidth="1" />
-          </pattern>
-        </defs>
-        <rect x="0" y="0" width={W} height={H} fill="url(#cc-grid)" />
-        {/* enlaces */}
-        {placed.map(({ t, x, y }, i) => {
-          const c = t.status === 'up' ? TEAL : t.status === 'down' ? DOWN : MUTE;
+      {/* bus horizontal animado detrás */}
+      <div className="pointer-events-none absolute inset-x-6 top-7 h-px" style={{ background: `linear-gradient(90deg, transparent, ${TEAL}, transparent)`, opacity: 0.5 }} />
+      <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {buckets.map((b) => {
+          const up = b.nodes.filter((n) => n.status === 'up').length;
+          const anyDown = b.nodes.some((n) => n.status === 'down');
           return (
-            <g key={`l${i}`}>
-              <line x1={cx} y1={cy} x2={x} y2={y} stroke={c} strokeOpacity={0.5} strokeWidth={1.6}
-                strokeDasharray="5 6" className="cc-flow" style={{ filter: `drop-shadow(0 0 3px ${c})` }} />
-            </g>
+            <div key={b.key} className="space-y-1.5">
+              <div className="hw-mono mb-1 flex items-center justify-center gap-1.5 rounded-md border border-border/60 bg-card/60 py-1 text-[10px] font-semibold uppercase tracking-wide"
+                style={{ color: anyDown ? DOWN : TEAL, boxShadow: `0 0 10px color-mix(in srgb, ${anyDown ? DOWN : TEAL} 25%, transparent)` }}>
+                <b.icon className="h-3.5 w-3.5" /> {b.key} <span className="text-muted-foreground">{up}/{b.nodes.length}</span>
+              </div>
+              {b.nodes.map((t) => <NodeChip key={t.id} t={t} />)}
+              {b.nodes.length === 0 && <div className="hw-mono py-2 text-center text-[10px] text-muted-foreground/60">—</div>}
+            </div>
           );
         })}
-        {/* núcleo */}
-        <circle cx={cx} cy={cy} r={66} fill="url(#cc-core)" />
-        <circle cx={cx} cy={cy} r={34} fill="hsl(var(--card))" stroke={TEAL} strokeWidth={2} style={{ filter: `drop-shadow(0 0 10px ${TEAL})` }} />
-        <path d={`M${cx - 6} ${cy - 13} L${cx + 7} ${cy - 2} L${cx - 1} ${cy - 1} L${cx + 6} ${cy + 13} L${cx - 7} ${cy + 1} L${cx + 1} ${cy} Z`} fill={TEAL} style={{ filter: `drop-shadow(0 0 4px ${TEAL})` }} />
-        <text x={cx} y={cy + 52} textAnchor="middle" className="hw-mono" fill={TEAL} style={{ fontSize: 13, fontWeight: 700 }}>NOC</text>
-        {/* nodos */}
-        {placed.map(({ t, x, y, right }, i) => {
-          const c = t.status === 'up' ? UP : t.status === 'down' ? DOWN : MUTE;
-          const Icon = iconFor(t);
-          return (
-            <g key={`n${i}`}>
-              {t.status === 'down' && <circle cx={x} cy={y} r={20} fill="none" stroke={DOWN} strokeWidth={1.5} className="cc-pulse" />}
-              <circle cx={x} cy={y} r={15} fill="hsl(var(--card))" stroke={c} strokeWidth={2} style={{ filter: `drop-shadow(0 0 6px ${c})` }} />
-              <foreignObject x={x - 8} y={y - 8} width={16} height={16}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 16 }}>
-                  <Icon width={11} height={11} style={{ color: c }} />
-                </div>
-              </foreignObject>
-              <text x={right ? x + 22 : x - 22} y={y - 1} textAnchor={right ? 'start' : 'end'} className="hw-mono" fill="hsl(var(--foreground))" style={{ fontSize: 11 }}>{shortName(t.name)}</text>
-              <text x={right ? x + 22 : x - 22} y={y + 11} textAnchor={right ? 'start' : 'end'} className="hw-mono" fill={MUTE} style={{ fontSize: 9 }}>
-                {t.status === 'up' ? (t.latency_ms != null ? `${t.latency_ms} ms` : 'OK') : t.status === 'down' ? 'CAÍDO' : 'off'}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="hw-mono absolute right-2 top-2 flex items-center gap-1 text-[10px] text-muted-foreground">
-        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: UP, boxShadow: `0 0 6px ${UP}` }} /> EN VIVO
       </div>
+    </div>
+  );
+}
+
+/* ---------- Agentes Wazuh (rejilla de estado) ---------- */
+function AgentsGrid({ data }: { data: NocAgents | null }) {
+  if (!data) return <div className="hw-mono text-[10px] text-muted-foreground">Cargando…</div>;
+  if (!data.ok) return <div className="hw-mono flex items-center gap-2 text-[10px] text-muted-foreground"><TriangleAlert className="h-3.5 w-3.5" style={{ color: AMBER }} /> API de Wazuh no disponible.</div>;
+  const s = data.summary;
+  const counts = new Map<string, number>();
+  for (const a of data.agents) counts.set(a.health, (counts.get(a.health) ?? 0) + 1);
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="hw-mono text-lg font-bold tabular-nums" style={{ color: UP }}>{s?.active ?? 0}<span className="text-xs text-muted-foreground">/{s?.total ?? 0}</span></span>
+        <span className="hw-mono text-[10px] text-muted-foreground">activos</span>
+        {(s?.disconnected ?? 0) > 0 && <span className="hw-mono text-[10px]" style={{ color: DOWN }}>{s?.disconnected} desconectados</span>}
+        {(s?.neverConnected ?? 0) > 0 && <span className="hw-mono text-[10px]" style={{ color: 'hsl(280 60% 60%)' }}>{s?.neverConnected} fantasma</span>}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {data.agents.map((a) => (
+          <span key={a.id} title={`${a.name} · ${a.ip} · ${healthLabel[a.health] ?? a.status}${a.staleDays != null ? ` · ${a.staleDays}d` : ''}`}
+            className="inline-block h-3.5 w-3.5 rounded-sm" style={{ background: healthColor(a.health), boxShadow: a.health === 'ok' ? `0 0 5px ${UP}` : a.needsAttention ? `0 0 5px ${healthColor(a.health)}` : 'none', opacity: a.health === 'apagado' ? 0.5 : 1 }} />
+        ))}
+        {data.agents.length === 0 && <span className="hw-mono text-[10px] text-muted-foreground">Sin agentes.</span>}
+      </div>
+      <div className="hw-mono flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5 text-[9px] text-muted-foreground">
+        {[...counts.entries()].map(([h, n]) => (
+          <span key={h} className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm" style={{ background: healthColor(h) }} /> {healthLabel[h] ?? h} {n}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Mini-mapa de calor CPU/RAM ---------- */
+function Heatmap({ hosts }: { hosts: NocTarget[] }) {
+  const Cell = ({ v }: { v: number | null }) => (
+    <div className="flex h-7 items-center justify-center rounded" style={{ background: v != null ? `color-mix(in srgb, ${heatColor(v)} 30%, transparent)` : 'hsl(var(--border))', border: `1px solid ${v != null ? heatColor(v) : 'hsl(var(--border))'}` }}>
+      <span className="hw-mono text-[10px] font-bold tabular-nums" style={{ color: v != null ? heatColor(v) : MUTE }}>{v != null ? `${v}%` : '—'}</span>
+    </div>
+  );
+  return (
+    <div className="space-y-1.5">
+      <div className="hw-mono grid grid-cols-[1fr_52px_52px] items-center gap-1.5 text-[9px] uppercase text-muted-foreground">
+        <span>Equipo</span><span className="flex items-center justify-center gap-1"><Cpu className="h-3 w-3" />CPU</span><span className="flex items-center justify-center gap-1"><MemoryStick className="h-3 w-3" />RAM</span>
+      </div>
+      {hosts.map((t) => (
+        <div key={t.id} className="grid grid-cols-[1fr_52px_52px] items-center gap-1.5">
+          <span className="hw-mono truncate text-[10px] text-foreground/85" title={t.name}>{shortName(t.name)}</span>
+          <Cell v={t.cpu_pct} /><Cell v={t.mem_pct} />
+        </div>
+      ))}
+      {hosts.length === 0 && <div className="hw-mono text-[10px] text-muted-foreground">Sin equipos con SNMP.</div>}
     </div>
   );
 }
@@ -184,11 +235,12 @@ export default function NocCommand() {
   const [ov, setOv] = useState<NocOverview | null>(null);
   const [rep, setRep] = useState<NocReport | null>(null);
   const [trend, setTrend] = useState<NocTrend | null>(null);
+  const [agents, setAgents] = useState<NocAgents | null>(null);
   const [clock, setClock] = useState(new Date());
 
   const loadLive = useCallback(async () => { try { setOv(await nocApi.overview()); } catch { /* */ } }, []);
   const loadSlow = useCallback(async () => {
-    try { const [r, t] = await Promise.all([nocApi.report(30), nocApi.trend(14)]); setRep(r); setTrend(t); } catch { /* */ }
+    try { const [r, t, a] = await Promise.all([nocApi.report(30), nocApi.trend(14), nocApi.agents().catch(() => null)]); setRep(r); setTrend(t); if (a) setAgents(a); } catch { /* */ }
   }, []);
   useEffect(() => { void loadLive(); void loadSlow(); const a = setInterval(() => void loadLive(), 15_000); const b = setInterval(() => void loadSlow(), 60_000); return () => { clearInterval(a); clearInterval(b); }; }, [loadLive, loadSlow]);
   useEffect(() => { const i = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(i); }, []);
@@ -205,13 +257,6 @@ export default function NocCommand() {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-3">
-      <style>{`
-        @keyframes cc-dash { to { stroke-dashoffset: -44; } }
-        .cc-flow { animation: cc-dash 1.1s linear infinite; }
-        @keyframes cc-pz { 0%{ transform: scale(.8); opacity:.9 } 100%{ transform: scale(1.7); opacity:0 } }
-        .cc-pulse { transform-box: fill-box; transform-origin: center; animation: cc-pz 1.4s ease-out infinite; }
-      `}</style>
-
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-card/60 px-4 py-2.5">
         <div className="flex items-center gap-3">
@@ -238,7 +283,7 @@ export default function NocCommand() {
         <Kpi icon={CircleCheck} value={k?.up ?? 0} label="Activos" color={UP} />
         <Kpi icon={CircleX} value={k?.down ?? 0} label="Caídos" color={(k?.down ?? 0) > 0 ? DOWN : UP} />
         <Kpi icon={ShieldCheck} value={k?.avgUptime30 != null ? `${k.avgUptime30.toFixed(1)}%` : '—'} label="Uptime 30d" color={k?.avgUptime30 != null && k.avgUptime30 < 99 ? AMBER : UP} />
-        <Kpi icon={GaugeIcon} value={k?.avgLatency != null ? `${k.avgLatency}ms` : '—'} label="Latencia prom" color={TEAL} />
+        <Kpi icon={Boxes} value={agents?.summary ? `${agents.summary.active}/${agents.summary.total}` : '—'} label="Agentes Wazuh" color={agents?.summary && agents.summary.disconnected > 0 ? AMBER : UP} />
         <Kpi icon={Radio} value={snmp.length} label="Equipos SNMP" color={TEAL} />
       </div>
 
@@ -260,38 +305,16 @@ export default function NocCommand() {
           </Panel>
         </div>
 
-        {/* Topología */}
+        {/* Topología por grupos */}
         <div className="lg:col-span-6">
-          <Panel title="Topología de red" icon={Activity} right={<span className="hw-mono text-[10px] text-muted-foreground">{targets.filter((t) => t.enabled).length} nodos</span>}>
-            {ov ? <Topology targets={targets} /> : <div className="flex h-72 items-center justify-center text-muted-foreground">Cargando…</div>}
+          <Panel title="Topología por grupos" icon={Activity} right={<span className="hw-mono text-[10px] text-muted-foreground">{targets.filter((t) => t.enabled).length} nodos</span>}>
+            {ov ? <GroupTopology targets={targets} /> : <div className="flex h-72 items-center justify-center text-muted-foreground">Cargando…</div>}
           </Panel>
         </div>
 
-        {/* Recursos + alertas */}
+        {/* Agentes + alertas */}
         <div className="lg:col-span-3 space-y-3">
-          <Panel title="Recursos (SNMP)" icon={Cpu}>
-            <div className="space-y-2.5">
-              {snmp.map((t) => (
-                <div key={t.id}>
-                  <div className="hw-mono mb-1 flex items-center justify-between text-[10px]">
-                    <span className="truncate text-foreground/90">{shortName(t.name)}</span>
-                    {t.if_total != null && <span className="text-muted-foreground"><Cable className="mr-0.5 inline h-2.5 w-2.5" />{t.if_up ?? 0}/{t.if_total}</span>}
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Cpu className="h-3 w-3" style={{ color: t.cpu_pct != null && t.cpu_pct >= 85 ? AMBER : TEAL }} />
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border/40"><div className="h-full rounded-full" style={{ width: `${t.cpu_pct ?? 0}%`, background: t.cpu_pct != null && t.cpu_pct >= 85 ? AMBER : TEAL }} /></div>
-                    <span className="hw-mono w-8 text-right text-[9px] text-muted-foreground">{t.cpu_pct != null ? `${t.cpu_pct}%` : '—'}</span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-1.5">
-                    <MemoryStick className="h-3 w-3" style={{ color: t.mem_pct != null && t.mem_pct >= 90 ? AMBER : TEAL }} />
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border/40"><div className="h-full rounded-full" style={{ width: `${t.mem_pct ?? 0}%`, background: t.mem_pct != null && t.mem_pct >= 90 ? AMBER : TEAL }} /></div>
-                    <span className="hw-mono w-8 text-right text-[9px] text-muted-foreground">{t.mem_pct != null ? `${t.mem_pct}%` : '—'}</span>
-                  </div>
-                </div>
-              ))}
-              {snmp.length === 0 && <div className="hw-mono text-[10px] text-muted-foreground">Sin equipos con SNMP.</div>}
-            </div>
-          </Panel>
+          <Panel title="Agentes Wazuh" icon={Boxes}><AgentsGrid data={agents} /></Panel>
           <Panel title="Alertas activas" icon={TriangleAlert}>
             {down.length === 0 ? (
               <div className="hw-mono flex items-center gap-2 text-[11px]" style={{ color: UP }}><CircleCheck className="h-4 w-4" /> Todo operativo</div>
@@ -310,14 +333,19 @@ export default function NocCommand() {
         </div>
       </div>
 
-      {/* Fila inferior: gráficos */}
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {/* Fila media: heatmap + latencia + uptime */}
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Panel title="Mapa de calor CPU/RAM" icon={Cpu}><Heatmap hosts={snmp} /></Panel>
         <Panel title="Latencia por objetivo" icon={GaugeIcon}>
           <BarsV points={latRows.length ? latRows : [{ label: '—', v: 0, max: 1 }]} color={TEAL} />
         </Panel>
         <Panel title="Uptime 30d por objetivo" icon={ShieldCheck}>
           <div className="max-h-28 overflow-y-auto pr-1"><BarsH rows={upRows} /></div>
         </Panel>
+      </div>
+
+      {/* Fila inferior: tendencia + eventos */}
+      <div className="grid gap-3 lg:grid-cols-2">
         <Panel title="Caídas por día (14d)" icon={TriangleAlert}>
           <BarsV points={(trend?.puntos ?? []).map((p) => ({ label: p.dia, v: p.caidas, max: 1, tip: `${p.dia}: ${p.caidas} caída(s), ${p.equipos} equipo(s)` }))} color={AMBER} />
         </Panel>
@@ -336,7 +364,7 @@ export default function NocCommand() {
         </Panel>
       </div>
 
-      <p className="hw-mono flex items-center gap-1 text-[10px] text-muted-foreground"><Activity className="h-3 w-3" style={{ color: TEAL }} /> Datos en vivo · disponibilidad 15s · uptime/tendencia 60s · fuente NOC (chequeos activos + SNMP solo lectura).</p>
+      <p className="hw-mono flex items-center gap-1 text-[10px] text-muted-foreground"><Activity className="h-3 w-3" style={{ color: TEAL }} /> Datos en vivo · disponibilidad 15s · uptime/tendencia/agentes 60s · fuente NOC (chequeos activos + SNMP) y API de Wazuh (agentes).</p>
     </div>
   );
 }

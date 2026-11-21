@@ -20,6 +20,7 @@ import { env } from '../../config/env';
 import { HttpError } from '../auth/auth.service';
 import { sendTelegram } from '../notifications/telegram.service';
 import { getOverview, getReport, getTrend, addTarget, setEnabled, setSnmp, deleteTarget, runChecks, ensureNocSchema, isNocEnabled, SOC_GROUPS } from './noc.service';
+import { getAgentsSummary, getAgents } from '../wazuh/agents.service';
 
 export const nocRouter = Router();
 nocRouter.use(authenticate);
@@ -37,6 +38,14 @@ nocRouter.get('/report', canManage, async (req, res) => {
 });
 nocRouter.get('/trend', canManage, async (req, res) => {
   try { const days = req.query.days != null ? Number(req.query.days) : 14; res.json(await getTrend(Number.isFinite(days) ? days : 14)); } catch (e) { handle(e, res); }
+});
+// Estado de agentes Wazuh (reutiliza wazuh/agents.service). Tolerante a fallo de la API.
+nocRouter.get('/agents', canManage, async (_req, res) => {
+  try {
+    const [summary, list] = await Promise.all([getAgentsSummary().catch(() => null), getAgents(100).catch(() => [])]);
+    const agents = list.filter((a) => a.id !== '000').map((a) => ({ id: a.id, name: a.name, ip: a.ip, status: a.status, health: a.health, kind: a.kind, needsAttention: a.needsAttention, staleDays: a.staleDays }));
+    res.json({ ok: summary != null, summary, agents });
+  } catch (e) { handle(e, res); }
 });
 nocRouter.post('/targets', canManage, async (req, res) => {
   try {
