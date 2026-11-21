@@ -16,27 +16,29 @@ USER = os.environ.get("SONICWALL_USER", "admin")
 PASS = os.environ.get("SONICWALL_PASS", "")
 GROUP = "HexWatch-Blocked-IPs"
 CTX = ssl.create_default_context(); CTX.check_hostname=False; CTX.verify_mode=ssl.CERT_NONE
-_cookie = None
+_bearer = None
 
 def call(method, path, body=None, auth=False):
-    global _cookie
+    global _bearer
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(BASE + path, data=data, method=method)
     req.add_header("Content-Type", "application/json")
     if auth:
         req.add_header("Authorization", "Basic " + base64.b64encode(f"{USER}:{PASS}".encode()).decode())
-    if _cookie:
-        req.add_header("Cookie", _cookie)
+    elif _bearer:
+        req.add_header("Authorization", "Bearer " + _bearer)
     try:
         r = urllib.request.urlopen(req, context=CTX, timeout=20)
-        sc = r.headers.get("Set-Cookie")
-        if sc: _cookie = sc.split(";")[0]
         raw = r.read().decode()
         return r.status, (json.loads(raw) if raw.strip().startswith(("{","[")) else raw)
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode()
 
-def login(): call("POST", "/auth", auth=True)
+def login():
+    global _bearer
+    st, r = call("POST", "/auth", auth=True)
+    try: _bearer = r["status"]["info"][0].get("bearer_token")
+    except Exception: _bearer = None
 def cfg():
     st, r = call("POST", "/config-mode")
     try: return r["status"]["info"][0].get("read_only", "No")
