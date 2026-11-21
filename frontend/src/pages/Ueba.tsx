@@ -7,11 +7,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import {
   UserSearch, RefreshCw, Loader2, Play, Check, Ban, RotateCcw, Settings2,
-  Plane, Globe, Clock, MonitorSmartphone, ShieldAlert,
+  Plane, Globe, Clock, MonitorSmartphone, ShieldAlert, History,
 } from 'lucide-react';
 import {
   uebaApi, DETECTOR_ES, type Anomaly, type Detector, type Severity, type UebaSettings, type MonitoredEntity,
 } from '@/lib/ueba';
+import UebaTimeline from './UebaTimeline';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -83,6 +84,7 @@ function Evidence({ a }: { a: Anomaly }) {
 }
 
 export default function Ueba() {
+  const [tab, setTab] = useState<'comp' | 'tl'>('comp');
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [data, setData] = useState<{ open: number; anomalies: Anomaly[] }>({ open: 0, anomalies: [] });
@@ -164,6 +166,13 @@ export default function Ueba() {
         </div>
       </div>
 
+      <div className="flex gap-1 border-b border-border">
+        <button onClick={() => setTab('comp')} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'comp' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}><UserSearch className="mr-1 inline h-4 w-4" /> Comportamiento</button>
+        <button onClick={() => setTab('tl')} className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'tl' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}><History className="mr-1 inline h-4 w-4" /> Línea de tiempo</button>
+      </div>
+
+      {tab === 'tl' && <UebaTimeline embedded />}
+      {tab === 'comp' && (<>
       {note && <Card><CardContent className="p-3 text-sm text-emerald-700">{note}</CardContent></Card>}
       {error && <Card><CardContent className="p-3 text-sm text-amber-700">{error}</CardContent></Card>}
 
@@ -293,6 +302,7 @@ export default function Ueba() {
           )}
         </CardContent>
       </Card>
+      </>)}
     </div>
   );
 }

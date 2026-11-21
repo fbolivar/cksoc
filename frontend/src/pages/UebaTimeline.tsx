@@ -15,7 +15,7 @@ const BAND_COLOR: Record<TlEvent['band'], string> = { critico: 'destructive', al
 const SRC_COLOR: Record<string, string> = { M365: 'hsl(210 90% 62%)', Endpoint: 'hsl(28 90% 58%)', Red: 'hsl(190 80% 55%)', Sistema: 'hsl(265 70% 66%)' };
 function fmt(ts: string) { return ts ? new Date(ts).toLocaleString('es-CO') : ''; }
 
-export default function UebaTimeline() {
+export default function UebaTimeline({ embedded = false }: { embedded?: boolean }) {
   const [user, setUser] = useState('');
   const [range, setRange] = useState('7d');
   const [tl, setTl] = useState<UserTimeline | null>(null);
@@ -35,8 +35,9 @@ export default function UebaTimeline() {
   const eventos = (tl?.events ?? []).filter((e) => !soloAnom || e.anomalias.length);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className={embedded ? 'space-y-5' : 'mx-auto max-w-4xl space-y-5'}>
       <div className="flex flex-wrap items-end justify-between gap-3">
+{!embedded && (
         <div>
           <h1 className="hw-mono flex items-center gap-2 text-2xl font-bold tracking-tight">
             <History className="h-6 w-6 text-primary" /> UEBA · TIMELINE
@@ -45,6 +46,7 @@ export default function UebaTimeline() {
             HISTORIA DEL USUARIO // ANOMALÍAS PUNTUADAS // ESTILO SMART TIMELINE
           </p>
         </div>
+        )}
         <div className="flex items-center gap-1">
           {['24h', '7d', '30d'].map((x) => (
             <Button key={x} size="sm" variant={range === x ? 'default' : 'ghost'} className="h-7 px-2 text-[11px]" onClick={() => setRange(x)}>{x}</Button>
