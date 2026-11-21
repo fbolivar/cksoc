@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ShieldAlert, CheckCircle2, Bug, Server, Gauge as GaugeIcon, ShieldCheck, TriangleAlert,
-  Globe2, MonitorDot, Activity, ScanLine, ChevronRight, Radio, Zap,
+  Globe2, MonitorDot, Activity, ScanLine, ChevronRight, Radio, Zap, Timer,
 } from 'lucide-react';
 import { overviewApi, type OverviewData, type AlertTrend, type AssetRadar } from '@/lib/overview';
 import { metricsApi, type SocMetrics } from '@/lib/metrics';
@@ -257,6 +257,7 @@ export default function CommandCenter() {
   const [flows, setFlows] = useState<FlowsOverview | null>(null);
   const [attacks, setAttacks] = useState<AttackOrigin[]>([]);
   const [blockedToday, setBlockedToday] = useState<number | null>(null);
+  const [contain30d, setContain30d] = useState<number | null>(null);
   const [radar, setRadar] = useState<AssetRadar | null>(null);
   const [clock, setClock] = useState(new Date());
 
@@ -276,7 +277,10 @@ export default function CommandCenter() {
     if (at.status === 'fulfilled') setAttacks(at.value.origins);
     if (hb.status === 'fulfilled') {
       const today = new Date().toDateString();
-      setBlockedToday(hb.value.filter((h) => h.accion === 'block' && h.resultado === 'success' && new Date(h.created_at).toDateString() === today).length);
+      const d30 = Date.now() - 30 * 864e5;
+      const okBlocks = hb.value.filter((h) => h.accion === 'block' && h.resultado === 'success');
+      setBlockedToday(okBlocks.filter((h) => new Date(h.created_at).toDateString() === today).length);
+      setContain30d(okBlocks.filter((h) => new Date(h.created_at).getTime() >= d30).length);
     }
   }, []);
   useEffect(() => { void loadCore(); const i = setInterval(() => void loadCore(), 30_000); return () => clearInterval(i); }, [loadCore]);
@@ -292,6 +296,12 @@ export default function CommandCenter() {
   const vulnMedia = Math.max(0, vulnTotal - vulnCrit - vulnAlta);
   const highRiskPct = vulnTotal > 0 ? Math.round(((vulnCrit + vulnAlta) / vulnTotal) * 100) : null;
   const resueltos = soc ? soc.counts.resuelto + soc.counts.cerrado : null;
+  const mttrMin = soc?.mttr.avgMinutes ?? null;
+  const mttaMin = soc?.mtta.avgMinutes ?? null;
+  const fmtDur = (m: number | null) => (m == null ? '—' : m < 60 ? `${Math.round(m)}m` : `${(m / 60).toFixed(1)}h`);
+  const mttrStr = fmtDur(mttrMin);
+  const mttaStr = fmtDur(mttaMin);
+  const hoursSaved = contain30d != null ? Math.round((contain30d * 18) / 60) : null;
   const incOpen = soc ? soc.counts.abierto + soc.counts.en_curso : null;
   const risk = useMemo(() => {
     const crit = ov?.amenazas.criticas24h ?? 0; const breached = soc?.sla.overallPct != null ? 0 : 0;
@@ -352,6 +362,21 @@ export default function CommandCenter() {
         <Kpi icon={Server} value={ov?.agentes.activos != null ? `${ov.agentes.activos}/${ov.agentes.total ?? '—'}` : '—'} label="Agentes activos" color={TEAL} to="/activos" />
         <Kpi icon={GaugeIcon} value={risk} label="Riesgo global" color={risk > 66 ? RED : risk > 40 ? ORANGE : GREEN} />
         <Kpi icon={TriangleAlert} value={incOpen ?? '—'} label="Incidentes abiertos" color={incOpen && incOpen > 0 ? ORANGE : GREEN} to="/incidentes" />
+      </div>
+
+      {/* Eficiencia operativa (MTTR + automatizacion) */}
+      <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-card/30 p-2 sm:grid-cols-4">
+        {[
+          { Ic: Timer, label: 'MTTR (resolucion)', value: mttrStr, color: mttrMin != null && mttrMin <= 480 ? GREEN : ORANGE },
+          { Ic: Radio, label: 'MTTA (1a respuesta)', value: mttaStr, color: TEAL },
+          { Ic: ShieldX, label: 'Contenciones (30d)', value: contain30d ?? '—', color: CYAN },
+          { Ic: Zap, label: 'Horas ahorradas (est.)', value: hoursSaved != null ? `~${hoursSaved}h` : '—', color: GREEN },
+        ].map((st, i) => (
+          <div key={i} className="flex items-center gap-2 px-2 py-1" title="Eficiencia operativa del SOC">
+            <st.Ic className="h-4 w-4 shrink-0" style={{ color: st.color }} />
+            <div><div className="hw-mono text-lg font-bold leading-none" style={{ color: st.color }}>{st.value}</div><div className="text-[10px] text-muted-foreground">{st.label}</div></div>
+          </div>
+        ))}
       </div>
 
       {/* Actividad de amenazas + Vulnerabilidades */}
