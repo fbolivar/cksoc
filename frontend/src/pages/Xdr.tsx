@@ -5,9 +5,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AxiosError } from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Share2, Loader2, Search, ArrowLeft, ShieldAlert, Briefcase } from 'lucide-react';
+import { Share2, Loader2, Search, ArrowLeft, ShieldAlert, Briefcase, Ban } from 'lucide-react';
 import { xdrApi, type ActivityGroup, type ActivityGraph, type GraphNode, type EntType } from '@/lib/xdr';
 import { incidentsApi, type Severity } from '@/lib/incidents';
+import { responseApi } from '@/lib/response';
+import { BlockModal } from '@/components/response/BlockModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +63,7 @@ export default function Xdr() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [incBusy, setIncBusy] = useState(false);
+  const [blockIp, setBlockIp] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const loadGroups = useCallback(async () => {
@@ -150,6 +153,11 @@ export default function Xdr() {
               <Button size="sm" variant="outline" onClick={() => createIncidentFromGraph(graph)} disabled={incBusy}>
                 {incBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Briefcase className="h-4 w-4" />} Crear incidente
               </Button>
+              {graph.seed.type === 'ip' && (
+                <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/10" onClick={() => setBlockIp(graph.seed.value)}>
+                  <Ban className="h-4 w-4" /> Bloquear IP
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => setGraph(null)}><ArrowLeft className="h-4 w-4" /> Grupos</Button>
             </div>
           </CardHeader>
@@ -216,6 +224,11 @@ export default function Xdr() {
             </p>
           </CardContent>
         </Card>
+      )}
+      {blockIp && (
+        <BlockModal ip={blockIp} context={`Investigacion XDR de ${blockIp}`}
+          onConfirm={async (m) => { await responseApi.block(blockIp, m); setBlockIp(null); setMsg('IP bloqueada en el SonicWall.'); }}
+          onCancel={() => setBlockIp(null)} />
       )}
     </div>
   );
