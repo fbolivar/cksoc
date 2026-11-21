@@ -180,8 +180,10 @@ export async function runAgenticoCycle(opts: { dryRun?: boolean } = {}): Promise
   // ---------- 2) DECISIÓN (segura) ----------
   // Candidatos: origen del mapa (ya excluye interna/propia-WAN/CDN/SaaS) que esté en un
   // IOC o con reputación AbuseIPDB >= umbral, y que NO esté ya en cuarentena.
+  const PUBLIC_DNS = new Set(['8.8.8.8', '8.8.4.4', '1.1.1.1', '1.0.0.1', '9.9.9.9', '149.112.112.112', '208.67.222.222', '208.67.220.220', '94.140.14.14']);
   const candidatos = threats
     .filter((o) => o.ips[0] && !blockedSet.has(o.ips[0]))
+    .filter((o) => !PUBLIC_DNS.has(o.ips[0]) && !benignIp(o.ips[0])) // nunca bloquear DNS publico/infra legitima aunque este en un IOC
     .filter((o) => Boolean(o.ioc) || o.abuseScore >= env.AGENTICO_MIN_ABUSE)
     .sort((a, b) => (Number(Boolean(b.ioc)) - Number(Boolean(a.ioc))) || (b.abuseScore - a.abuseScore))
     .slice(0, env.AGENTICO_MAX_BLOCKS);
