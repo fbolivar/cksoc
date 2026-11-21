@@ -45,6 +45,7 @@ const CorrelationPage = lazy(() => import('@/pages/Correlation'));
 const Soar = lazy(() => import('@/pages/Soar'));
 const Ueba = lazy(() => import('@/pages/Ueba'));
 const EntityRisk = lazy(() => import('@/pages/EntityRisk'));
+const IncidentDossier = lazy(() => import('@/pages/IncidentDossier'));
 const Ndr = lazy(() => import('@/pages/Ndr'));
 const Office365 = lazy(() => import('@/pages/Office365'));
 const EmailPosture = lazy(() => import('@/pages/EmailPosture'));
@@ -426,6 +427,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <EntityRisk />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/dossier"
+        element={
+          <Protected>
+            <AppLayout>
+              <IncidentDossier />
             </AppLayout>
           </Protected>
         }

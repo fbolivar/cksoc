@@ -83,6 +83,8 @@ import { soarRouter, startSoarScheduler } from './modules/soar/soar.routes';
 import { uebaRouter, startUebaScheduler } from './modules/ueba/ueba.routes';
 import { agenticoRouter, startAgenticoScheduler, startAgenticoUrgentWatch } from './modules/agentico/agentico.routes';
 import { copilotRouter } from './modules/copilot/copilot.routes';
+import { dossierRouter } from './modules/incident-dossier/dossier.routes';
+import { ensureDossierSchema } from './modules/incident-dossier/dossier.service';
 import { actionCenterRouter } from './modules/action-center/action-center.routes';
 import { startActionDigestScheduler } from './modules/action-center/action-center.scheduler';
 import { setIo } from './modules/realtime/bus';
@@ -161,6 +163,7 @@ app.use('/api/noc', nocRouter);
 app.use('/api/itdr', itdrRouter);
 app.use('/api/bec', becRouter);
 app.use('/api/xdr', xdrRouter);
+app.use('/api/dossier', dossierRouter);
 app.use('/api/drp', drpRouter);
 app.use('/api/edr', edrRouter);
 app.use('/api/flows', flowsRouter);
@@ -299,6 +302,7 @@ startActionDigestScheduler();
 
 // UEBA: motor de analítica de comportamiento (escanea cada 15 min)
 startUebaScheduler();
+ensureDossierSchema().catch(() => {});
 
 // Inteligencia de CVEs (CISA KEV diario + EPSS cada 6 h) para priorizar vulns
 startCveIntelScheduler();
