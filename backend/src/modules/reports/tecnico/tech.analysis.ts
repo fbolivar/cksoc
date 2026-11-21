@@ -13,6 +13,8 @@
  */
 import type { TechMetrics } from './tech.data';
 import { fechaLarga } from '../executive/periodo';
+import { isSocInfra } from '../../wazuh/agents.service';
+import { clientVulnResumen } from '../../vulnerabilities/vuln.service';
 
 export type SevTecnica = 'critica' | 'alta' | 'media' | 'baja' | 'info';
 export type Confianza = 'alta' | 'media' | 'baja';
@@ -495,15 +497,16 @@ export function detectarHallazgos(m: TechMetrics): HallazgoTecnico[] {
     });
   }
 
-  if (v && (v.resumen.critical > 0 || v.resumen.high > 0)) {
-    const porHost = (v.porAgente ?? []).slice(0, 6);
+  const vcli = v ? clientVulnResumen(v) : null;
+  if (v && vcli && (vcli.critical > 0 || vcli.high > 0)) {
+    const porHost = (v.porAgente ?? []).filter((a) => !isSocInfra(a.agent)).slice(0, 6);
     h.push({
       id: 'vul-criticas',
       dominio: 'vulnerabilidades',
       titulo: 'Volumen relevante de vulnerabilidades críticas y altas sin remediar',
-      severidad: v.resumen.critical >= 20 ? 'alta' : 'media',
+      severidad: vcli.critical >= 20 ? 'alta' : 'media',
       confianza: 'alta',
-      evidencia: `${fmt(v.resumen.critical)} críticas y ${fmt(v.resumen.high)} altas distribuidas en ${fmt(v.resumen.agentes)} host(s); ${fmt(v.resumen.cves)} CVE distintos.`,
+      evidencia: `${fmt(vcli.critical)} críticas y ${fmt(vcli.high)} altas distribuidas en ${fmt(vcli.equipos)} host(s) del cliente; ${fmt(v.resumen.cves)} CVE distintos.`,
       detalle: porHost.map((a) => `${a.agent} — ${fmt(a.total)} vulnerabilidades (${fmt(a.critical)} críticas, ${fmt(a.high)} altas)`),
       impacto: 'El volumen impide remediar todo a la vez; sin priorización por riesgo real (KEV + EPSS + exposición) el esfuerzo se dispersa en CVE que nunca se explotarán mientras quedan abiertos los que sí.',
       consulta: null,

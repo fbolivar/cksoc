@@ -177,7 +177,7 @@ function reglasExcluidas(): unknown[] {
   return [{
     bool: {
       must_not: [
-        ...socInfraMustNot(), // no contar la infra del SOC (cs-soc-*, pmx-soc, gvm-soc) en el reporte del cliente
+        ...socInfraMustNot({ keepFirewall: true }), // no contar la infra del SOC (pero conservar el firewall = perimetro del cliente) (cs-soc-*, pmx-soc, gvm-soc) en el reporte del cliente
         { terms: { 'rule.id': noiseRuleIds } },
         { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
         // 100600 benigno: exfil interna (egress RFC1918), DVR (srcip) y relays HexDesk. El externo real se conserva.

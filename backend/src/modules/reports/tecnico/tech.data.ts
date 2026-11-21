@@ -13,7 +13,7 @@ import { getIndexerClient } from '../../wazuh/wazuh.client';
 import { env } from '../../../config/env';
 import { query } from '../../../config/db';
 import { geolocate, isPublicIP } from '../../geo/geoip.service';
-import { getAgents, getAgentsSummary, type AgentItem } from '../../wazuh/agents.service';
+import { getAgents, getAgentsSummary, socInfraMustNot, isSocInfra, type AgentItem } from '../../wazuh/agents.service';
 import { getVulnerabilities, type VulnData } from '../../vulnerabilities/vuln.service';
 import { getSca, type ScaData } from '../../sca/sca.service';
 import { getCoverage, type CoverageData } from '../../mitre/mitre.service';
@@ -239,6 +239,7 @@ function reglasExcluidas(): unknown[] {
   return [{
     bool: {
       must_not: [
+        ...socInfraMustNot({ keepFirewall: true }), // excluir ruido de servidores del SOC, conservando el firewall (igual que exec)
         { terms: { 'rule.id': noiseRuleIds } },
         { terms: { 'rule.groups': ['sca', 'vulnerability-detector'] } },
         {
@@ -409,7 +410,7 @@ async function topAgentes(p: Periodo): Promise<AgenteTop[]> {
       },
     },
   });
-  return (data?.aggregations?.a?.buckets ?? []).map((b) => ({
+  return (data?.aggregations?.a?.buckets ?? []).filter((b) => !isSocInfra(b.key)).map((b) => ({
     agente: b.key,
     total: b.doc_count,
     criticos: b.crit?.doc_count ?? 0,

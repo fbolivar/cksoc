@@ -163,9 +163,15 @@ export function isSocInfra(name: string): boolean {
   return SOC_INFRA_RE.test(n) || reportExcludeHosts().includes(n);
 }
 /** Clausulas must_not para excluir la infra del SOC en queries al Indexer (agent.name). */
-export function socInfraMustNot(): unknown[] {
+export function socInfraMustNot(opts: { keepFirewall?: boolean } = {}): unknown[] {
+  // cs-soc-* es ruido de los servidores del SOC. Con keepFirewall se EXENTAN los
+  // eventos del firewall SonicWall (grupo 'sonicwall'): el perimetro del cliente se
+  // ingiere bajo el manager cs-soc-wazuh via syslog y esos ataques SI son del cliente.
+  const csSoc = opts.keepFirewall
+    ? { bool: { filter: [{ prefix: { 'agent.name': 'cs-soc-' } }, { bool: { must_not: [{ term: { 'rule.groups': 'sonicwall' } }] } }] } }
+    : { prefix: { 'agent.name': 'cs-soc-' } };
   const must: unknown[] = [
-    { prefix: { 'agent.name': 'cs-soc-' } },
+    csSoc,
     { prefix: { 'agent.name': 'pmx-soc' } },
     { prefix: { 'agent.name': 'gvm-soc' } },
   ];

@@ -20,6 +20,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { TechMetrics } from './tech.data';
+import { clientVulnResumen } from '../../vulnerabilities/vuln.service';
+import { isSocInfra } from '../../wazuh/agents.service';
 import { seccionVigilancia } from '../vigilancia.template';
 import {
   analizarTecnico, DOMINIOS, ETIQUETA_SEV,
@@ -434,10 +436,11 @@ function seccionDominios(m: TechMetrics): string {
   out += h3('3.5 Vulnerabilidades (estado actual)');
   if (m.vuln) {
     const v = m.vuln;
+    const vc = clientVulnResumen(v); // solo equipos del cliente (excluye infra del SOC), igual que el ejecutivo
     out += kpiGrid([
-      { valor: `${v.resumen.total >= 10_000 ? '≥ ' : ''}${fmt(v.resumen.total)}`, etiqueta: 'Detecciones', pie: `${fmt(v.resumen.cves)} CVE distintos` },
-      { valor: fmt(v.resumen.critical), etiqueta: 'Críticas', color: v.resumen.critical ? C.crit : C.ok },
-      { valor: fmt(v.resumen.high), etiqueta: 'Altas', color: v.resumen.high ? C.alta : C.ok },
+      { valor: `${vc.total >= 10_000 ? '≥ ' : ''}${fmt(vc.total)}`, etiqueta: 'Detecciones', pie: `${fmt(v.resumen.cves)} CVE distintos` },
+      { valor: fmt(vc.critical), etiqueta: 'Críticas', color: vc.critical ? C.crit : C.ok },
+      { valor: fmt(vc.high), etiqueta: 'Altas', color: vc.high ? C.alta : C.ok },
       { valor: fmt(v.resumen.kev), etiqueta: 'En catálogo KEV', pie: 'explotación activa', color: v.resumen.kev ? C.crit : C.ok },
     ]);
     if (v.topCve?.length) {
@@ -456,10 +459,11 @@ function seccionDominios(m: TechMetrics): string {
       );
       out += nota('Prioridad = CVSS ponderado + presencia en KEV + probabilidad de explotación (EPSS). Es el orden en el que conviene parchear.');
     }
-    if (v.porAgente?.length) {
+    const hostsCliente = (v.porAgente ?? []).filter((a) => !isSocInfra(a.agent));
+    if (hostsCliente.length) {
       out += tabla(
         ['Host', 'Total', 'Críticas', 'Altas'],
-        v.porAgente.slice(0, 10).map((a) => [`<b>${esc(a.agent)}</b>`, fmt(a.total), fmt(a.critical), fmt(a.high)]),
+        hostsCliente.slice(0, 10).map((a) => [`<b>${esc(a.agent)}</b>`, fmt(a.total), fmt(a.critical), fmt(a.high)]),
         { anchos: ['46%', '18%', '18%', '18%' ] }
       );
     }
