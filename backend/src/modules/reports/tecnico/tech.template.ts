@@ -438,12 +438,15 @@ function seccionDominios(m: TechMetrics): string {
     const v = m.vuln;
     const vc = clientVulnResumen(v); // solo equipos del cliente (excluye infra del SOC), igual que el ejecutivo
     out += kpiGrid([
-      { valor: `${vc.total >= 10_000 ? '≥ ' : ''}${fmt(vc.total)}`, etiqueta: 'Detecciones', pie: `${fmt(v.resumen.cves)} CVE distintos` },
+      { valor: `${vc.total >= 10_000 ? '≥ ' : ''}${fmt(vc.total)}`, etiqueta: 'Detecciones', pie: vc.total ? `${fmt(v.resumen.cves)} CVE distintos` : 'endpoints del cliente' },
       { valor: fmt(vc.critical), etiqueta: 'Críticas', color: vc.critical ? C.crit : C.ok },
       { valor: fmt(vc.high), etiqueta: 'Altas', color: vc.high ? C.alta : C.ok },
       { valor: fmt(v.resumen.kev), etiqueta: 'En catálogo KEV', pie: 'explotación activa', color: v.resumen.kev ? C.crit : C.ok },
     ]);
-    if (v.topCve?.length) {
+    if (vc.total === 0) {
+      out += nota('Sin vulnerabilidades reportadas en endpoints del cliente en la ventana. La postura de la infraestructura del SOC (parcheo de los servidores del SOC) se gestiona por separado.');
+    }
+    if (vc.total > 0 && v.topCve?.length) {
       out += tabla(
         ['CVE', 'Severidad', 'CVSS', 'EPSS', 'KEV', 'Prioridad', 'Hosts'],
         v.topCve.slice(0, 12).map((c) => [

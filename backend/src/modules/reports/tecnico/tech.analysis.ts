@@ -923,10 +923,16 @@ function observaciones(m: TechMetrics, hs: HallazgoTecnico[]): string {
     b.push('**Mapeo ATT&CK.** Ningún evento del periodo trae mapeo a técnicas de ATT&CK. Sin ese mapeo no es posible razonar sobre cobertura ni comunicar el riesgo en un lenguaje comparable con otras organizaciones.');
   }
 
-  // Postura acumulada
+  // Postura acumulada (vulnerabilidades: solo endpoints del cliente; infra del SOC aparte)
   if (m.vuln || m.sca) {
+    const vcli = m.vuln ? clientVulnResumen(m.vuln) : null;
+    const deudaVuln = vcli
+      ? (vcli.critical > 0 || vcli.high > 0
+          ? `${fmt(vcli.critical)} vulnerabilidades críticas y ${fmt(vcli.high)} altas en endpoints del cliente. `
+          : `Sin vulnerabilidades pendientes en los endpoints del cliente (la postura de la infraestructura del SOC se gestiona por separado). `)
+      : '';
     b.push(
-      `**Deuda de seguridad acumulada.** ${m.vuln ? `${fmt(m.vuln.resumen.critical)} vulnerabilidades críticas y ${fmt(m.vuln.resumen.high)} altas${m.vuln.resumen.kev ? `, de las cuales ${fmt(m.vuln.resumen.kev)} con explotación activa confirmada` : ''}. ` : ''}${m.sca ? `Configuración segura en el ${m.sca.resumen.scorePromedio} % del estándar CIS. ` : ''}Ninguna de estas condiciones genera alertas por sí sola, pero son las que determinan el alcance real de un compromiso: no cambian el "si ocurre", cambian el "hasta dónde llega".`
+      `**Deuda de seguridad acumulada.** ${deudaVuln}${m.sca ? `Configuración segura en el ${m.sca.resumen.scorePromedio} % del estándar CIS. ` : ''}Ninguna de estas condiciones genera alertas por sí sola, pero son las que determinan el alcance real de un compromiso: no cambian el "si ocurre", cambian el "hasta dónde llega".`
     );
   }
 
