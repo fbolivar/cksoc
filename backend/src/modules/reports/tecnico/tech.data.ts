@@ -305,7 +305,7 @@ async function volumenPorNivel(p: Periodo): Promise<TechMetrics['porNivel']> {
     out.push({
       banda,
       rango: rangoTxt,
-      conteo: await contar(p, [{ range: { 'rule.level': { gte: min, lte: max } } }, ...reglasExcluidas()]),
+      conteo: await contar(p, [{ range: { 'rule.level': { gte: min, lte: max } } }, ...(min >= 8 ? reglasExcluidas() : [])]),
     });
   }
   return out;

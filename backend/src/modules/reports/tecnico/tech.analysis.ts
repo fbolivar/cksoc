@@ -845,7 +845,7 @@ function resumenTecnico(m: TechMetrics, hs: HallazgoTecnico[]): string {
   const partes: string[] = [];
 
   partes.push(
-    `Durante ${m.periodo.label} la plataforma procesó **${fmt(m.total)}** eventos provenientes de ${m.agentes.activos} agente(s) activo(s), disparando **${fmt(m.reglasDistintas)}** reglas distintas. La distribución por severidad fue: ${fmt(m.criticos)} de nivel crítico (≥12), ${fmt(m.altos)} de nivel alto (8–11) y ${fmt(m.medios)} de nivel medio (5–7).`
+    `Durante ${m.periodo.label} la plataforma procesó **${fmt(m.total)}** eventos provenientes de ${m.agentes.activos ? `${m.agentes.activos} agente(s) activo(s)` : 'la telemetría de red y nube (SonicWall + O365)'}, disparando **${fmt(m.reglasDistintas)}** reglas distintas. La distribución por severidad fue: ${fmt(m.criticos)} de nivel crítico (≥12), ${fmt(m.altos)} de nivel alto (8–11) y ${fmt(m.medios)} de nivel medio (5–7).`
   );
 
   if (m.variacion.total !== null || m.variacion.criticos !== null) {
