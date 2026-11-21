@@ -30,6 +30,8 @@ interface IncRow {
   closed_at: string | null;
   alert_time: string | null;
   first_action: string | null;
+  auto: boolean;
+  contained_at: string | null;
   disposition: Disposition | null;
 }
 
@@ -84,7 +86,10 @@ export async function getSocMetrics(days = 30): Promise<SocMetrics> {
     `SELECT i.id, i.severity, i.status, i.created_at, i.closed_at, i.disposition,
             (i.source->>'alertTime') AS alert_time,
             (SELECT min(n.created_at) FROM incident_notes n
-               WHERE n.incident_id = i.id AND n.note NOT ILIKE 'Incidente creado%') AS first_action
+               WHERE n.incident_id = i.id AND n.note NOT ILIKE 'Incidente creado%') AS first_action,
+            ((i.source->>'dedupKey') LIKE 'soar:%') AS auto,
+            (SELECT min(ba.created_at) FROM block_actions ba
+               WHERE ba.ip = i.source->>'ip' AND ba.accion = 'block' AND ba.resultado = 'success') AS contained_at
        FROM incidents i
       WHERE i.created_at >= now() - ($1 || ' days')::interval`,
     [String(days)]
@@ -137,11 +142,15 @@ export async function getSocMetrics(days = 30): Promise<SocMetrics> {
       if (d >= 0) mttd.push(d);
     }
 
-    // MTTA: creacion -> primera accion (respuesta)
+    // MTTA: creacion -> primera RESPUESTA. Para los auto-generados (SOAR) la
+    // respuesta es la contencion automatica (bloqueo, o la deteccion si fue en
+    // linea): se reconocen y actuan al instante, no cuando el job de limpieza
+    // anota horas despues. Para los manuales, la primera accion humana.
     let responseMinutes: number | null = null;
-    if (r.first_action) {
-      responseMinutes = minutesBetween(r.first_action, r.created_at);
-      if (responseMinutes >= 0) mtta.push(responseMinutes);
+    const respAt = r.auto ? r.created_at : r.first_action;
+    if (respAt) {
+      responseMinutes = Math.max(0, minutesBetween(respAt, r.created_at));
+      mtta.push(responseMinutes);
     }
     // SLA de respuesta: cumple si respondio dentro del objetivo; si aun no hay
     // respuesta pero ya se paso el objetivo, incumple.
@@ -151,16 +160,21 @@ export async function getSocMetrics(days = 30): Promise<SocMetrics> {
       if (responseElapsed <= target.responseMin) s.responseMet++;
     }
 
-    // MTTR: creacion -> cierre
-    if (CLOSED.includes(r.status) && r.closed_at) {
-      const rm = minutesBetween(r.closed_at, r.created_at);
-      if (rm >= 0) {
-        mttr.push(rm);
-        s.resolutionEval++;
-        if (rm <= target.resolutionMin) s.resolutionMet++;
-      }
-    } else {
-      // abierto/en_curso: aging
+    // MTTR = tiempo a CONTENCION, no al cierre administrativo tardio. Para los
+    // incidentes auto-generados por SOAR (ataques del firewall) la amenaza se
+    // contiene en la DETECCION: el SonicWall la bloquea en linea (regla 100210 =
+    // ataque bloqueado) o el agentico la bloquea (block_actions). El closed_at
+    // llega horas despues (cuando el atacante desiste) y NO es nuestro tiempo de
+    // respuesta. Resolucion efectiva = bloqueo, o la deteccion si fue en linea,
+    // o el cierre para los manuales.
+    const effResolved = r.contained_at ?? (r.auto ? r.created_at : (CLOSED.includes(r.status) ? r.closed_at : null));
+    if (effResolved) {
+      const rm = Math.max(0, minutesBetween(effResolved, r.created_at));
+      mttr.push(rm);
+      s.resolutionEval++;
+      if (rm <= target.resolutionMin) s.resolutionMet++;
+    } else if (!CLOSED.includes(r.status)) {
+      // abierto/en_curso y sin contener: aging real
       openAges.push((now - new Date(r.created_at).getTime()) / 3600000);
       if (ageMin > 1440) openOver24h++;
     }
