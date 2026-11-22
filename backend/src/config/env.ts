@@ -46,6 +46,12 @@ const schema = z.object({
   // TLS self-signed de Wazuh: en redes internas suele ser necesario "false"
   WAZUH_TLS_REJECT_UNAUTHORIZED: boolish.default('false'),
 
+  // --- Observabilidad: API Proxmox VE (solo lectura, token PVEAuditor) ---
+  PROXMOX_API_URL: z.string().optional(),
+  PROXMOX_API_TOKENID: z.string().optional(),
+  PROXMOX_API_SECRET: z.string().optional(),
+  PROXMOX_NODE: z.string().optional(),
+
   // --- Notificaciones (Fase 3) - opcional ---
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),

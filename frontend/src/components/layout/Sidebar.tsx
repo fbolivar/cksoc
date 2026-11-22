@@ -50,6 +50,7 @@ import {
   Wrench,
   BrainCircuit,
   Gauge,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -142,6 +143,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/notificaciones', label: 'Notificaciones', icon: BellRing },
       { to: '/oncall', label: 'On-call · Turnos', icon: CalendarClock, roles: ['admin', 'analista'] },
       { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse },
+      { to: '/observabilidad', label: 'Observabilidad · Recursos', icon: TrendingUp, roles: ['admin', 'analista'] },
       { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, roles: ['admin'] },
       { to: '/auditoria', label: 'Auditoría del sistema', icon: ScrollText, roles: ['admin'] },
       { to: '/gestion', label: 'Gestión', icon: Users, roles: ['admin'] },
