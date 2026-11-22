@@ -69,6 +69,10 @@ export default function Reports() {
   const [shiftTurno, setShiftTurno] = useState<Turno>(new Date().getHours() < 12 ? 'am' : 'pm');
   const [shiftBusy, setShiftBusy] = useState<'send' | 'preview' | null>(null);
   const [fwBusy, setFwBusy] = useState(false);
+  // Dosier de auditoría (todo en uno)
+  const [dosBusy, setDosBusy] = useState(false);
+  const [dosPreset, setDosPreset] = useState('mes-anterior');
+  const [dosTech, setDosTech] = useState(true);
 
   const personalizado = preset === 'personalizado';
 
@@ -180,6 +184,16 @@ export default function Reports() {
     } catch (e) {
       flash('err', (e as AxiosError<{ error?: string }>).response?.data?.error ?? 'No se pudo generar la postura del firewall (revisa la conexión con el SonicWall).');
     } finally { setFwBusy(false); }
+  }
+
+  async function dossierDownload() {
+    setDosBusy(true);
+    try {
+      await reportsApi.downloadDossier({ preset: dosPreset, tecnico: dosTech });
+      flash('ok', 'Dosier de auditoría generado · PDF descargado.');
+    } catch (e) {
+      err(e, 'No se pudo generar el dosier de auditoría');
+    } finally { setDosBusy(false); }
   }
 
   /** Preselecciona título y periodo desde el catálogo. */
@@ -295,6 +309,43 @@ export default function Reports() {
             <Button size="sm" onClick={fwDownload} disabled={fwBusy}>
               {fwBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
               {fwBusy ? 'Generando PDF…' : 'Descargar postura (PDF)'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Dosier de auditoría (todo en uno) */}
+      {canManage && (
+        <div className="hud">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-[240px] flex-1">
+              <h3 className="flex items-center gap-2 text-[14px] font-bold">
+                <ClipboardCheck className="h-[18px] w-[18px] text-primary" /> Dosier de auditoría (todo en uno)
+              </h3>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                Un solo PDF con el <b>informe gerencial</b>, el de <b>cumplimiento normativo</b> (Ley 1581 / ISO 27001 + postura CIS)
+                y, opcional, el <b>anexo técnico</b>. Expediente único de evidencia para una auditoría.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <select value={dosPreset} onChange={(e) => setDosPreset(e.target.value)}
+                  className="h-8 rounded-md border border-border/60 bg-background px-2 text-[12px]">
+                  {(presets.filter((p) => !['personalizado', 'ultimas-24h', 'ultimas-72h'].includes(p.value)).length
+                    ? presets.filter((p) => !['personalizado', 'ultimas-24h', 'ultimas-72h'].includes(p.value))
+                    : [{ value: 'mes-anterior', label: 'Mes anterior' }]).map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                  <input type="checkbox" checked={dosTech} onChange={(e) => setDosTech(e.target.checked)} /> Incluir anexo técnico
+                </label>
+              </div>
+              <p className="hw-mono mt-2 text-[10px] text-muted-foreground/70">
+                Genera un PDF combinado{dosTech ? ' (~50 s con el anexo técnico)' : ' (~10 s)'}
+              </p>
+            </div>
+            <Button size="sm" onClick={dossierDownload} disabled={dosBusy}>
+              {dosBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+              {dosBusy ? 'Armando dosier…' : 'Descargar dosier (PDF)'}
             </Button>
           </div>
         </div>

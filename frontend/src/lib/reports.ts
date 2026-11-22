@@ -117,6 +117,24 @@ export const reportsApi = {
 
   remove: (id: string) => api.delete(`/reports/${id}`).then((r) => r.data),
 
+  /** Dosier de auditoría (todo en uno): gerencial + cumplimiento + anexo técnico. */
+  downloadDossier: async (params: { preset?: string; desde?: string; hasta?: string; tecnico?: boolean }) => {
+    const res = await api.get('/reports/dossier', {
+      params: { preset: params.preset, desde: params.desde, hasta: params.hasta, tecnico: params.tecnico === false ? '0' : '1' },
+      responseType: 'blob',
+      timeout: 150_000,
+    });
+    const m = /filename="?([^"]+)"?/.exec((res.headers['content-disposition'] as string) ?? '');
+    const url = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = m?.[1] ?? `Dosier-Auditoria-${new Date().toISOString().slice(0, 10)}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
   /** Descarga el PDF (respeta el JWT) y dispara la descarga en el navegador. */
   download: async (id: string, title: string) => {
     const res = await api.get(`/reports/${id}/download`, { responseType: 'blob' });
