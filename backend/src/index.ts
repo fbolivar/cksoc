@@ -60,6 +60,7 @@ import { darkwebRouter } from './modules/darkweb/darkweb.routes';
 import { takedownRouter } from './modules/takedown/takedown.routes';
 import { oauthAppsRouter, startOAuthAppsScheduler } from './modules/oauthapps/oauthapps.routes';
 import { idpersistRouter, startIdpersistScheduler } from './modules/idpersist/idpersist.routes';
+import { cloudDataRouter, startCloudDataScheduler } from './modules/clouddata/clouddata.routes';
 import { obsRouter } from './modules/obs/obs.routes';
 import { itdrRouter, startItdrScheduler } from './modules/itdr/itdr.routes';
 import { becRouter, startBecScheduler } from './modules/bec/bec.routes';
@@ -180,6 +181,7 @@ app.use('/api/darkweb', darkwebRouter);
 app.use('/api/takedown', takedownRouter);
 app.use('/api/oauth-apps', oauthAppsRouter);
 app.use('/api/idpersist', idpersistRouter);
+app.use('/api/clouddata', cloudDataRouter);
 app.use('/api/obs', obsRouter);
 app.use('/api/itdr', itdrRouter);
 app.use('/api/bec', becRouter);
@@ -316,6 +318,7 @@ startNocScheduler();
 startRansomwareScheduler();
 startOAuthAppsScheduler();
 startIdpersistScheduler();
+startCloudDataScheduler();
 
 // ITDR: amenazas de identidad (viaje imposible / MFA-fatigue) sobre logins O365
 startItdrScheduler();
