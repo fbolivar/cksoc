@@ -87,6 +87,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
       { to: '/ndr', label: 'NDR · Red', icon: Network, roles: ['admin', 'analista'] },
       { to: '/ransomware', label: 'Ransomware Intel', icon: Biohazard, roles: ['admin', 'analista'] },
+      { to: '/darkweb', label: 'Dark Web Radar', icon: Radar, roles: ['admin', 'analista'] },
       { to: '/flows', label: 'Flujos de red', icon: Waypoints, roles: ['admin', 'analista'] },
       { to: '/ddos', label: 'DDoS / Bots', icon: Waves, roles: ['admin', 'analista'] },
       { to: '/amenazas-api', label: 'Amenazas de API (OWASP)', icon: ListChecks, roles: ['admin', 'analista'] },
