@@ -2,9 +2,12 @@
  * Barra lateral de navegacion del SOC, organizada por secciones
  * (Panel / Amenazas / Postura / Operacion) para escalar como un SOC moderno.
  */
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
+  ChevronDown,
+  ChevronRight,
   Globe2,
   ShieldAlert,
   ListChecks,
@@ -72,12 +75,12 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/', label: 'SOC · Centro de Comando', icon: LayoutDashboard },
       { to: '/centro-accion', label: 'Centro de Acción', icon: Inbox, roles: ['admin', 'analista'] },
       { to: '/metricas', label: 'Métricas SOC', icon: LineChart, roles: ['admin', 'analista'] },
+      { to: '/exposicion', label: 'Scorecard de exposición', icon: Gauge, roles: ['admin', 'analista'] },
       { to: '/copiloto', label: 'Copiloto IA', icon: Sparkles, roles: ['admin', 'analista'] },
-      { to: '/noc/centro', label: 'NOC · Centro de Comando', icon: Gauge, roles: ['admin', 'analista'] },
     ],
   },
   {
-    title: 'Detectar',
+    title: 'Detección y amenazas',
     items: [
       { to: '/alertas', label: 'Alertas', icon: ListFilter },
       { to: '/deteccion', label: 'Detecciones', icon: SlidersHorizontal, roles: ['admin', 'analista'] },
@@ -85,21 +88,34 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/comportamiento', label: 'Comportamiento (UEBA)', icon: UserSearch, roles: ['admin', 'analista'] },
       { to: '/riesgo-entidad', label: 'Riesgo por entidad', icon: Target, roles: ['admin', 'analista'] },
       { to: '/mapa', label: 'Mapa de ataques', icon: Globe2 },
-      { to: '/ndr', label: 'NDR · Red', icon: Network, roles: ['admin', 'analista'] },
       { to: '/ransomware', label: 'Ransomware Intel', icon: Biohazard, roles: ['admin', 'analista'] },
       { to: '/darkweb', label: 'Dark Web Radar', icon: Radar, roles: ['admin', 'analista'] },
+      { to: '/seguridad-ia', label: 'Seguridad de IA', icon: BrainCircuit, roles: ['admin', 'analista'] },
+      { to: '/llm-guard', label: 'LLM Guardrail', icon: ShieldCheck, roles: ['admin', 'analista'] },
+    ],
+  },
+  {
+    title: 'Red',
+    items: [
+      { to: '/ndr', label: 'NDR · Red', icon: Network, roles: ['admin', 'analista'] },
       { to: '/flows', label: 'Flujos de red', icon: Waypoints, roles: ['admin', 'analista'] },
       { to: '/ddos', label: 'DDoS / Bots', icon: Waves, roles: ['admin', 'analista'] },
       { to: '/amenazas-api', label: 'Amenazas de API (OWASP)', icon: ListChecks, roles: ['admin', 'analista'] },
       { to: '/analitica-api', label: 'Analítica de API (endpoint)', icon: Activity, roles: ['admin', 'analista'] },
+    ],
+  },
+  {
+    title: 'Microsoft 365',
+    items: [
       { to: '/office365', label: 'Office 365', icon: Cloud, roles: ['admin', 'analista'] },
-      { to: '/oauth-apps', label: 'Consentimientos OAuth', icon: KeyRound, roles: ['admin', 'analista'] },
-      { to: '/riesgo-datos-nube', label: 'Riesgo de datos (nube)', icon: Cloud, roles: ['admin', 'analista'] },
       { to: '/itdr', label: 'ITDR · Identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
       { to: '/persistencia-identidad', label: 'Persistencia de identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
-      { to: '/seguridad-ia', label: 'Seguridad de IA', icon: BrainCircuit, roles: ['admin', 'analista'] },
-      { to: '/llm-guard', label: 'LLM Guardrail', icon: ShieldCheck, roles: ['admin', 'analista'] },
+      { to: '/oauth-apps', label: 'Consentimientos OAuth', icon: KeyRound, roles: ['admin', 'analista'] },
+      { to: '/riesgo-datos-nube', label: 'Riesgo de datos (nube)', icon: Cloud, roles: ['admin', 'analista'] },
       { to: '/bec', label: 'Correo · Anti-BEC', icon: MailWarning, roles: ['admin', 'analista'] },
+      { to: '/clawback', label: 'Claw-back de correo', icon: MailWarning, roles: ['admin'] },
+      { to: '/postura-correo', label: 'Postura de correo', icon: Mail, roles: ['admin', 'analista'] },
+      { to: '/postura-permisos', label: 'Postura de permisos', icon: Share2, roles: ['admin', 'analista'] },
     ],
   },
   {
@@ -118,15 +134,13 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta · SonicWall', icon: ShieldAlert, roles: ['admin', 'analista'] },
-      { to: '/clawback', label: 'Claw-back de correo', icon: MailWarning, roles: ['admin'] },
       { to: '/edr', label: 'EDR · Endpoint', icon: Cpu, roles: ['admin', 'analista'] },
       { to: '/soar', label: 'Automatización (SOAR)', icon: Workflow, roles: ['admin', 'analista'] },
     ],
   },
   {
-    title: 'Postura',
+    title: 'Postura y superficie',
     items: [
-      { to: '/exposicion', label: 'Scorecard de exposición', icon: Gauge, roles: ['admin', 'analista'] },
       { to: '/activos', label: 'Activos', icon: Server },
       { to: '/hygiene', label: 'IT Hygiene', icon: Activity },
       { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug },
@@ -137,23 +151,25 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/exposicion-apis', label: 'Exposición de APIs', icon: Boxes, roles: ['admin', 'analista'] },
       { to: '/drp', label: 'Riesgo digital (DRP)', icon: Eye, roles: ['admin', 'analista'] },
       { to: '/takedown', label: 'Generador de takedown', icon: Scale, roles: ['admin', 'analista'] },
-      { to: '/postura-correo', label: 'Postura de correo', icon: Mail, roles: ['admin', 'analista'] },
-      { to: '/postura-permisos', label: 'Postura de permisos (M365)', icon: Share2, roles: ['admin', 'analista'] },
       { to: '/factor-humano', label: 'Factor humano', icon: Users },
       { to: '/cumplimiento', label: 'Cumplimiento normativo', icon: Scale },
     ],
   },
   {
     title: 'Reportes',
-    items: [{ to: '/reportes', label: 'Reportes', icon: FileBarChart }, { to: '/resumen', label: 'Resumen Ejecutivo', icon: ShieldCheck }],
+    items: [
+      { to: '/reportes', label: 'Reportes', icon: FileBarChart },
+      { to: '/resumen', label: 'Resumen Ejecutivo', icon: ShieldCheck },
+    ],
   },
   {
-    title: 'Operación',
+    title: 'Operación y sistema',
     items: [
-      { to: '/notificaciones', label: 'Notificaciones', icon: BellRing },
-      { to: '/oncall', label: 'On-call · Turnos', icon: CalendarClock, roles: ['admin', 'analista'] },
+      { to: '/noc/centro', label: 'NOC · Centro de Comando', icon: Gauge, roles: ['admin', 'analista'] },
       { to: '/salud', label: 'Salud del SIEM', icon: HeartPulse },
       { to: '/observabilidad', label: 'Observabilidad · Recursos', icon: TrendingUp, roles: ['admin', 'analista'] },
+      { to: '/notificaciones', label: 'Notificaciones', icon: BellRing },
+      { to: '/oncall', label: 'On-call · Turnos', icon: CalendarClock, roles: ['admin', 'analista'] },
       { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, roles: ['admin'] },
       { to: '/auditoria', label: 'Auditoría del sistema', icon: ScrollText, roles: ['admin'] },
       { to: '/gestion', label: 'Gestión', icon: Users, roles: ['admin'] },
@@ -166,46 +182,63 @@ const sections: { title: string | null; items: Item[] }[] = [
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth();
   const role = (user?.role ?? 'lector') as Role;
-  // Filtra items por rol y descarta secciones que queden vacias.
   const visibles = sections
     .map((s) => ({ ...s, items: s.items.filter((i) => !i.roles || i.roles.includes(role)) }))
     .filter((s) => s.items.length > 0);
 
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem('hw_nav_collapsed') || '{}') as Record<string, boolean>; } catch { return {}; }
+  });
+  const toggle = (t: string) => setCollapsed((c) => {
+    const nc = { ...c, [t]: !c[t] };
+    try { localStorage.setItem('hw_nav_collapsed', JSON.stringify(nc)); } catch { /* per-viewer */ }
+    return nc;
+  });
+
   return (
-    <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-      {visibles.map((section, si) => (
-        <div key={si} className="space-y-1">
-          {section.title && (
-            <p className="hw-mono flex items-center gap-2 px-3 pb-1.5 pt-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-primary/80">
-              {section.title}
-              <span className="h-px flex-1 bg-border" />
-            </p>
-          )}
-          {section.items.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                cn(
-                  'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors',
-                  isActive
-                    ? 'bg-secondary font-semibold text-foreground'
-                    : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
-                  <span className="truncate">{label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </div>
-      ))}
+    <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4">
+      {visibles.map((section) => {
+        const isCol = section.title ? !!collapsed[section.title] : false;
+        return (
+          <div key={section.title ?? 'sec'} className="space-y-1">
+            {section.title && (
+              <button
+                type="button"
+                onClick={() => toggle(section.title as string)}
+                className="hw-mono flex w-full items-center gap-2 px-3 pb-1.5 pt-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-primary/80 hover:text-primary"
+              >
+                {isCol ? <ChevronRight className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />}
+                <span>{section.title}</span>
+                <span className="rounded bg-secondary px-1 py-px text-[8px] font-semibold text-muted-foreground">{section.items.length}</span>
+                <span className="h-px flex-1 bg-border" />
+              </button>
+            )}
+            {!isCol && section.items.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  cn(
+                    'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors',
+                    isActive
+                      ? 'bg-secondary font-semibold text-foreground'
+                      : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+                  )
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
+                    <span className="truncate">{label}</span>
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
+        );
+      })}
     </nav>
   );
 }
