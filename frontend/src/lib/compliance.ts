@@ -15,6 +15,16 @@ export interface ComplianceData {
 
 export const complianceApi = {
   get: (hours: number) => api.get<ComplianceData>('/compliance', { params: { hours } }).then((r) => r.data),
+  downloadReport: async (hours: number) => {
+    const res = await api.get('/compliance/report.pdf', { params: { hours }, responseType: 'blob', timeout: 90_000 });
+    const url = URL.createObjectURL(res.data as Blob);
+    const m = /filename="?([^"]+)"?/.exec((res.headers['content-disposition'] as string) ?? '');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = m?.[1] ?? `Informe-Cumplimiento-${new Date().toISOString().slice(0, 10)}.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export type Prioridad = 'Alta' | 'Media' | 'Baja' | 'Informativo';

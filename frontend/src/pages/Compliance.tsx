@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AxiosError } from 'axios';
-import { Scale, RefreshCw, Loader2, ExternalLink, Info, ShieldCheck } from 'lucide-react';
+import { Scale, RefreshCw, Loader2, ExternalLink, Info, ShieldCheck, FileDown } from 'lucide-react';
 import {
   complianceApi, FRAMEWORKS, PRIORIDAD_COLOR, APLICA_META, CONTROL_DESC,
   type ComplianceData,
@@ -24,6 +24,14 @@ export default function Compliance() {
   const [tab, setTab] = useState(FRAMEWORKS[0].key);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  async function descargar() {
+    setDownloading(true); setError(null);
+    try { await complianceApi.downloadReport(HOURS[range]); }
+    catch { setError('No se pudo generar el informe PDF'); }
+    finally { setDownloading(false); }
+  }
 
   async function load(r: Range) {
     setLoading(true); setError(null);
@@ -55,6 +63,9 @@ export default function Compliance() {
             options={[{ value: '7d', label: '7 días' }, { value: '30d', label: '30 días' }, { value: '90d', label: '90 días' }]} />
           <Button variant="outline" size="sm" onClick={() => load(range)} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} /> Actualizar
+          </Button>
+          <Button size="sm" onClick={descargar} disabled={downloading || loading}>
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />} Informe PDF
           </Button>
         </div>
       </div>
