@@ -55,21 +55,45 @@ const NIST_ISO: Record<string, string[]> = {
 const ISO_FALLBACK: Record<string, string[]> = {
   AC: ['A.5.15'], IA: ['A.8.5'], AU: ['A.8.15'], CM: ['A.8.9'], SC: ['A.8.20'], SI: ['A.8.16'], SA: ['A.8.25'],
 };
-// ---- Crosswalk -> Ley 1581 / Decreto 1074 (capa técnica del principio de seguridad) ----
-const NIST_LEY_FAM: Record<string, string[]> = {
-  AC: ['L.SEG'], IA: ['L.SEG'], AU: ['L.TRAZ'], SC: ['L.CIFR'], CM: ['L.INTEG'], SA: ['L.VULN'],
-};
-const NIST_LEY_CTRL: Record<string, string[]> = {
-  'SI.2': ['L.VULN'], 'SI.3': ['L.DET'], 'SI.4': ['L.DET'], 'SI.7': ['L.INTEG'],
-};
-const GDPR_LEY: Record<string, string[]> = {
-  'IV_32.2': ['L.CIFR', 'L.SEG'], 'II_5.1.f': ['L.INTEG'],
-};
-
 const fam = (id: string): string => id.split(/[._]/)[0];
 const nistToIso = (id: string): string[] => NIST_ISO[id] ?? ISO_FALLBACK[fam(id)] ?? [];
-const nistToLey = (id: string): string[] => NIST_LEY_CTRL[id] ?? NIST_LEY_FAM[fam(id)] ?? [];
-const gdprToLey = (id: string): string[] => GDPR_LEY[id] ?? [];
+
+// ---- Ley 1581/Decreto 1074: query DIRECTA por control (evidencia real por tipo de
+// evento, no crosswalk). Cada control se mapea a las señales que de verdad lo evidencian. ----
+const LEY_QUERIES: { id: string; src: string; q: Record<string, unknown> }[] = [
+  { id: 'L.SEG', src: 'señales: authentication, pam, sshd, sudo, adduser, access_control',
+    q: { terms: { 'rule.groups': ['authentication_success', 'authentication_failed', 'authentication_failures', 'pam', 'sshd', 'sudo', 'adduser', 'access_control', 'win_authentication'] } } },
+  { id: 'L.TRAZ', src: 'señales: config_changed, accesslog, web, nginx, syslog, audit',
+    q: { terms: { 'rule.groups': ['config_changed', 'accesslog', 'web', 'nginx', 'syslog', 'audit'] } } },
+  { id: 'L.DET', src: 'señales: ids, attack, malware, botnet, exfiltration, recon, web_scan',
+    q: { terms: { 'rule.groups': ['ids', 'attack', 'attacks', 'malware', 'botnet', 'exfiltration', 'recon', 'web_scan'] } } },
+  { id: 'L.INTEG', src: 'señales: syscheck (FIM), ossec',
+    q: { terms: { 'rule.groups': ['syscheck', 'syscheck_file', 'syscheck_entry_modified', 'syscheck_entry_added', 'syscheck_entry_deleted', 'ossec'] } } },
+  { id: 'L.VULN', src: 'señal: vulnerability-detector',
+    q: { terms: { 'rule.groups': ['vulnerability-detector'] } } },
+  { id: 'L.CIFR', src: 'señales: web_activity, dns, security_services',
+    q: { terms: { 'rule.groups': ['web_activity', 'dns', 'security_services'] } } },
+];
+// Ruido benigno de alto volumen dentro de esos grupos (FIM checksum / audit systemd).
+const LEY_NOISE = [{ terms: { 'rule.id': ['80792', '91578'] } }];
+
+async function getLey1581(client: ReturnType<typeof getIndexerClient>, hours: number): Promise<FrameworkResult> {
+  const aggs: Record<string, unknown> = {};
+  for (const ctl of LEY_QUERIES) aggs[ctl.id] = { filter: ctl.q, aggs: { lvl: { max: { field: 'rule.level' } } } };
+  aggs['_total'] = { filter: { bool: { should: LEY_QUERIES.map((c) => c.q), minimum_should_match: 1 } } };
+
+  const res = await client.post(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
+    size: 0,
+    query: { bool: { filter: [{ range: { timestamp: { gte: `now-${hours}h`, lte: 'now' } } }], must_not: LEY_NOISE } },
+    aggs,
+  });
+  const a = res.data.aggregations as Record<string, { doc_count?: number; lvl?: { value: number | null } }>;
+  const controles: Control[] = LEY_QUERIES
+    .map((ctl) => ({ id: ctl.id, count: a[ctl.id]?.doc_count ?? 0, level: Math.round(a[ctl.id]?.lvl?.value ?? 0), src: ctl.src }))
+    .filter((c) => c.count > 0)
+    .sort((x, y) => y.level - x.level || y.count - x.count);
+  return { total: a['_total']?.doc_count ?? 0, controlesCubiertos: controles.length, controles, derivado: false };
+}
 
 /** Construye un marco derivado agregando controles fuente por el crosswalk dado. */
 function deriveFrom(sources: { controles: Control[]; map: (id: string) => string[]; tag: string }[]): Control[] {
@@ -107,9 +131,6 @@ export async function getCompliance(hours: number): Promise<ComplianceData> {
       aggs: { lvl: { max: { field: 'rule.level' } } },
     };
   }
-  // Total de la capa Ley 1581 (eventos con mapeo NIST o GDPR).
-  aggs.ley_total = { filter: { bool: { should: [{ exists: { field: 'rule.nist_800_53' } }, { exists: { field: 'rule.gdpr' } }], minimum_should_match: 1 } } };
-
   let data: { aggregations: Record<string, { doc_count?: number; value?: number; buckets?: { key: string; doc_count: number; lvl?: { value: number | null } }[] }> };
   try {
     const res = await client.post(`/${env.WAZUH_ALERTS_INDEX}/_search`, {
@@ -137,22 +158,13 @@ export async function getCompliance(hours: number): Promise<ComplianceData> {
     };
   }
 
-  // Marcos derivados por crosswalk (lo que de verdad le aplica al cliente).
+  // ISO 27001: derivado por crosswalk desde NIST (Wazuh no lo etiqueta).
   const nistControles = frameworks.nist?.controles ?? [];
-  const gdprControles = frameworks.gdpr?.controles ?? [];
   const isoControles = deriveFrom([{ controles: nistControles, map: nistToIso, tag: 'NIST' }]);
   frameworks.iso27001 = { total: frameworks.nist?.total ?? 0, controlesCubiertos: isoControles.length, controles: isoControles, derivado: true };
 
-  const leyControles = deriveFrom([
-    { controles: nistControles, map: nistToLey, tag: 'NIST' },
-    { controles: gdprControles, map: gdprToLey, tag: 'GDPR' },
-  ]);
-  frameworks.ley1581 = {
-    total: data.aggregations['ley_total']?.doc_count ?? 0,
-    controlesCubiertos: leyControles.length,
-    controles: leyControles,
-    derivado: true,
-  };
+  // Ley 1581: evidencia DIRECTA por control (query propia por tipo de evento).
+  frameworks.ley1581 = await getLey1581(client, hours);
 
   const result: ComplianceData = { hours, frameworks };
   cache.set(hours, { at: Date.now(), data: result });

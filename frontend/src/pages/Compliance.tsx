@@ -143,12 +143,12 @@ export default function Compliance() {
                 <div className="space-y-2.5">
                   {fw.controles.map((c) => (
                     <div key={c.id} className="flex items-center gap-3">
-                      <span className="w-28 shrink-0 font-mono text-xs text-neon" title={c.src ? `Derivado de ${c.src}` : undefined}>{c.id}</span>
+                      <span className="w-28 shrink-0 font-mono text-xs text-neon" title={c.src ?? undefined}>{c.id}</span>
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex items-center justify-between gap-2">
                           <span className="flex min-w-0 items-center gap-1.5 truncate text-sm">
                             {c.level >= 8 && <span className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold text-white" style={{ background: c.level >= 12 ? '#dc2626' : '#f59e0b' }} title={`Máx. severidad nivel ${c.level}`}>N{c.level}</span>}
-                            <span className="truncate" title={c.src ? `Derivado de ${c.src}` : undefined}>{CONTROL_DESC[c.id] ?? 'Control del marco'}</span>
+                            <span className="truncate" title={c.src ?? undefined}>{CONTROL_DESC[c.id] ?? 'Control del marco'}</span>
                           </span>
                           <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{c.count.toLocaleString('es-CO')}</span>
                         </div>

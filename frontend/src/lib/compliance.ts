@@ -40,9 +40,9 @@ export interface FrameworkMeta {
  */
 export const FRAMEWORKS: FrameworkMeta[] = [
   {
-    key: 'ley1581', label: 'Ley 1581 (Habeas Data)', prioridad: 'Alta', aplica: 'si', catalogo: 6, derivado: true,
+    key: 'ley1581', label: 'Ley 1581 (Habeas Data)', prioridad: 'Alta', aplica: 'si', catalogo: 6,
     contexto: 'Ley 1581/2012 y Decreto 1074/2015: protección de datos personales en Colombia (vigilada por la SIC). Obligatoria para quien trata datos de terceros, como un bufete con datos de clientes.',
-    nota: 'Capa TÉCNICA del principio de seguridad (acceso, cifrado, trazabilidad, detección de incidentes). La parte legal/organizacional —registro RNBD, autorizaciones, política de tratamiento, respuesta a titulares— se gestiona aparte y no se detecta por logs.',
+    nota: 'Capa TÉCNICA del principio de seguridad, medida por evidencia DIRECTA por tipo de evento: control de acceso, trazabilidad, detección de incidentes, integridad (FIM), vulnerabilidades y comunicaciones. La parte legal/organizacional —registro RNBD, autorizaciones, política de tratamiento, respuesta a titulares— se gestiona aparte y no se detecta por logs.',
     ref: () => 'https://www.sic.gov.co/tema/proteccion-de-datos-personales',
   },
   {
