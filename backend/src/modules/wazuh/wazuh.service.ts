@@ -234,6 +234,11 @@ const MAX_WINDOW = 10000; // limite de deep paging de OpenSearch
 // para que el analista vea solo lo que un humano debe mirar. Se pueden mostrar
 // desactivando el toggle "Solo seguridad".
 const NOISE_GROUPS = ['sca', 'vulnerability-detector', 'system_error'];
+// Reglas de TELEMETRIA de alto volumen y baja severidad (visibilidad pura, no accionables
+// individualmente). Se OCULTAN del feed 'Solo seguridad' pero SIGUEN INDEXADAS: NDR, Flujos,
+// Mapa de ataques, forense y reportes las usan. 100205/100207 trafico SonicWall externo/web,
+// 100700 MailItemsAccessed de O365, 5501/5502 sesiones PAM de los servidores del SOC.
+const NOISE_RULE_IDS = ['100205', '100207', '100700', '5501', '5502'];
 
 function bandRange(band: string): Record<string, number> | null {
   switch (band) {
@@ -284,6 +289,7 @@ export async function searchAlerts(
   // sigue visible. Esto limpia el histórico previo al afinamiento sin borrar datos.
   const mustNot = p.triage ? [
     { terms: { 'rule.groups': NOISE_GROUPS } },
+    { terms: { 'rule.id': NOISE_RULE_IDS } },
     { bool: { filter: [{ term: { 'rule.id': '100600' } }], minimum_should_match: 1, should: [
       { prefix: { 'data.dstip': '192.168.' } },
       { prefix: { 'data.dstip': '10.' } },

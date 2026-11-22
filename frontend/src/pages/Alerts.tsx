@@ -258,7 +258,7 @@ export default function Alerts() {
           <Button
             variant={triage ? 'default' : 'outline'} size="sm"
             onClick={() => { setPage(0); setTriage((v) => !v); }}
-            title="Solo seguridad: oculta ruido no accionable (cumplimiento SCA, vulnerabilidades y errores de aplicación). Estos viven en sus propios módulos."
+            title="Solo seguridad: oculta el ruido no accionable (SCA, vulnerabilidades, errores) y la telemetría de alto volumen y baja severidad (tráfico de firewall, auditoría de correo, sesiones de los servidores). Todo sigue indexado y disponible en «Ver todo» y en sus módulos (NDR, Flujos, Reportes)."
           >
             <ShieldAlert className="h-4 w-4" /> {triage ? 'Solo seguridad' : 'Ver todo'}
           </Button>
