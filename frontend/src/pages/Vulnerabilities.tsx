@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { ShieldAlert, RefreshCw, Loader2, ExternalLink, Server, Package, Bug, Flame, Target } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Loader2, ExternalLink, Server, Package, Bug, Flame, Target, Biohazard } from 'lucide-react';
 import { vulnApi, SEV_COLOR, SEV_LABEL, priorityBand, type VulnData, type VulnItem, type Severity, type IntelStatus } from '@/lib/vulnerabilities';
 import { downloadCsv, fileStamp, type CsvCol } from '@/lib/csv';
 import { useAuth } from '@/lib/auth';
@@ -17,6 +17,11 @@ import { ExportButton } from '@/components/shared/ExportButton';
 /** Insignia de explotación activa (CISA KEV). */
 function KevBadge() {
   return <span className="inline-flex items-center gap-1 rounded border border-rose-500/30 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700" title="En el catálogo CISA KEV: explotada activamente en el mundo"><Flame className="h-3 w-3" /> KEV</span>;
+}
+
+/** Insignia de explotación por ransomware (CISA KEV). */
+function RansomBadge() {
+  return <span className="inline-flex items-center gap-1 rounded border border-fuchsia-500/30 bg-fuchsia-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-fuchsia-700" title="CISA KEV: explotada en campañas de ransomware"><Biohazard className="h-3 w-3" /> RANSOM</span>;
 }
 
 /** EPSS como porcentaje (probabilidad de explotación en 30 días). */
@@ -133,11 +138,12 @@ export default function Vulnerabilities() {
       ) : r && (
         <>
           {/* KPIs */}
-          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-7">
+          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-8">
             <KpiCard label="Total" value={r.total} icon={Bug} />
             <KpiCard label="Críticas" value={r.critical} color={SEV_COLOR.Critical} icon={ShieldAlert} />
             <KpiCard label="Altas" value={r.high} color={SEV_COLOR.High} icon={ShieldAlert} />
             <KpiCard label="Explotadas (KEV)" value={r.kev} color="#dc2626" icon={Flame} />
+            <KpiCard label="Por ransomware" value={r.kevRansomware} color="#be123c" icon={Biohazard} />
             <KpiCard label="Explotables (EPSS↑)" value={r.exploitable} color="#ea580c" icon={Target} />
             <KpiCard label="CVEs únicas" value={r.cves} icon={Bug} />
             <KpiCard label="Activos afectados" value={r.agentes} icon={Server} />
@@ -180,6 +186,7 @@ export default function Vulnerabilities() {
                               <div className="flex items-center gap-1.5">
                                 <SevChip s={p.severity} />
                                 {p.inKev && <KevBadge />}
+                                {p.kevRansomware && <RansomBadge />}
                                 <EpssTag epss={p.epss} />
                               </div>
                             </td>
@@ -235,6 +242,7 @@ export default function Vulnerabilities() {
                           className="font-mono text-sm text-neon hover:underline">{c.cve}</a>
                         {c.score != null && <span className="text-[10px] text-muted-foreground">CVSS {c.score}</span>}
                         {c.inKev && <KevBadge />}
+                        {c.kevRansomware && <RansomBadge />}
                         <EpssTag epss={c.epss} />
                       </div>
                       <p className="truncate text-[11px] text-muted-foreground">{c.description}</p>
@@ -299,6 +307,7 @@ export default function Vulnerabilities() {
                         <td className="py-2 pr-3">
                           <div className="flex items-center gap-1.5">
                             {v.inKev && <KevBadge />}
+                            {v.kevRansomware && <RansomBadge />}
                             <EpssTag epss={v.epss} />
                             {!v.inKev && v.epss == null && <span className="text-[10px] text-muted-foreground/40">—</span>}
                           </div>

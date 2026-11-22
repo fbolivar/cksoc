@@ -25,6 +25,7 @@ export interface VulnItem {
   publishedAt: string | null;
   reference: string | null;
   inKev: boolean;
+  kevRansomware: boolean;
   epss: number | null;
   priority: number;
 }
@@ -35,6 +36,7 @@ export interface PrioritizedCve {
   severity: Severity;
   score: number | null;
   inKev: boolean;
+  kevRansomware: boolean;
   kevDue: string | null;
   epss: number | null;
   epssPct: number | null;
@@ -45,9 +47,9 @@ export interface PrioritizedCve {
 }
 
 export interface VulnData {
-  resumen: { total: number; critical: number; high: number; medium: number; low: number; agentes: number; cves: number; kev: number; exploitable: number };
+  resumen: { total: number; critical: number; high: number; medium: number; low: number; agentes: number; cves: number; kev: number; kevRansomware: number; exploitable: number };
   porSeveridad: { severity: Severity; count: number }[];
-  topCve: { cve: string; count: number; severity: Severity; score: number | null; description: string; inKev: boolean; epss: number | null; priority: number }[];
+  topCve: { cve: string; count: number; severity: Severity; score: number | null; description: string; inKev: boolean; kevRansomware: boolean; epss: number | null; priority: number }[];
   porAgente: { agent: string; total: number; critical: number; high: number }[];
   topPaquetes: { paquete: string; count: number }[];
   priorizadas: PrioritizedCve[];
@@ -62,7 +64,7 @@ function cvssBase(sev: Severity, score: number | null): number {
 
 /** Prioridad por riesgo real: CVSS + gran empujón si está en KEV + EPSS. */
 export function priorityOf(sev: Severity, score: number | null, intel?: CveIntel): number {
-  return Math.round(cvssBase(sev, score) * 6 + (intel?.inKev ? 45 : 0) + (intel?.epss ?? 0) * 40);
+  return Math.round(cvssBase(sev, score) * 6 + (intel?.inKev ? 45 : 0) + (intel?.kevRansomware ? 25 : 0) + (intel?.epss ?? 0) * 40);
 }
 
 interface Bucket {
@@ -167,6 +169,7 @@ export async function getVulnerabilities(): Promise<VulnData> {
       agentes: a.agentes.value,
       cves: a.cves.value,
       kev: 0,
+      kevRansomware: 0,
       exploitable: 0,
     },
     porSeveridad: a.sev.buckets.map((b) => ({ severity: b.key as Severity, count: b.doc_count })),
@@ -181,6 +184,7 @@ export async function getVulnerabilities(): Promise<VulnData> {
         score: (score.base as number) ?? null,
         description: (vuln.description as string) ?? '',
         inKev: false,
+        kevRansomware: false,
         epss: null as number | null,
         priority: 0,
       };
@@ -226,12 +230,14 @@ async function enrichWithIntel(result: VulnData, prioSource: PrioSource[]): Prom
   for (const it of result.items) {
     const info = intel.get(it.cve.toUpperCase());
     it.inKev = info?.inKev ?? false;
+    it.kevRansomware = info?.kevRansomware ?? false;
     it.epss = info?.epss ?? null;
     it.priority = priorityOf(it.severity, it.score, info);
   }
   for (const c of result.topCve) {
     const info = intel.get(c.cve.toUpperCase());
     c.inKev = info?.inKev ?? false;
+    c.kevRansomware = info?.kevRansomware ?? false;
     c.epss = info?.epss ?? null;
     c.priority = priorityOf(c.severity, c.score, info);
   }
@@ -250,7 +256,7 @@ async function enrichWithIntel(result: VulnData, prioSource: PrioSource[]): Prom
     const info = intel.get(p.cve.toUpperCase());
     return {
       cve: p.cve, severity: p.severity, score: p.score,
-      inKev: info?.inKev ?? false, kevDue: info?.kevDue ?? null,
+      inKev: info?.inKev ?? false, kevRansomware: info?.kevRansomware ?? false, kevDue: info?.kevDue ?? null,
       epss: info?.epss ?? null, epssPct: info?.epssPct ?? null,
       priority: priorityOf(p.severity, p.score, info),
       instancias: p.instancias, agentes: p.agentes,
@@ -262,6 +268,7 @@ async function enrichWithIntel(result: VulnData, prioSource: PrioSource[]): Prom
 
   // Contadores honestos sobre TODO el entorno (no solo el top 30).
   result.resumen.kev = prio.filter((p) => p.inKev).length;
+  result.resumen.kevRansomware = prio.filter((p) => p.kevRansomware).length;
   result.resumen.exploitable = prio.filter((p) => p.inKev || (p.epss ?? 0) >= 0.5).length;
 
   // Descripciones faltantes para el top 30 (una consulta pequeña).
@@ -309,6 +316,7 @@ function flatten(src: Record<string, unknown>): VulnItem {
     publishedAt: (vuln.published_at as string) ?? null,
     reference: (vuln.reference as string) ?? null,
     inKev: false,
+    kevRansomware: false,
     epss: null,
     priority: 0,
   };
@@ -316,7 +324,7 @@ function flatten(src: Record<string, unknown>): VulnItem {
 
 function emptyData(): VulnData {
   return {
-    resumen: { total: 0, critical: 0, high: 0, medium: 0, low: 0, agentes: 0, cves: 0, kev: 0, exploitable: 0 },
+    resumen: { total: 0, critical: 0, high: 0, medium: 0, low: 0, agentes: 0, cves: 0, kev: 0, kevRansomware: 0, exploitable: 0 },
     porSeveridad: [],
     topCve: [],
     porAgente: [],

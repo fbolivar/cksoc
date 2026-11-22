@@ -448,6 +448,7 @@ CREATE TABLE IF NOT EXISTS cve_intel (
     kev_name   TEXT,
     kev_added  DATE,
     kev_due    DATE,
+    kev_ransomware BOOLEAN NOT NULL DEFAULT FALSE,   -- CISA KEV: explotada por ransomware
     epss       REAL,        -- probabilidad de explotación 0-1
     epss_pct   REAL,        -- percentil 0-1
     epss_at    TIMESTAMPTZ,

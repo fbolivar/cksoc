@@ -17,14 +17,14 @@ const KEV_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_
 const EPSS_URL = 'https://api.first.org/data/v1/epss';
 const STATES_INDEX = 'wazuh-states-vulnerabilities-*';
 
-export interface CveIntel { cve: string; inKev: boolean; kevName: string | null; kevDue: string | null; epss: number | null; epssPct: number | null }
+export interface CveIntel { cve: string; inKev: boolean; kevName: string | null; kevDue: string | null; epss: number | null; epssPct: number | null; kevRansomware: boolean }
 
 const CVE_RE = /^CVE-\d{4}-\d{3,7}$/i;
 
 /** Refresca el catálogo CISA KEV completo en cve_intel. */
 export async function refreshKev(): Promise<number> {
   try {
-    const { data } = await axios.get<{ vulnerabilities?: { cveID: string; vulnerabilityName?: string; dateAdded?: string; dueDate?: string }[] }>(
+    const { data } = await axios.get<{ vulnerabilities?: { cveID: string; vulnerabilityName?: string; dateAdded?: string; dueDate?: string; knownRansomwareCampaignUse?: string }[] }>(
       KEV_URL, { timeout: 30000, headers: { 'User-Agent': 'HexWatch-SOC' } }
     );
     const list = (data.vulnerabilities ?? []).filter((v) => v.cveID && CVE_RE.test(v.cveID));
@@ -33,14 +33,14 @@ export async function refreshKev(): Promise<number> {
       const vals: string[] = [];
       const params: unknown[] = [];
       chunk.forEach((v, j) => {
-        const b = j * 4;
-        vals.push(`($${b + 1}, TRUE, $${b + 2}, $${b + 3}, $${b + 4})`);
-        params.push(v.cveID.toUpperCase(), v.vulnerabilityName ?? null, v.dateAdded ?? null, v.dueDate ?? null);
+        const b = j * 5;
+        vals.push(`($${b + 1}, TRUE, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5})`);
+        params.push(v.cveID.toUpperCase(), v.vulnerabilityName ?? null, v.dateAdded ?? null, v.dueDate ?? null, (v.knownRansomwareCampaignUse ?? '').toLowerCase() === 'known');
       });
       await query(
-        `INSERT INTO cve_intel (cve, in_kev, kev_name, kev_added, kev_due) VALUES ${vals.join(',')}
+        `INSERT INTO cve_intel (cve, in_kev, kev_name, kev_added, kev_due, kev_ransomware) VALUES ${vals.join(',')}
          ON CONFLICT (cve) DO UPDATE SET in_kev = TRUE, kev_name = EXCLUDED.kev_name,
-           kev_added = EXCLUDED.kev_added, kev_due = EXCLUDED.kev_due, updated_at = now()`,
+           kev_added = EXCLUDED.kev_added, kev_due = EXCLUDED.kev_due, kev_ransomware = EXCLUDED.kev_ransomware, updated_at = now()`,
         params
       );
     }
@@ -104,24 +104,25 @@ export async function getEnvCves(limit = 800): Promise<string[]> {
 export async function getIntelMap(cves: string[]): Promise<Map<string, CveIntel>> {
   const unique = [...new Set(cves.map((c) => c.toUpperCase()).filter(Boolean))];
   if (!unique.length) return new Map();
-  const rows = await query<{ cve: string; in_kev: boolean; kev_name: string | null; kev_due: string | null; epss: number | null; epss_pct: number | null }>(
-    'SELECT cve, in_kev, kev_name, kev_due, epss, epss_pct FROM cve_intel WHERE cve = ANY($1)', [unique]
+  const rows = await query<{ cve: string; in_kev: boolean; kev_name: string | null; kev_due: string | null; epss: number | null; epss_pct: number | null; kev_ransomware: boolean }>(
+    'SELECT cve, in_kev, kev_name, kev_due, epss, epss_pct, kev_ransomware FROM cve_intel WHERE cve = ANY($1)', [unique]
   ).catch(() => []);
   const map = new Map<string, CveIntel>();
   for (const r of rows) {
-    map.set(r.cve, { cve: r.cve, inKev: r.in_kev, kevName: r.kev_name, kevDue: r.kev_due, epss: r.epss, epssPct: r.epss_pct });
+    map.set(r.cve, { cve: r.cve, inKev: r.in_kev, kevName: r.kev_name, kevDue: r.kev_due, epss: r.epss, epssPct: r.epss_pct, kevRansomware: r.kev_ransomware });
   }
   return map;
 }
 
-export interface IntelStatus { kevCount: number; epssCount: number; feeds: { name: string; last_run_at: string | null; last_count: number; last_status: string | null }[] }
+export interface IntelStatus { kevCount: number; epssCount: number; kevRansomwareCount: number; feeds: { name: string; last_run_at: string | null; last_count: number; last_status: string | null }[] }
 export async function intelStatus(): Promise<IntelStatus> {
   const kev = await query<{ n: string }>('SELECT COUNT(*)::int AS n FROM cve_intel WHERE in_kev = TRUE').catch(() => [{ n: '0' }]);
   const epss = await query<{ n: string }>('SELECT COUNT(*)::int AS n FROM cve_intel WHERE epss IS NOT NULL').catch(() => [{ n: '0' }]);
+  const kevRw = await query<{ n: string }>('SELECT COUNT(*)::int AS n FROM cve_intel WHERE kev_ransomware = TRUE').catch(() => [{ n: '0' }]);
   const feeds = await query<{ name: string; last_run_at: string | null; last_count: number; last_status: string | null }>(
     'SELECT name, last_run_at, last_count, last_status FROM cve_intel_feeds ORDER BY name'
   ).catch(() => []);
-  return { kevCount: Number(kev[0]?.n ?? 0), epssCount: Number(epss[0]?.n ?? 0), feeds };
+  return { kevCount: Number(kev[0]?.n ?? 0), epssCount: Number(epss[0]?.n ?? 0), kevRansomwareCount: Number(kevRw[0]?.n ?? 0), feeds };
 }
 
 /** Refresco completo: KEV + EPSS para las CVEs del entorno. */

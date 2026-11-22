@@ -16,6 +16,7 @@ export interface VulnItem {
   publishedAt: string | null;
   reference: string | null;
   inKev: boolean;
+  kevRansomware: boolean;
   epss: number | null;
   priority: number;
 }
@@ -25,6 +26,7 @@ export interface PrioritizedCve {
   severity: Severity;
   score: number | null;
   inKev: boolean;
+  kevRansomware: boolean;
   kevDue: string | null;
   epss: number | null;
   epssPct: number | null;
@@ -35,9 +37,9 @@ export interface PrioritizedCve {
 }
 
 export interface VulnData {
-  resumen: { total: number; critical: number; high: number; medium: number; low: number; agentes: number; cves: number; kev: number; exploitable: number };
+  resumen: { total: number; critical: number; high: number; medium: number; low: number; agentes: number; cves: number; kev: number; kevRansomware: number; exploitable: number };
   porSeveridad: { severity: Severity; count: number }[];
-  topCve: { cve: string; count: number; severity: Severity; score: number | null; description: string; inKev: boolean; epss: number | null; priority: number }[];
+  topCve: { cve: string; count: number; severity: Severity; score: number | null; description: string; inKev: boolean; kevRansomware: boolean; epss: number | null; priority: number }[];
   porAgente: { agent: string; total: number; critical: number; high: number }[];
   topPaquetes: { paquete: string; count: number }[];
   priorizadas: PrioritizedCve[];
@@ -47,6 +49,7 @@ export interface VulnData {
 export interface IntelStatus {
   kevCount: number;
   epssCount: number;
+  kevRansomwareCount: number;
   feeds: { name: string; last_run_at: string | null; last_count: number; last_status: string | null }[];
 }
 
