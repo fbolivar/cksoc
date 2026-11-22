@@ -95,6 +95,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/office365', label: 'Office 365', icon: Cloud, roles: ['admin', 'analista'] },
       { to: '/oauth-apps', label: 'Consentimientos OAuth', icon: KeyRound, roles: ['admin', 'analista'] },
       { to: '/itdr', label: 'ITDR · Identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
+      { to: '/persistencia-identidad', label: 'Persistencia de identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
       { to: '/seguridad-ia', label: 'Seguridad de IA', icon: BrainCircuit, roles: ['admin', 'analista'] },
       { to: '/llm-guard', label: 'LLM Guardrail', icon: ShieldCheck, roles: ['admin', 'analista'] },
       { to: '/bec', label: 'Correo · Anti-BEC', icon: MailWarning, roles: ['admin', 'analista'] },

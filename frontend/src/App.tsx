@@ -66,6 +66,7 @@ const Scorecard = lazy(() => import('@/pages/Scorecard'));
 const DarkWeb = lazy(() => import('@/pages/DarkWeb'));
 const Takedown = lazy(() => import('@/pages/Takedown'));
 const OAuthApps = lazy(() => import('@/pages/OAuthApps'));
+const IdPersist = lazy(() => import('@/pages/IdPersist'));
 const Observabilidad = lazy(() => import('@/pages/Observabilidad'));
 const NocCommand = lazy(() => import('@/pages/NocCommand'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
@@ -368,6 +369,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <OAuthApps />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/persistencia-identidad"
+        element={
+          <Protected>
+            <AppLayout>
+              <IdPersist />
             </AppLayout>
           </Protected>
         }
