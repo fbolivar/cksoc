@@ -121,6 +121,7 @@ const sections: { title: string | null; items: Item[] }[] = [
   {
     title: 'Postura',
     items: [
+      { to: '/exposicion', label: 'Scorecard de exposición', icon: Gauge, roles: ['admin', 'analista'] },
       { to: '/activos', label: 'Activos', icon: Server },
       { to: '/hygiene', label: 'IT Hygiene', icon: Activity },
       { to: '/vulnerabilidades', label: 'Vulnerabilidades', icon: Bug },

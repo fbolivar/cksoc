@@ -55,6 +55,7 @@ import { shadowAiRouter, startShadowAiScheduler } from './modules/shadowai/shado
 import { aisecRouter, startAiSecScheduler } from './modules/aisec/aisec.routes';
 import { nocRouter, startNocScheduler } from './modules/noc/noc.routes';
 import { ransomwareRouter, startRansomwareScheduler } from './modules/ransomware/ransomware.routes';
+import { scorecardRouter } from './modules/scorecard/scorecard.routes';
 import { obsRouter } from './modules/obs/obs.routes';
 import { itdrRouter, startItdrScheduler } from './modules/itdr/itdr.routes';
 import { becRouter, startBecScheduler } from './modules/bec/bec.routes';
@@ -170,6 +171,7 @@ app.use('/api/shadow-ai', shadowAiRouter);
 app.use('/api/aisec', aisecRouter);
 app.use('/api/noc', nocRouter);
 app.use('/api/ransomware', ransomwareRouter);
+app.use('/api/scorecard', scorecardRouter);
 app.use('/api/obs', obsRouter);
 app.use('/api/itdr', itdrRouter);
 app.use('/api/bec', becRouter);
