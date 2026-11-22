@@ -126,7 +126,9 @@ export default function Compliance() {
             </div>
             <div className="flex gap-6 text-right">
               <div>
-                <p className="text-2xl font-semibold tabular-nums" style={{ color: coberturaColor }}>{cobertura}%</p>
+                {meta.aplica === 'no'
+                  ? <p className="text-2xl font-semibold tabular-nums text-muted-foreground/50">—</p>
+                  : <p className="text-2xl font-semibold tabular-nums" style={{ color: coberturaColor }}>{cobertura}%</p>}
                 <p className="text-[11px] text-muted-foreground">cobertura técnica</p>
               </div>
               <div><p className="text-2xl font-semibold tabular-nums">{fw.controlesCubiertos}</p><p className="text-[11px] text-muted-foreground">de {meta.catalogo} controles</p></div>

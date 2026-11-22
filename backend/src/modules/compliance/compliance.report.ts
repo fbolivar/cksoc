@@ -88,7 +88,8 @@ export async function complianceReportPdf(hours: number): Promise<{ buffer: Buff
   out.push(tabla(['Marco', 'Aplicabilidad', 'Cobertura técnica', 'Controles con monitoreo', 'Observación'],
     orden.filter((k) => comp.frameworks[k]).map((k) => {
       const f = comp.frameworks[k]!; const m = META[k]!; const pc = pct(f.controlesCubiertos, m.catalogo);
-      return [esc(m.label), chip(APL[m.aplica].t, APL[m.aplica].c), `<b style="color:${pctColor(pc)}">${pc}%</b>`, `${f.controlesCubiertos} / ${m.catalogo}`, esc(m.nota)];
+      const cob = m.aplica === 'no' ? `<span style="color:${C.suave}">—</span>` : `<b style="color:${pctColor(pc)}">${pc}%</b>`;
+      return [esc(m.label), chip(APL[m.aplica].t, APL[m.aplica].c), cob, `${f.controlesCubiertos} / ${m.catalogo}`, esc(m.nota)];
     }), ['24%', '13%', '13%', '16%', '34%']));
   out.push(`<div style="border-left:3px solid ${C.marca};background:${C.fondo};padding:9px 12px;border-radius:4px;margin:4px 0 2px"><p style="font-size:9pt;line-height:1.5;color:${C.texto};margin:0">⚠ <b>Qué es y qué no es este informe.</b> Mide <b>cobertura de monitoreo</b> (cuántos controles técnicos de cada marco están vigilados por alertas reales) y <b>postura de configuración</b> (CIS/SCA). <b>No es una certificación de cumplimiento</b>: el cierre legal de la Ley 1581 o de ISO 27001 requiere, además, los procesos organizacionales —registro de bases de datos ante la SIC (RNBD), autorizaciones de titulares, política de tratamiento, respuesta a derechos— y una auditoría formal, que no se detectan por registros técnicos.</p></div>`);
 
