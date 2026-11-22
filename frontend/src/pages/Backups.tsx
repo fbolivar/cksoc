@@ -35,6 +35,8 @@ export default function Backups() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
+  const [restoreTyped, setRestoreTyped] = useState('');
 
   const flash = (kind: 'ok' | 'err', text: string) => {
     setMsg({ kind, text });
@@ -117,15 +119,14 @@ export default function Backups() {
     }
   };
 
-  const onRestore = async (id: string) => {
-    if (!confirm(`RESTAURAR la base de datos desde "${id}"?\n\nEsto REEMPLAZA todos los datos actuales con los de este respaldo. Antes se crea un respaldo de seguridad del estado actual, y la restauracion es atomica (si algo falla, no cambia nada). La app puede quedar unos segundos no disponible.\n\n¿Continuar?`)) return;
-    const typed = prompt(`CONFIRMACION: escribe el nombre exacto del respaldo para restaurar:\n${id}`);
-    if (typed === null) return;
-    if (typed.trim() !== id) { flash('err', 'El nombre no coincide; restauracion cancelada'); return; }
+  const doRestore = async () => {
+    const id = restoreTarget;
+    if (!id || restoreTyped.trim() !== id) return;
+    setRestoreTarget(null);
     mark(id, 'restore');
     try {
       const r = await backupsApi.restore(id);
-      flash('ok', `Restaurado desde ${id}. Respaldo de seguridad del estado previo: ${r.safetyBackupId}`);
+      flash('ok', `Restaurado desde ${id}. Respaldo de seguridad previo: ${r.safetyBackupId}`);
       await load();
     } catch (e) {
       flash('err', (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'No se pudo restaurar');
@@ -270,7 +271,7 @@ export default function Backups() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => void onRestore(b.id)}
+                    onClick={() => { setRestoreTarget(b.id); setRestoreTyped(''); }}
                     disabled={!!busy[b.id]}
                     title="Restaurar esta copia (reemplaza la BD actual)"
                     className="text-amber-600 hover:text-amber-700"
@@ -298,6 +299,20 @@ export default function Backups() {
         El formato .bbg es un contenedor propio: volcado SQL comprimido con metadatos y verificación de integridad
         (SHA-256). El respaldo automático corre a diario y conserva los últimos configurados.
       </p>
+      {restoreTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setRestoreTarget(null)}>
+          <div className="w-full max-w-lg rounded-lg border border-border bg-background p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 text-amber-600"><AlertTriangle className="h-5 w-5" /><h3 className="text-lg font-semibold">Restaurar base de datos</h3></div>
+            <p className="mt-3 text-sm text-muted-foreground">Vas a <b className="text-foreground">reemplazar toda la base de datos actual</b> con el respaldo <span className="font-mono text-foreground">{restoreTarget}</span>. Antes se crea un respaldo de seguridad del estado actual y la operación es atómica (si algo falla, no cambia nada). La app puede quedar unos segundos no disponible.</p>
+            <p className="mt-3 text-sm">Para confirmar, escribe el nombre exacto del respaldo:</p>
+            <input value={restoreTyped} onChange={(e) => setRestoreTyped(e.target.value)} placeholder={restoreTarget ?? ''} autoFocus className="mt-1 w-full rounded-md border border-border bg-secondary/40 px-3 py-2 font-mono text-sm outline-none focus:border-primary" />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setRestoreTarget(null)}>Cancelar</Button>
+              <Button size="sm" disabled={restoreTyped.trim() !== restoreTarget} onClick={() => void doRestore()} className="bg-amber-600 text-white hover:bg-amber-700">Restaurar ahora</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
