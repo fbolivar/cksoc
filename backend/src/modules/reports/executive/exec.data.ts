@@ -602,9 +602,9 @@ export async function collectMetrics(entrada: Periodo | string): Promise<ReportM
       hardeningTopFallos: (sca?.topFallidos ?? []).slice(0, 4).map((f) => String((f as { title?: string }).title ?? '')).filter(Boolean),
       cumplimiento: comp
         ? [
-            { marco: 'NIST 800-53', controles: comp.frameworks.nist?.controles.length ?? 0 },
-            { marco: 'GDPR', controles: comp.frameworks.gdpr?.controles.length ?? 0 },
-            { marco: 'TSC (SOC 2)', controles: comp.frameworks.tsc?.controles.length ?? 0 },
+            { marco: 'Ley 1581 (Habeas Data)', controles: comp.frameworks.ley1581?.controlesCubiertos ?? 0 },
+            { marco: 'ISO/IEC 27001:2022', controles: comp.frameworks.iso27001?.controlesCubiertos ?? 0 },
+            { marco: 'GDPR', controles: comp.frameworks.gdpr?.controlesCubiertos ?? 0 },
           ]
         : [],
     };

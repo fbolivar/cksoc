@@ -36,9 +36,11 @@ export interface Vigilancia {
 export interface AiSecVig { aiServices: number; shadowServices: number; sentMB: number; exfilFlagged: number; copInteractions: number; copUsers: number; jailbreak: number; xpia: number; agents: number; postureScore: number; topFindings: { category: string; status: string; finding: string }[]; topExfil: { host: string; service: string; mb: number }[]; agentList: { label: string; interactions: number }[] }
 
 const FW_LABEL: Record<string, string> = {
-  nist_800_53: 'NIST 800-53', gdpr: 'GDPR', tsc: 'SOC 2 (TSC)', pci_dss: 'PCI DSS', hipaa: 'HIPAA',
-  nist: 'NIST 800-53', pci: 'PCI DSS',
+  ley1581: 'Ley 1581 (Habeas Data)', iso27001: 'ISO/IEC 27001:2022', gdpr: 'GDPR',
+  nist_800_53: 'NIST 800-53', nist: 'NIST 800-53', tsc: 'SOC 2 (TSC)',
 };
+// Marcos que aplican al cliente, en orden (PCI/HIPAA se omiten: no aplican).
+const FW_ORDEN = ['ley1581', 'iso27001', 'gdpr', 'nist', 'tsc'];
 const MFA_ERRORS = ['500121', '500071', '500571', '50076', '50074'];
 
 async function esCount(body: unknown): Promise<number> {
@@ -145,9 +147,10 @@ export async function collectVigilancia(hours = 720): Promise<Vigilancia> {
   let cumplimiento: FwItem[] = [];
   try {
     const comp = await getCompliance(hours).catch(() => ({ frameworks: {} as Record<string, any> }));
-    cumplimiento = Object.entries(comp.frameworks || {}).map(([k, v]) => ({
-      marco: FW_LABEL[k] || k.toUpperCase(), total: (v as any).total ?? 0, controles: (v as any).controlesCubiertos ?? 0,
-    })).sort((a, b) => b.controles - a.controles);
+    const fw = (comp.frameworks || {}) as Record<string, any>;
+    cumplimiento = FW_ORDEN.filter((k) => fw[k]).map((k) => ({
+      marco: FW_LABEL[k] || k.toUpperCase(), total: fw[k].total ?? 0, controles: fw[k].controlesCubiertos ?? 0,
+    }));
   } catch { /* compliance opcional */ }
 
   // ── 9. Seguridad de IA ──
