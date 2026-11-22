@@ -61,6 +61,7 @@ const Asm = lazy(() => import('@/pages/Asm'));
 const ShadowAi = lazy(() => import('@/pages/ShadowAi'));
 const AiSecurity = lazy(() => import('@/pages/AiSecurity'));
 const Noc = lazy(() => import('@/pages/Noc'));
+const Ransomware = lazy(() => import('@/pages/Ransomware'));
 const Observabilidad = lazy(() => import('@/pages/Observabilidad'));
 const NocCommand = lazy(() => import('@/pages/NocCommand'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
@@ -313,6 +314,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Observabilidad />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/ransomware"
+        element={
+          <Protected>
+            <AppLayout>
+              <Ransomware />
             </AppLayout>
           </Protected>
         }
