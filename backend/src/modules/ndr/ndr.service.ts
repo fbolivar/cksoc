@@ -98,7 +98,16 @@ async function overviewAggs(gte: string) {
   };
 }
 
-interface IpsHit { _source: { '@timestamp': string; data?: { srcip?: string; dstip?: string; msg?: string; action?: string; severity?: string; attack?: string } } }
+interface IpsHit { _source: { '@timestamp': string; rule?: { description?: string; level?: number }; data?: { srcip?: string; dstip?: string; action?: string; appName?: string; protocol?: string; dstport?: string } } }
+
+/** Etiqueta de severidad a partir del nivel de la regla Wazuh (SonicWall no envia severidad propia). */
+function sevLabel(level?: number): string | null {
+  if (level == null) return null;
+  if (level >= 12) return 'critica';
+  if (level >= 10) return 'alta';
+  if (level >= 7) return 'media';
+  return 'baja';
+}
 
 async function ipsAlerts(gte: string): Promise<{ count: number; list: NdrIps[] }> {
   try {
@@ -106,16 +115,21 @@ async function ipsAlerts(gte: string): Promise<{ count: number; list: NdrIps[] }
       `/${env.WAZUH_ALERTS_INDEX}/_search`,
       {
         size: 25,
-        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'sonicwall' } }, { terms: { 'rule.id': ['100206', '100210'] } }] } },
+        query: { bool: { filter: [{ range: { '@timestamp': { gte } } }, { match: { 'rule.groups': 'sonicwall' } }, { range: { 'rule.level': { gte: 7 } } }] } },
         sort: [{ '@timestamp': { order: 'desc' } }],
-        _source: ['@timestamp', 'data.srcip', 'data.dstip', 'data.msg', 'data.action', 'data.severity', 'data.attack'],
+        _source: ['@timestamp', 'rule.description', 'rule.level', 'data.srcip', 'data.dstip', 'data.action', 'data.appName', 'data.protocol', 'data.dstport'],
       },
     );
     const total = typeof data.hits.total === 'number' ? data.hits.total : data.hits.total.value;
-    const list = data.hits.hits.map((h) => ({
-      ts: h._source['@timestamp'], srcip: h._source.data?.srcip ?? null, dstip: h._source.data?.dstip ?? null,
-      msg: h._source.data?.msg ?? '', action: h._source.data?.action ?? '', severity: h._source.data?.severity ?? null, attack: h._source.data?.attack ?? null,
-    }));
+    const list = data.hits.hits.map((h) => {
+      const dd = h._source.data ?? {};
+      const app = dd.appName ?? null; const port = dd.dstport ?? null;
+      return {
+        ts: h._source['@timestamp'], srcip: dd.srcip ?? null, dstip: dd.dstip ?? null,
+        msg: h._source.rule?.description ?? '', action: dd.action ?? '',
+        severity: sevLabel(h._source.rule?.level), attack: app ? (port ? `${app} :${port}` : app) : null,
+      };
+    });
     return { count: total, list };
   } catch { return { count: 0, list: [] }; }
 }

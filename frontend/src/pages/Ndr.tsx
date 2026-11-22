@@ -344,10 +344,10 @@ export default function Ndr() {
                   {d.ipsAlerts.map((a, i) => (
                     <div key={i} className="rounded border-l-2 border-l-destructive/60 bg-secondary/30 px-2.5 py-1.5">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-xs font-medium">{a.attack || a.msg}</span>
+                        <span className="truncate text-xs font-medium">{a.msg || a.attack}</span>
                         {a.severity && <span className="hw-mono shrink-0 text-[9px] uppercase text-destructive">{a.severity}</span>}
                       </div>
-                      <p className="hw-mono truncate text-[10px] text-muted-foreground">{a.srcip} → {a.dstip} · {a.action} · {new Date(a.ts).toLocaleTimeString('es-CO')}</p>
+                      <p className="hw-mono truncate text-[10px] text-muted-foreground">{a.srcip} → {a.dstip} · {a.action}{a.attack ? ' · ' + a.attack : ''} · {new Date(a.ts).toLocaleTimeString('es-CO')}</p>
                     </div>
                   ))}
                 </div>
