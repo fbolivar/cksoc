@@ -138,6 +138,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/drp', label: 'Riesgo digital (DRP)', icon: Eye, roles: ['admin', 'analista'] },
       { to: '/takedown', label: 'Generador de takedown', icon: Scale, roles: ['admin', 'analista'] },
       { to: '/postura-correo', label: 'Postura de correo', icon: Mail, roles: ['admin', 'analista'] },
+      { to: '/postura-permisos', label: 'Postura de permisos (M365)', icon: Share2, roles: ['admin', 'analista'] },
       { to: '/factor-humano', label: 'Factor humano', icon: Users },
       { to: '/cumplimiento', label: 'Cumplimiento normativo', icon: Scale },
     ],

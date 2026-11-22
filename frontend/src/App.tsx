@@ -69,6 +69,7 @@ const OAuthApps = lazy(() => import('@/pages/OAuthApps'));
 const IdPersist = lazy(() => import('@/pages/IdPersist'));
 const CloudData = lazy(() => import('@/pages/CloudData'));
 const Clawback = lazy(() => import('@/pages/Clawback'));
+const PermPosture = lazy(() => import('@/pages/PermPosture'));
 const Observabilidad = lazy(() => import('@/pages/Observabilidad'));
 const NocCommand = lazy(() => import('@/pages/NocCommand'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
@@ -401,6 +402,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Clawback />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/postura-permisos"
+        element={
+          <Protected>
+            <AppLayout>
+              <PermPosture />
             </AppLayout>
           </Protected>
         }
