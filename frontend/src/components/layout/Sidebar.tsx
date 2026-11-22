@@ -132,6 +132,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/asm', label: 'Superficie externa (ASM)', icon: ScanSearch, roles: ['admin', 'analista'] },
       { to: '/exposicion-apis', label: 'Exposición de APIs', icon: Boxes, roles: ['admin', 'analista'] },
       { to: '/drp', label: 'Riesgo digital (DRP)', icon: Eye, roles: ['admin', 'analista'] },
+      { to: '/takedown', label: 'Generador de takedown', icon: Scale, roles: ['admin', 'analista'] },
       { to: '/postura-correo', label: 'Postura de correo', icon: Mail, roles: ['admin', 'analista'] },
       { to: '/factor-humano', label: 'Factor humano', icon: Users },
       { to: '/cumplimiento', label: 'Cumplimiento normativo', icon: Scale },
