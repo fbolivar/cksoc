@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
 import {
-  getBackups, postBackup, downloadBackup, getBackupIntegrity, removeBackup, getPosture,
+  getBackups, postBackup, downloadBackup, getBackupIntegrity, removeBackup, getPosture, restoreBackupCtrl,
 } from './backups.controller';
 
 export const backupsRouter = Router();
@@ -22,3 +22,4 @@ backupsRouter.post('/', postBackup);
 backupsRouter.get('/:id/download', downloadBackup);
 backupsRouter.get('/:id/verify', getBackupIntegrity);
 backupsRouter.delete('/:id', removeBackup);
+backupsRouter.post('/:id/restore', restoreBackupCtrl);

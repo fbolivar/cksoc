@@ -39,6 +39,9 @@ export const backupsApi = {
 
   remove: (id: string) => api.delete(`/backups/${encodeURIComponent(id)}`).then((r) => r.data),
 
+  restore: (id: string) =>
+    api.post<{ ok: boolean; restoredFrom: string; safetyBackupId: string }>(`/backups/${encodeURIComponent(id)}/restore`, { confirm: id }).then((r) => r.data),
+
   download: async (id: string) => {
     const res = await api.get(`/backups/${encodeURIComponent(id)}/download`, { responseType: 'blob' });
     const url = URL.createObjectURL(res.data as Blob);

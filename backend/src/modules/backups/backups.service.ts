@@ -12,7 +12,7 @@
  * integridad al listar/restaurar. Solo rol admin.
  */
 import { spawn } from 'node:child_process';
-import { createGunzip, gzipSync } from 'node:zlib';
+import { createGunzip, gzipSync, gunzipSync } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { createReadStream } from 'node:fs';
@@ -245,6 +245,62 @@ export async function listBackups(): Promise<BackupItem[]> {
   }
   items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   return items;
+}
+
+const RESTORE_PREAMBLE =
+  "SET lock_timeout = '20s'; " +
+  // Termina las demas conexiones a la BD (pool del backend) para que el DROP SCHEMA
+  // no choque con sus locks; el pool reconecta solo tras el commit.
+  'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid(); ' +
+  'DROP SCHEMA IF EXISTS public CASCADE;\nCREATE SCHEMA public;\nCREATE EXTENSION IF NOT EXISTS pgcrypto;\n';
+
+/** Extrae el volcado SQL (sin cabecera, descomprimido) de un respaldo .bbg/.pnnc. */
+async function extractSql(fullPath: string): Promise<Buffer> {
+  const buf = await fs.readFile(fullPath);
+  const ok = buf.subarray(0, 4).equals(MAGIC) || buf.subarray(0, 4).equals(MAGIC_LEGACY);
+  if (!ok) throw new HttpBackupError(400, 'Archivo de respaldo invalido (cabecera)');
+  const mLen = buf.readUInt32BE(5);
+  return gunzipSync(buf.subarray(9 + mLen));
+}
+
+/** Ejecuta psql restaurando un script SQL en UNA sola transaccion (atomico). */
+function pgRestore(sqlFile: string): Promise<void> {
+  const { args, env: pgEnv } = pgConn();
+  return new Promise((resolve, reject) => {
+    const proc = spawn('psql', [...args, '--single-transaction', '-v', 'ON_ERROR_STOP=1', '-q', '-f', sqlFile], { env: pgEnv });
+    const err: Buffer[] = [];
+    proc.stderr.on('data', (c: Buffer) => err.push(c));
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`psql salio con codigo ${code}: ${Buffer.concat(err).toString().slice(0, 400)}`));
+    });
+  });
+}
+
+/**
+ * Restaura la base de datos DESDE un respaldo. DESTRUCTIVO: reemplaza el estado
+ * actual. Antes crea un respaldo de seguridad del estado vigente, verifica la
+ * integridad del respaldo a restaurar, y aplica el volcado en UNA transaccion
+ * (si algo falla, rollback: la BD queda intacta).
+ */
+export async function restoreBackup(id: string): Promise<{ restoredFrom: string; safetyBackupId: string }> {
+  const name = safeName(id);
+  if (!(await backupExists(name))) throw new HttpBackupError(404, 'Respaldo no encontrado');
+  if ((await verifyBackup(name)) !== 'ok') {
+    throw new HttpBackupError(409, 'El respaldo no paso la verificacion de integridad; no se restaura.');
+  }
+  const safety = await createBackup({ origin: 'manual', note: `Pre-restauracion (estado previo a restaurar ${name})` });
+  const sql = await extractSql(backupFilePath(name));
+  const tmp = path.join(backupDir(), `.restore-${Date.now()}.sql`);
+  await fs.writeFile(tmp, Buffer.concat([Buffer.from(RESTORE_PREAMBLE, 'utf-8'), sql]), { mode: 0o600 });
+  try {
+    await pgRestore(tmp);
+  } finally {
+    await fs.unlink(tmp).catch(() => {});
+  }
+  logger.warn({ id: name, safetyBackupId: safety.id }, 'Base de datos RESTAURADA desde respaldo');
+  return { restoredFrom: name, safetyBackupId: safety.id };
 }
 
 export function backupFilePath(id: string): string {

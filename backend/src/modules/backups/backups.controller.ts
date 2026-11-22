@@ -6,7 +6,7 @@ import { logger } from '../../config/logger';
 import { auditFromReq } from '../audit/audit.service';
 import {
   createBackup, listBackups, deleteBackup, verifyBackup,
-  backupFilePath, backupExists, HttpBackupError, getRecoveryPosture,
+  backupFilePath, backupExists, HttpBackupError, getRecoveryPosture, restoreBackup,
 } from './backups.service';
 
 export async function getBackups(_req: Request, res: Response): Promise<void> {
@@ -102,5 +102,23 @@ export async function removeBackup(req: Request, res: Response): Promise<void> {
       return;
     }
     res.status(500).json({ error: 'No se pudo eliminar el respaldo' });
+  }
+}
+
+export async function restoreBackupCtrl(req: Request, res: Response): Promise<void> {
+  const id = req.params.id;
+  const confirm = (req.body as { confirm?: string } | undefined)?.confirm;
+  if (confirm !== id) {
+    res.status(400).json({ error: 'Confirmacion invalida: debes confirmar el nombre exacto del respaldo.' });
+    return;
+  }
+  try {
+    const r = await restoreBackup(id);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'backup_restore', target: id, result: 'ok' });
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    if (err instanceof HttpBackupError) { res.status(err.status).json({ error: err.message }); return; }
+    logger.error({ err }, 'Fallo la restauracion de respaldo');
+    res.status(500).json({ error: 'No se pudo restaurar el respaldo' });
   }
 }

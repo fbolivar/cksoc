@@ -4,7 +4,7 @@
  * verificar su integridad (sha256), descargarlos y eliminarlos.
  */
 import { useEffect, useState } from 'react';
-import { Database, Download, Trash2, ShieldCheck, Plus, Loader2, RefreshCw, HardDriveDownload, AlertTriangle, Clock, CloudOff } from 'lucide-react';
+import { Database, Download, Trash2, ShieldCheck, Plus, Loader2, RefreshCw, HardDriveDownload, AlertTriangle, Clock, CloudOff, RotateCcw } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { backupsApi, type BackupItem, type RecoveryPosture } from '@/lib/backups';
 import { Button } from '@/components/ui/button';
@@ -112,6 +112,23 @@ export default function Backups() {
       await load();
     } catch {
       flash('err', 'No se pudo eliminar');
+    } finally {
+      unmark(id);
+    }
+  };
+
+  const onRestore = async (id: string) => {
+    if (!confirm(`RESTAURAR la base de datos desde "${id}"?\n\nEsto REEMPLAZA todos los datos actuales con los de este respaldo. Antes se crea un respaldo de seguridad del estado actual, y la restauracion es atomica (si algo falla, no cambia nada). La app puede quedar unos segundos no disponible.\n\n¿Continuar?`)) return;
+    const typed = prompt(`CONFIRMACION: escribe el nombre exacto del respaldo para restaurar:\n${id}`);
+    if (typed === null) return;
+    if (typed.trim() !== id) { flash('err', 'El nombre no coincide; restauracion cancelada'); return; }
+    mark(id, 'restore');
+    try {
+      const r = await backupsApi.restore(id);
+      flash('ok', `Restaurado desde ${id}. Respaldo de seguridad del estado previo: ${r.safetyBackupId}`);
+      await load();
+    } catch (e) {
+      flash('err', (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'No se pudo restaurar');
     } finally {
       unmark(id);
     }
@@ -249,6 +266,16 @@ export default function Backups() {
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => void onDownload(b.id)} disabled={!!busy[b.id]} title="Descargar .bbg">
                     {busy[b.id] === 'download' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void onRestore(b.id)}
+                    disabled={!!busy[b.id]}
+                    title="Restaurar esta copia (reemplaza la BD actual)"
+                    className="text-amber-600 hover:text-amber-700"
+                  >
+                    {busy[b.id] === 'restore' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                   </Button>
                   <Button
                     variant="ghost"
