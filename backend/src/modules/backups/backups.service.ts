@@ -185,6 +185,7 @@ export async function createBackup(opts: { origin?: 'manual' | 'automatico'; not
   const stamp = createdAt.replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
   const id = `bbg-${stamp}.bbg`;
   await fs.writeFile(path.join(dir, id), file, { mode: 0o600 });
+  await copyToNetworkRepo(path.join(dir, id), id).catch(() => {});
   logger.info({ id, bytes: file.length, origin: meta.origin }, 'Respaldo .bbg creado');
 
   return {
@@ -301,6 +302,104 @@ export async function restoreBackup(id: string): Promise<{ restoredFrom: string;
   }
   logger.warn({ id: name, safetyBackupId: safety.id }, 'Base de datos RESTAURADA desde respaldo');
   return { restoredFrom: name, safetyBackupId: safety.id };
+}
+
+// ─── Copia a repositorio de red (carpeta compartida SMB/UNC o ruta local montada) ───
+const NETCOPY_CONF = '/opt/hexwatch-ops/backup-netcopy.json';
+export interface NetCopyConfig {
+  enabled: boolean; path: string; user: string; domain: string;
+  password?: string; lastCopy?: { at: string; ok: boolean; detail: string } | null;
+}
+
+async function readNetCopy(): Promise<NetCopyConfig> {
+  try {
+    const c = JSON.parse(await fs.readFile(NETCOPY_CONF, 'utf-8')) as NetCopyConfig;
+    return { enabled: !!c.enabled, path: c.path ?? '', user: c.user ?? '', domain: c.domain ?? '', password: c.password ?? '', lastCopy: c.lastCopy ?? null };
+  } catch { return { enabled: false, path: '', user: '', domain: '', password: '', lastCopy: null }; }
+}
+async function writeNetCopy(c: NetCopyConfig): Promise<void> {
+  await fs.mkdir(path.dirname(NETCOPY_CONF), { recursive: true }).catch(() => {});
+  await fs.writeFile(NETCOPY_CONF, JSON.stringify(c, null, 2), { mode: 0o600 });
+}
+export function isUncPath(p: string): boolean { return /^(\\\\|\/\/)/.test((p || '').trim()); }
+
+/** Config para el panel: enmascara la contrasena. */
+export async function getNetCopyPublic(): Promise<{ enabled: boolean; path: string; user: string; domain: string; hasPassword: boolean; lastCopy: NetCopyConfig['lastCopy'] }> {
+  const c = await readNetCopy();
+  return { enabled: c.enabled, path: c.path, user: c.user, domain: c.domain, hasPassword: !!c.password, lastCopy: c.lastCopy ?? null };
+}
+/** Guarda la config; conserva la contrasena previa si llega vacia. */
+export async function saveNetCopy(i: { enabled: boolean; path: string; user: string; domain: string; password?: string }): Promise<void> {
+  const prev = await readNetCopy();
+  const password = (i.password && i.password.length) ? i.password : prev.password;
+  await writeNetCopy({ enabled: !!i.enabled, path: (i.path || '').trim(), user: (i.user || '').trim(), domain: (i.domain || '').trim(), password, lastCopy: prev.lastCopy ?? null });
+}
+
+function parseUnc(p: string): { service: string; dir: string } {
+  const parts = p.replace(/\\/g, '/').replace(/^\/+/, '').split('/').filter(Boolean);
+  return { service: `//${parts[0]}/${parts[1] ?? ''}`, dir: parts.slice(2).join('/') };
+}
+
+/** Ejecuta smbclient con un comando -c usando un authfile temporal (sin pass en argv). */
+function smbExec(cfg: NetCopyConfig, cmd: string): Promise<void> {
+  const { service } = parseUnc(cfg.path);
+  const authFile = path.join(os.tmpdir(), `.smbauth-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+  const auth = [`username=${cfg.user}`, `password=${cfg.password ?? ''}`, cfg.domain ? `domain=${cfg.domain}` : ''].filter(Boolean).join('\n') + '\n';
+  return fs.writeFile(authFile, auth, { mode: 0o600 }).then(() => new Promise<void>((resolve, reject) => {
+    const args = cfg.user ? [service, '-A', authFile, '-c', cmd] : [service, '-N', '-c', cmd];
+    const proc = spawn('smbclient', args, { timeout: 25000 });
+    const out: Buffer[] = [];
+    proc.stdout.on('data', (d: Buffer) => out.push(d));
+    proc.stderr.on('data', (d: Buffer) => out.push(d));
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      void fs.unlink(authFile).catch(() => {});
+      if (code === 0) resolve();
+      else reject(new Error(Buffer.concat(out).toString().replace(/\s+/g, ' ').slice(0, 280) || `smbclient codigo ${code}`));
+    });
+  }));
+}
+
+/** Copia un respaldo recien creado al repositorio de red. NO falla el respaldo. */
+export async function copyToNetworkRepo(localPath: string, id: string): Promise<void> {
+  const c = await readNetCopy();
+  if (!c.enabled || !c.path) return;
+  try {
+    if (isUncPath(c.path)) {
+      const { dir } = parseUnc(c.path);
+      await smbExec(c, `${dir ? `cd "${dir}"; ` : ''}put "${localPath}" "${id}"`);
+    } else {
+      await fs.mkdir(c.path, { recursive: true }).catch(() => {});
+      await fs.copyFile(localPath, path.join(c.path, id));
+    }
+    c.lastCopy = { at: new Date().toISOString(), ok: true, detail: `Copiado a ${c.path}` };
+    logger.info({ id, dest: c.path }, 'Respaldo copiado al repositorio de red');
+  } catch (e) {
+    c.lastCopy = { at: new Date().toISOString(), ok: false, detail: (e as Error).message.slice(0, 220) };
+    logger.warn({ id, err: (e as Error).message }, 'Fallo la copia al repositorio de red');
+  }
+  await writeNetCopy(c).catch(() => {});
+}
+
+/** Prueba la config SIN guardar: valida acceso de escritura. */
+export async function testNetCopy(i: { path: string; user: string; domain: string; password?: string }): Promise<{ ok: boolean; detail: string }> {
+  const prev = await readNetCopy();
+  const cfg: NetCopyConfig = { enabled: true, path: (i.path || '').trim(), user: (i.user || '').trim(), domain: (i.domain || '').trim(), password: (i.password && i.password.length) ? i.password : prev.password };
+  if (!cfg.path) return { ok: false, detail: 'Ruta vacia' };
+  try {
+    if (isUncPath(cfg.path)) {
+      const { dir } = parseUnc(cfg.path);
+      const tmp = path.join(os.tmpdir(), `.nettest-${Date.now()}`);
+      await fs.writeFile(tmp, 'hexwatch-netcopy-test\n');
+      await smbExec(cfg, `${dir ? `cd "${dir}"; ` : ''}put "${tmp}" ".hexwatch-netcopy-test"; del ".hexwatch-netcopy-test"`);
+      await fs.unlink(tmp).catch(() => {});
+      return { ok: true, detail: 'Escritura verificada en el recurso de red (SMB).' };
+    }
+    await fs.mkdir(cfg.path, { recursive: true });
+    const t = path.join(cfg.path, '.hexwatch-netcopy-test');
+    await fs.writeFile(t, 'test'); await fs.unlink(t);
+    return { ok: true, detail: 'Escritura verificada en la carpeta.' };
+  } catch (e) { return { ok: false, detail: (e as Error).message.slice(0, 240) }; }
 }
 
 export function backupFilePath(id: string): string {

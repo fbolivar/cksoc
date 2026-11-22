@@ -27,6 +27,15 @@ export interface RecoveryPosture {
   warnings: string[];
 }
 
+export interface NetCopyCfg {
+  enabled: boolean;
+  path: string;
+  user: string;
+  domain: string;
+  hasPassword: boolean;
+  lastCopy: { at: string; ok: boolean; detail: string } | null;
+}
+
 export const backupsApi = {
   list: () => api.get<{ backups: BackupItem[] }>('/backups').then((r) => r.data.backups),
   posture: () => api.get<RecoveryPosture>('/backups/posture').then((r) => r.data),
@@ -36,6 +45,14 @@ export const backupsApi = {
 
   verify: (id: string) =>
     api.get<{ integrity: 'ok' | 'corrupto' }>(`/backups/${encodeURIComponent(id)}/verify`).then((r) => r.data.integrity),
+
+  netcopy: {
+    get: () => api.get<NetCopyCfg>('/backups/netcopy').then((r) => r.data),
+    save: (c: { enabled: boolean; path: string; user: string; domain: string; password?: string }) =>
+      api.put<NetCopyCfg>('/backups/netcopy', c).then((r) => r.data),
+    test: (c: { path: string; user: string; domain: string; password?: string }) =>
+      api.post<{ ok: boolean; detail: string }>('/backups/netcopy/test', c).then((r) => r.data),
+  },
 
   remove: (id: string) => api.delete(`/backups/${encodeURIComponent(id)}`).then((r) => r.data),
 

@@ -11,6 +11,7 @@ import { authenticate } from '../../middleware/auth';
 import { requireRole } from '../../middleware/roles';
 import {
   getBackups, postBackup, downloadBackup, getBackupIntegrity, removeBackup, getPosture, restoreBackupCtrl,
+  getNetCopyCtrl, putNetCopyCtrl, testNetCopyCtrl,
 } from './backups.controller';
 
 export const backupsRouter = Router();
@@ -18,6 +19,9 @@ backupsRouter.use(authenticate, requireRole('admin'));
 
 backupsRouter.get('/', getBackups);
 backupsRouter.get('/posture', getPosture);
+backupsRouter.get('/netcopy', getNetCopyCtrl);
+backupsRouter.put('/netcopy', putNetCopyCtrl);
+backupsRouter.post('/netcopy/test', testNetCopyCtrl);
 backupsRouter.post('/', postBackup);
 backupsRouter.get('/:id/download', downloadBackup);
 backupsRouter.get('/:id/verify', getBackupIntegrity);

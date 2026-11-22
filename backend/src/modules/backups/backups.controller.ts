@@ -7,6 +7,7 @@ import { auditFromReq } from '../audit/audit.service';
 import {
   createBackup, listBackups, deleteBackup, verifyBackup,
   backupFilePath, backupExists, HttpBackupError, getRecoveryPosture, restoreBackup,
+  getNetCopyPublic, saveNetCopy, testNetCopy,
 } from './backups.service';
 
 export async function getBackups(_req: Request, res: Response): Promise<void> {
@@ -121,4 +122,35 @@ export async function restoreBackupCtrl(req: Request, res: Response): Promise<vo
     logger.error({ err }, 'Fallo la restauracion de respaldo');
     res.status(500).json({ error: 'No se pudo restaurar el respaldo' });
   }
+}
+
+
+const netCopySchema = z.object({
+  enabled: z.boolean(),
+  path: z.string().max(400),
+  user: z.string().max(120).optional().default(''),
+  domain: z.string().max(120).optional().default(''),
+  password: z.string().max(200).optional(),
+});
+
+export async function getNetCopyCtrl(_req: Request, res: Response): Promise<void> {
+  try { res.json(await getNetCopyPublic()); }
+  catch { res.status(500).json({ error: 'No se pudo leer la configuracion de copia en red' }); }
+}
+
+export async function putNetCopyCtrl(req: Request, res: Response): Promise<void> {
+  const parsed = netCopySchema.safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Datos invalidos' }); return; }
+  try {
+    await saveNetCopy(parsed.data);
+    void auditFromReq(req, { actorId: req.user!.id, actorEmail: req.user!.email, action: 'backup_netcopy_config', target: parsed.data.path, result: 'ok' });
+    res.json(await getNetCopyPublic());
+  } catch { res.status(500).json({ error: 'No se pudo guardar la configuracion' }); }
+}
+
+export async function testNetCopyCtrl(req: Request, res: Response): Promise<void> {
+  const parsed = netCopySchema.partial({ enabled: true }).safeParse(req.body ?? {});
+  if (!parsed.success) { res.status(400).json({ error: 'Datos invalidos' }); return; }
+  try { res.json(await testNetCopy({ path: parsed.data.path ?? '', user: parsed.data.user ?? '', domain: parsed.data.domain ?? '', password: parsed.data.password })); }
+  catch (e) { res.json({ ok: false, detail: (e as Error).message }); }
 }

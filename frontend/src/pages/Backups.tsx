@@ -4,9 +4,9 @@
  * verificar su integridad (sha256), descargarlos y eliminarlos.
  */
 import { useEffect, useState } from 'react';
-import { Database, Download, Trash2, ShieldCheck, Plus, Loader2, RefreshCw, HardDriveDownload, AlertTriangle, Clock, CloudOff, RotateCcw } from 'lucide-react';
+import { Database, Download, Trash2, ShieldCheck, Plus, Loader2, RefreshCw, HardDriveDownload, AlertTriangle, Clock, CloudOff, RotateCcw, Network } from 'lucide-react';
 import { AxiosError } from 'axios';
-import { backupsApi, type BackupItem, type RecoveryPosture } from '@/lib/backups';
+import { backupsApi, type BackupItem, type RecoveryPosture, type NetCopyCfg } from '@/lib/backups';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -37,10 +37,30 @@ export default function Backups() {
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
   const [restoreTyped, setRestoreTyped] = useState('');
+  const [netCfg, setNetCfg] = useState<NetCopyCfg | null>(null);
+  const [netPass, setNetPass] = useState('');
+  const [netBusy, setNetBusy] = useState<'test' | 'save' | null>(null);
+  const [netTest, setNetTest] = useState<{ ok: boolean; detail: string } | null>(null);
 
   const flash = (kind: 'ok' | 'err', text: string) => {
     setMsg({ kind, text });
     setTimeout(() => setMsg(null), 4500);
+  };
+
+  const emptyNet: NetCopyCfg = { enabled: false, path: '', user: '', domain: '', hasPassword: false, lastCopy: null };
+  const netField = (k: 'path' | 'user' | 'domain', v: string) => setNetCfg((c) => ({ ...(c ?? emptyNet), [k]: v }));
+  const netPayload = () => ({ enabled: netCfg?.enabled ?? false, path: netCfg?.path ?? '', user: netCfg?.user ?? '', domain: netCfg?.domain ?? '', password: netPass || undefined });
+  const onNetTest = async () => {
+    setNetBusy('test'); setNetTest(null);
+    try { setNetTest(await backupsApi.netcopy.test(netPayload())); }
+    catch (e) { setNetTest({ ok: false, detail: (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Error de prueba' }); }
+    finally { setNetBusy(null); }
+  };
+  const onNetSave = async () => {
+    setNetBusy('save');
+    try { const r = await backupsApi.netcopy.save(netPayload()); setNetCfg(r); setNetPass(''); setNetTest(null); flash('ok', 'Configuracion de copia en red guardada'); }
+    catch (e) { flash('err', (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'No se pudo guardar'); }
+    finally { setNetBusy(null); }
   };
 
   const load = async () => {
@@ -48,6 +68,7 @@ export default function Backups() {
     try {
       setItems(await backupsApi.list());
       backupsApi.posture().then(setPosture).catch(() => setPosture(null));
+      backupsApi.netcopy.get().then(setNetCfg).catch(() => setNetCfg(null));
     } catch {
       flash('err', 'No se pudieron cargar los respaldos');
     } finally {
@@ -213,6 +234,30 @@ export default function Backups() {
             {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             {creating ? 'Creando…' : 'Crear respaldo'}
           </Button>
+        </div>
+      </div>
+
+      {/* Copia en repositorio de red (misma red) */}
+      <div className="glass space-y-3 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold"><Network className="h-4 w-4 text-brand" /> Copia en repositorio de red (misma red)</div>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <input type="checkbox" className="h-3.5 w-3.5 accent-brand" checked={netCfg?.enabled ?? false} onChange={(e) => setNetCfg((c) => ({ ...(c ?? emptyNet), enabled: e.target.checked }))} />
+            Activar
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">Cada respaldo se copia tambien a una carpeta de red. Usa una ruta UNC <span className="font-mono text-foreground">\\servidor\recurso\carpeta</span> alcanzable desde el servidor del SOC, o una carpeta local montada. Las letras de unidad (Z:) no aplican aqui.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <input value={netCfg?.path ?? ''} onChange={(e) => netField('path', e.target.value)} placeholder="\\192.168.20.50\Respaldos\BBG" className="w-full rounded-md border border-border bg-secondary/40 px-3 py-2 font-mono text-xs outline-none focus:border-primary sm:col-span-2" />
+          <input value={netCfg?.user ?? ''} onChange={(e) => netField('user', e.target.value)} placeholder="Usuario (si el recurso lo pide)" className="w-full rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm outline-none focus:border-primary" />
+          <input value={netCfg?.domain ?? ''} onChange={(e) => netField('domain', e.target.value)} placeholder="Dominio (opcional)" className="w-full rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm outline-none focus:border-primary" />
+          <input type="password" value={netPass} onChange={(e) => setNetPass(e.target.value)} placeholder={netCfg?.hasPassword ? 'Contrasena guardada (vacio = conservar)' : 'Contrasena (si aplica)'} className="w-full rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm outline-none focus:border-primary sm:col-span-2" />
+        </div>
+        {netTest && (<div className={`rounded-md px-3 py-2 text-xs ${netTest.ok ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-700'}`}>{netTest.ok ? 'Correcto: ' : 'Error: '}{netTest.detail}</div>)}
+        {netCfg?.lastCopy && (<p className="text-[10px] text-muted-foreground/80">Ultima copia: {new Date(netCfg.lastCopy.at).toLocaleString()} ({netCfg.lastCopy.ok ? 'OK' : 'fallo'}) {netCfg.lastCopy.detail}</p>)}
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => void onNetTest()} disabled={netBusy !== null || !(netCfg?.path)}>{netBusy === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Probar conexion</Button>
+          <Button size="sm" onClick={() => void onNetSave()} disabled={netBusy !== null}>{netBusy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Guardar</Button>
         </div>
       </div>
 
