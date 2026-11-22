@@ -19,11 +19,13 @@ const n = (v: string | undefined, d: number): number => { const x = Number(v); r
 
 const TH = {
   del: n(process.env.CLOUDDATA_DEL, 100),
-  mod: n(process.env.CLOUDDATA_MOD, 300),
+  mod: n(process.env.CLOUDDATA_MOD, 600),
   dl: n(process.env.CLOUDDATA_DL, 500),
   share: n(process.env.CLOUDDATA_SHARE, 15),
   anon: n(process.env.CLOUDDATA_ANON, 5),
 };
+// Cuentas de sincronización/backup conocidas que mueven muchos archivos de forma legítima.
+const IGNORE = new Set((process.env.CLOUDDATA_IGNORE_USERS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
 const OPS = {
   del: ['FileDeleted', 'FileRecycled', 'FileVersionsAllDeleted', 'FileDeletedFirstStageRecycleBin', 'FileDeletedSecondStageRecycleBin'],
   mod: ['FileModified', 'FileModifiedExtended', 'FileRenamed'],
@@ -63,7 +65,7 @@ export async function getOverview(days = '24h'): Promise<CdOverview> {
     const a = data.aggregations;
     const push = (key: keyof typeof OPS, tipo: string, label: string, th: number) => {
       for (const b of a[key]?.by?.buckets ?? []) {
-        if (SYS.test(b.key) || !b.key.includes('@')) continue;
+        if (SYS.test(b.key) || !b.key.includes('@') || IGNORE.has(b.key.toLowerCase())) continue;
         hallazgos.push({ tipo, tipoLabel: label, user: b.key, count: b.doc_count, umbral: th, sev: sevOf(b.doc_count, th) });
       }
     };
