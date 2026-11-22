@@ -93,6 +93,7 @@ const sections: { title: string | null; items: Item[] }[] = [
       { to: '/amenazas-api', label: 'Amenazas de API (OWASP)', icon: ListChecks, roles: ['admin', 'analista'] },
       { to: '/analitica-api', label: 'Analítica de API (endpoint)', icon: Activity, roles: ['admin', 'analista'] },
       { to: '/office365', label: 'Office 365', icon: Cloud, roles: ['admin', 'analista'] },
+      { to: '/oauth-apps', label: 'Consentimientos OAuth', icon: KeyRound, roles: ['admin', 'analista'] },
       { to: '/itdr', label: 'ITDR · Identidad', icon: Fingerprint, roles: ['admin', 'analista'] },
       { to: '/seguridad-ia', label: 'Seguridad de IA', icon: BrainCircuit, roles: ['admin', 'analista'] },
       { to: '/llm-guard', label: 'LLM Guardrail', icon: ShieldCheck, roles: ['admin', 'analista'] },

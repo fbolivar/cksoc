@@ -65,6 +65,7 @@ const Ransomware = lazy(() => import('@/pages/Ransomware'));
 const Scorecard = lazy(() => import('@/pages/Scorecard'));
 const DarkWeb = lazy(() => import('@/pages/DarkWeb'));
 const Takedown = lazy(() => import('@/pages/Takedown'));
+const OAuthApps = lazy(() => import('@/pages/OAuthApps'));
 const Observabilidad = lazy(() => import('@/pages/Observabilidad'));
 const NocCommand = lazy(() => import('@/pages/NocCommand'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
@@ -357,6 +358,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <Takedown />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/oauth-apps"
+        element={
+          <Protected>
+            <AppLayout>
+              <OAuthApps />
             </AppLayout>
           </Protected>
         }
