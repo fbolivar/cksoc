@@ -111,8 +111,10 @@ function extractBlock(file: string): string {
 /** El matcher XML apropiado según el tipo de campo. */
 function renderMatcher(field: string, value: string): string {
   if (STATIC_IP_FIELDS.has(field)) {
-    // Elemento dedicado; valor = IP o CIDR literal (Wazuh lo compara como IP).
-    return `    <${field}>${xmlText(value)}</${field}>\n`;
+    // Wazuh usa el elemento decodificado <srcip>/<dstip> (compara como IP/CIDR).
+    // OJO: OS_XML RECHAZA tags con punto (<data.srcip>), por eso mapeamos a <srcip>/<dstip>.
+    const tag = field === 'data.srcip' ? 'srcip' : field === 'data.dstip' ? 'dstip' : field;
+    return `    <${tag}>${xmlText(value)}</${tag}>\n`;
   }
   if (field === 'full_log') {
     // Substring en el log crudo (OS_Match), sin backslashes.
