@@ -118,6 +118,7 @@ const sections: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/incidentes', label: 'Incidentes', icon: Briefcase },
       { to: '/respuesta', label: 'Respuesta · SonicWall', icon: ShieldAlert, roles: ['admin', 'analista'] },
+      { to: '/clawback', label: 'Claw-back de correo', icon: MailWarning, roles: ['admin'] },
       { to: '/edr', label: 'EDR · Endpoint', icon: Cpu, roles: ['admin', 'analista'] },
       { to: '/soar', label: 'Automatización (SOAR)', icon: Workflow, roles: ['admin', 'analista'] },
     ],

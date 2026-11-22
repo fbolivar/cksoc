@@ -68,6 +68,7 @@ const Takedown = lazy(() => import('@/pages/Takedown'));
 const OAuthApps = lazy(() => import('@/pages/OAuthApps'));
 const IdPersist = lazy(() => import('@/pages/IdPersist'));
 const CloudData = lazy(() => import('@/pages/CloudData'));
+const Clawback = lazy(() => import('@/pages/Clawback'));
 const Observabilidad = lazy(() => import('@/pages/Observabilidad'));
 const NocCommand = lazy(() => import('@/pages/NocCommand'));
 const Itdr = lazy(() => import('@/pages/Itdr'));
@@ -390,6 +391,16 @@ export default function App() {
           <Protected>
             <AppLayout>
               <CloudData />
+            </AppLayout>
+          </Protected>
+        }
+      />
+      <Route
+        path="/clawback"
+        element={
+          <Protected>
+            <AppLayout>
+              <Clawback />
             </AppLayout>
           </Protected>
         }
